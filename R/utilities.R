@@ -754,7 +754,9 @@ preProcessing <- function(object,slot.name=c("data.signaling","data")){
     }
   }
 
-  k.boot <- sapply(X = 1:10,FUN = function(x){x*1;ALRA::choose_k(data)$k})
+  K <- ifelse(min(dim(data)) < formals(ALRA::choose_k)$K, round(0.9*min(dim(data))), formals(ALRA::choose_k)$K)
+  noise_start <- min(round(0.8*K), formals(ALRA::choose_k)$noise_start)
+  k.boot <- sapply(X = 1:10,FUN = function(x){x*1;ALRA::choose_k(data,K = K,noise_start = noise_start)$k})
   k <- median(k.boot,na.rm = T)
 
   # a matrix where the cells are rows and genes are columns.
