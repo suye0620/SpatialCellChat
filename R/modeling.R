@@ -289,7 +289,7 @@ computeCommunProb <- function (
   execution.time = Sys.time() - ptm
   object@options$run.time <- as.numeric(execution.time,
                                         units = "secs")
-  object@images[["result.computeCellDistance"]] <- res
+  object@images$.distance <- res
   object@options$parameter <- list(
     raw.use = raw.use,
     # spot.size = spot.size,
@@ -1997,9 +1997,9 @@ filterProbability <- function (
       cell.names <- spatstat.sparse::dimnames.sparse3Darray(object@net$prob.cell)[[1]]
     }
 
-    d.spatial <- object@images$result.computeCellDistance$d.spatial
+    d.spatial <- object@images$.distance$d.spatial
     Matrix::diag(d.spatial) <- 1
-    adj.contact <- object@images$result.computeCellDistance$adj.contact
+    adj.contact <- object@images$.distance$adj.contact
 
     nLR <- object@options$parameter$nLR
     nLR1 <- object@options$parameter$nLR1
@@ -2152,7 +2152,7 @@ aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signali
 #'
 #' @param object CellChat object
 #' @param features a char vector giving the used features. default use all features
-#' @param group.by cell group information; default is `object@idents` when input is a single object and `object@idents$joint` when input is a merged object; otherwise it should be one of the column names of the meta slot
+#' @param group.by cell group information; default is `object@idents` when input is a single object and `object@idents` when input is a merged object; otherwise it should be one of the column names of the meta slot
 #' @param type methods for computing the average gene expression per cell group.
 #'
 #' By default = "triMean", defined as a weighted average of the distribution's median and its two quartiles (https://en.wikipedia.org/wiki/Trimean);
@@ -2191,7 +2191,7 @@ computeAveExpr <- function(object, features = NULL, group.by = NULL, type = c("t
     labels <- object@idents
     if (!is.factor(labels)) {
       message("Use the joint cell labels from the merged CellChat object")
-      labels <- object@idents$joint
+      labels <- object@idents
     }
   } else {
     labels <- object@meta[[group.by]]

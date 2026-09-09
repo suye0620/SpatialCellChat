@@ -2304,7 +2304,7 @@ subsetCommunication <- function(object = NULL, net = NULL, slot.name = "net",
       for (i in 1:length(net0)) {
         net <- net0[[i]]
         LR <- object@LR[[i]]$LRsig
-        cells.level <- levels(object@idents[[i]])
+        cells.level <- levels(object@idents)
 
         df.net[[i]] <- subsetCommunication_internal(net, LR, cells.level, slot.name = slot.name,
                                                     sources.use = sources.use, targets.use = targets.use,
@@ -2320,7 +2320,7 @@ subsetCommunication <- function(object = NULL, net = NULL, slot.name = "net",
         LR <- rbind(LR, object@LR[[i]]$LRsig)
       }
       LR <- unique(LR)
-      cells.level <- levels(object@idents$joint)
+      cells.level <- levels(object@idents)
       df.net <- subsetCommunication_internal(net, LR, cells.level, slot.name = slot.name,
                                              sources.use = sources.use, targets.use = targets.use,
                                              signaling = signaling,
@@ -2784,7 +2784,7 @@ netAnalysis_diff_signalingRole_scatter <- function(object, color.use = NULL, com
   message(paste0("Visualizing differential outgoing and incoming signaling changes from ", dataset.name[comparison[1]], " to ", dataset.name[comparison[2]]))
   title <- paste0("Signaling changes ", " (", dataset.name[comparison[1]], " vs. ", dataset.name[comparison[2]], ")")
 
-  cell.levels <- levels(object@idents$joint)
+  cell.levels <- levels(object@idents)
   if (is.null(xlabel) | is.null(ylabel)) {
     xlabel = "Differential outgoing interaction strength"
     ylabel = "Differential incoming interaction strength"
@@ -2898,7 +2898,7 @@ netAnalysis_diff_signalingRole_scatter <- function(object, color.use = NULL, com
 #'
 #'
 #' @param object A merged CellChat object of a list of CellChat objects
-#' @param idents.use the cell group names of interest. Should be one of `levels(object@idents$joint)`
+#' @param idents.use the cell group names of interest. Should be one of `levels(object@idents)`
 #' @param color.use a vector with three elements: the first is for coloring shared pathways, the second is for specific pathways in the first dataset, and the third is for specific pathways in the second dataset
 #' @param comparison an index vector giving the two datasets for comparison
 #' @param signaling a char vector containing signaling pathway names. signaling = NULL: Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
@@ -2945,7 +2945,7 @@ netAnalysis_signalingChanges_scatter <- function(object, idents.use, color.use =
     message(paste0("Visualizing differential outgoing and incoming signaling changes from ", dataset.name[comparison[1]], " to ", dataset.name[comparison[2]]))
     title <- paste0("Signaling changes of ", idents.use, " (", dataset.name[comparison[1]], " vs. ", dataset.name[comparison[2]], ")")
 
-    cell.levels <- levels(object@idents$joint)
+    cell.levels <- levels(object@idents)
     if (is.null(xlabel) | is.null(ylabel)) {
       xlabel = "Differential outgoing interaction strength"
       ylabel = "Differential incoming interaction strength"
@@ -3939,16 +3939,105 @@ extractTopicSignaling <- function (object,
 }
 
 
-#' computeCommunField
+.sc_communication_field_layer <- function(mat, coordinates, top, sparse, direction) {
+  if (!inherits(mat, "sparseMatrix"))
+    stop("communication probability layers must be sparse matrices", call. = FALSE)
+
+  n_cells <- nrow(mat)
+  if (nrow(coordinates) != n_cells)
+    stop("communication probabilities and coordinates must have the same cells", call. = FALSE)
+
+  # Store only non-zero entries once, then build source/target adjacency lists
+  # without materialising a dense n-cell by n-cell probability matrix.
+  mat <- methods::as(mat, "dgCMatrix")
+  edge_rows <- mat@i + 1L
+  edge_cols <- rep.int(seq_len(ncol(mat)), diff(mat@p))
+  edge_values <- mat@x
+  adjacency <- if (length(edge_values)) {
+    split(seq_along(edge_values), if (direction == "outgoing") edge_rows else edge_cols)
+  } else {
+    list()
+  }
+
+  result <- matrix(0, nrow = n_cells, ncol = 2L,
+                   dimnames = list(rownames(coordinates), c("x_cent", "y_cent")))
+  for (node in seq_len(n_cells)) {
+    edge_index <- if (length(edge_values)) adjacency[[as.character(node)]] else NULL
+    if (!length(edge_index)) next
+
+    values <- edge_values[edge_index]
+    positive <- is.finite(values) & values > 0
+    if (!any(positive)) next
+    edge_index <- edge_index[positive]
+    values <- values[positive]
+    order_index <- order(values, decreasing = TRUE, method = "radix")
+    edge_index <- edge_index[order_index]
+    values <- values[order_index]
+    cumulative <- cumsum(values)
+    selected <- if (isTRUE(sparse)) {
+      selected <- which(cumulative < top * sum(values))
+      if (!length(selected) && top > 0) 1L else selected
+    } else if (length(values) <= 2L) {
+      seq_along(values)
+    } else {
+      which(cumulative <= top * sum(values))
+    }
+    if (!length(selected)) next
+
+    neighbours <- if (direction == "outgoing") edge_cols[edge_index[selected]] else edge_rows[edge_index[selected]]
+    displacement <- if (direction == "outgoing") {
+      coordinates[neighbours, , drop = FALSE] - coordinates[rep.int(node, length(neighbours)), , drop = FALSE]
+    } else {
+      coordinates[rep.int(node, length(neighbours)), , drop = FALSE] - coordinates[neighbours, , drop = FALSE]
+    }
+    lengths <- sqrt(rowSums(displacement * displacement))
+    nonzero <- lengths > 0
+    if (any(nonzero)) {
+      result[node, ] <- colSums(
+        displacement[nonzero, , drop = FALSE] *
+          (values[selected][nonzero] / lengths[nonzero])
+      )
+    }
+  }
+
+  Matrix::Matrix(result, sparse = TRUE)
+}
+
+
+
+
+.sc_compute_communication_field <- function(prob, coordinates, signaling, top, sparse) {
+  outgoing <- lapply(signaling, function(name) {
+    .sc_communication_field_layer(prob[[name]], coordinates, top, sparse, "outgoing")
+  })
+  incoming <- lapply(signaling, function(name) {
+    .sc_communication_field_layer(prob[[name]], coordinates, top, sparse, "incoming")
+  })
+  outgoing <- SparseChatArray(
+    outgoing,
+    dimnames = list(rownames(coordinates), c("x_cent", "y_cent"), signaling)
+  )
+  incoming <- SparseChatArray(
+    incoming,
+    dimnames = list(rownames(coordinates), c("x_cent", "y_cent"), signaling)
+  )
+  list(outgoing = outgoing, incoming = incoming)
+}
+
+#' Compute communication vector fields from cell-level probabilities
 #'
-#' @param object SpatialCellChat object
-#' @param slot.name the slot name of object that is used for analysis
-#' @param signaling.name alternative signaling pathway name used for analysis. If NULL, all the signaling pathways will be used
-#' @param top the cutoff for selecting top signalings
-#' @param sparse whether to apply a sparse strategy for selecting top signalings
-#'
-#' @return A SpatialCellChat object
+#' @param object A SpatialCellChat object.
+#' @param slot.name Either `"net"` for ligand-receptor results or `"netP"`
+#'   for pathway results.
+#' @param signaling.name Optional layer names or numeric indices. `NULL`
+#'   computes every cell-level probability layer.
+#' @param top Non-negative finite cutoff for selecting the strongest links.
+#' @param sparse Logical; when `TRUE`, retain links whose cumulative weight is
+#'   strictly below `top` times the node's total weight.
+#' @return The object with `cell$field$outgoing` and `cell$field$incoming`
+#'   stored as `SparseChatArray` values.
 #' @export
+#'
 computeCommunField <- function (
     object,
     slot.name = "netP",
@@ -3956,204 +4045,53 @@ computeCommunField <- function (
     top = 0.8,
     sparse = T
 ){
-  if (is.null(methods::slot(object, slot.name)$tmp$prob.cell)) {
-    if (slot.name == "net") {
-      stop(
-        cli.symbol(2),
-        "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! "
-      )
-    } else if (slot.name == "netP") {
-      stop(
-        cli.symbol(2),
-        "Please run `computeCommunProbPathway` to compute the communication probability/strength between any interacting individual cells! "
-      )
-    }
+  if (!methods::is(object, "SpatialCellChat"))
+    stop("object must be a SpatialCellChat", call. = FALSE)
+  slot.name <- match.arg(slot.name, c("net", "netP"))
+  if (!is.numeric(top) || length(top) != 1L || !is.finite(top) || top < 0)
+    stop("top must be one non-negative finite number", call. = FALSE)
+  if (!is.logical(sparse) || length(sparse) != 1L || is.na(sparse))
+    stop("sparse must be TRUE or FALSE", call. = FALSE)
+
+  result <- methods::slot(object, slot.name)
+  cell <- result$cell
+  prob <- if (is.list(cell)) cell$prob else NULL
+  if (!inherits(prob, "SparseChatArray"))
+    stop("run the cell-level communication probability step before computeCommunField", call. = FALSE)
+
+  cell_names <- dimnames(prob)[[1L]]
+  signaling.use <- dimnames(prob)[[3L]]
+  if (is.null(signaling.use)) signaling.use <- names(prob)
+  if (is.null(signaling.use) || !length(signaling.use))
+    stop("cell-level communication probabilities must have signaling names", call. = FALSE)
+  if (is.null(signaling.name)) {
+    signaling <- signaling.use
+  } else if (is.numeric(signaling.name)) {
+    if (anyNA(signaling.name) || any(signaling.name < 1) || any(signaling.name > length(signaling.use)))
+      stop("numeric signaling.name indices are out of bounds", call. = FALSE)
+    signaling <- signaling.use[signaling.name]
   } else {
-    # prob.cell <- object@net$prob.cell
-    net <- methods::slot(object, slot.name)$tmp$prob.cell # a list
-
-    if (slot.name == "net") {
-      LRsig.use.idx <- object@net$tmp$LRsig.use.idx
-      net <- net[LRsig.use.idx] # use LRsigs whose prob.sum > 0
-    }
-
-    signaling.use <- names(net)
-    cell.names <- spatstat.sparse::dimnames.sparse3Darray(methods::slot(object, slot.name)$prob.cell)[[1]]
+    signaling <- as.character(signaling.name)
+    if (!length(signaling) || anyNA(signaling) || any(!signaling %in% signaling.use))
+      stop("signaling.name must identify existing communication layers", call. = FALSE)
   }
+  if (!length(signaling))
+    stop("signaling.name selected no communication layers", call. = FALSE)
 
-  nC <- length(cell.names)
+  coordinates <- object@images$coordinates
+  if (!is.matrix(coordinates) || ncol(coordinates) < 2L || nrow(coordinates) != length(cell_names))
+    stop("images$coordinates must contain one row and at least two columns per cell", call. = FALSE)
+  coordinates <- coordinates[, seq_len(2L), drop = FALSE]
+  if (is.null(rownames(coordinates)) || !identical(rownames(coordinates), cell_names))
+    stop("images$coordinates rownames must match communication cell names", call. = FALSE)
+  if (!is.numeric(coordinates) || any(!is.finite(coordinates)))
+    stop("images$coordinates must contain finite numeric values", call. = FALSE)
 
-  if (!is.null(signaling.name)) {
-    if (is.numeric(signaling.name)) signaling.name <- signaling.use[signaling.name]
-    net <- net[signaling.name] # [] will return a list
-  } else {
-    signaling.name <- signaling.use
-  }
-
-  data.spatial <- object@images$coordinates
-  # temp_coordinates = data.spatial
-  # data.spatial[, 1] = temp_coordinates[, 2]
-  # data.spatial[, 2] = temp_coordinates[, 1]
-  data.spatial <- as.matrix(data.spatial)
-  colnames(data.spatial) <- c("x_cent", "y_cent")
-
-  nrun <- length(signaling.name)
-
-  cf.all.outgoing_ <- my_future_lapply(
-    X = 1:nrun,
-    FUN = function(x) {
-
-      net0 <- net[[x]] # [[]] will return one element(communication matrix)
-
-      ### compute cf.outgoing ###
-      idx.outgoing.cells <- which(Matrix::rowSums(net0) > 0)
-      cf.outgoing <- sapply(
-        X = idx.outgoing.cells,
-        FUN = function(x) {
-          res <- sort(net0[x, , drop = T], decreasing = TRUE, index.return = TRUE)
-          if(sparse){
-            idx.outgoing <- which(cumsum(res$x) < top * sum(res$x))
-          } else {
-            if (cumsum(res$x)[[2]] == cumsum(res$x)[[1]]) {
-              idx.outgoing <- c(1)
-            } else if (cumsum(res$x)[[3]] == cumsum(res$x)[[2]]) {
-              idx.outgoing <- c(1, 2)
-            } else {
-              idx.outgoing <- which(cumsum(res$x) <= top * sum(res$x))
-            }
-          }
-          idx.end <- res$ix[idx.outgoing]
-
-          if (length(idx.end) > 0) {
-            direction <-
-              data.spatial[idx.end, , drop = F] - data.spatial[rep.int(x, times = length(idx.end)), , drop =F]
-            prob.outgoing <- res$x[idx.outgoing]
-            direction <- purrr::map_dfr(
-              .x = 1:NROW(direction),
-              .f = function(x) {
-                norm.x <- norm(direction[x, , drop = T], type = "2")
-                if (norm.x > 0) {
-                  return(direction[x, , drop = T] * (prob.outgoing[x] / norm.x))
-                } else if (norm.x == 0) {
-                  return(direction[x, , drop = T])
-                }
-              }
-            )
-            direction <- apply(direction, 2L, FUN = sum)
-            return(direction) # dim: 1,2
-          } else {
-            return(c(0, 0)) # dim: 1,2
-          }
-        }
-      )
-
-      idx.i <- rep(idx.outgoing.cells, times = 2)
-      idx.j <-
-        c(rep.int(1, times = length(idx.outgoing.cells)), rep.int(2, times = length(idx.outgoing.cells)))
-      value.x <- c(cf.outgoing[1, , drop = T], cf.outgoing[2, , drop = T])
-
-      cf.outgoing.sparse <- Matrix::sparseMatrix(
-        i = idx.i,
-        j = idx.j,
-        x = value.x,
-        dims = c(nC, 2),
-        dimnames = list(cell.names, c("x_cent", "y_cent")),
-        index1 = T
-      ) # matrix (dim: NROW(net0) x 2 or nC x 2)
-
-      return(cf.outgoing.sparse)
-    },
-    simplify = F,
-    hint.message = "Computing outgoing..."
-  )
-
-  cf.all.outgoing <-
-    my_as_sparse3Darray(cf.all.outgoing_, nonzero = T) # list=>3Darray
-  rm(cf.all.outgoing_)
-  gc()
-
-
-  cf.all.incoming_ <- my_future_lapply(
-    X = 1:nrun,
-    FUN = function(x) {
-      net0 <- net[[x]]
-
-      ### compute cf.incoming ###
-      idx.incoming.cells <- which(Matrix::colSums(net0) > 0)
-      cf.incoming <- sapply(
-        X = idx.incoming.cells,
-        FUN = function(x) {
-          res <- sort(net0[, x, drop = T], decreasing = TRUE, index.return = TRUE)
-          if(sparse){
-            idx.incoming <- which(cumsum(res$x) < top * sum(res$x))
-          } else {
-            if (cumsum(res$x)[[2]] == cumsum(res$x)[[1]]) {
-              idx.incoming <- c(1)
-            } else if (cumsum(res$x)[[3]] == cumsum(res$x)[[2]]) {
-              idx.incoming <- c(1, 2)
-            } else {
-              idx.incoming <- which(cumsum(res$x) <= top * sum(res$x))
-            }
-          }
-          idx.start <- res$ix[idx.incoming]
-
-          if (length(idx.start) > 0) {
-            direction <-
-              # data.spatial[rep.int(x, times = length(idx.start)), , drop = F] - data.spatial[idx.start, , drop = F]
-              data.spatial[rep.int(x, times = length(idx.start)), , drop = F] - data.spatial[idx.start, , drop = F]
-            prob.incoming <- res$x[idx.incoming]
-            direction <- purrr::map_dfr(
-              .x = 1:NROW(direction),
-              .f = function(x) {
-                norm.x <- norm(direction[x, , drop = T], type = "2")
-                if (norm.x > 0) {
-                  return(direction[x, , drop = T] * (prob.incoming[x] / norm.x))
-                } else if (norm.x == 0) {
-                  return(direction[x, , drop = T])
-                }
-              }
-            )
-            direction <- apply(direction, 2L, FUN = sum)
-            return(direction) # dim: 1,2
-          } else {
-            return(c(0, 0)) # dim: 1,2
-          }
-        }
-      )
-
-      idx.i <- rep(idx.incoming.cells, times = 2)
-      idx.j <-
-        c(rep.int(1, times = length(idx.incoming.cells)), rep.int(2, times = length(idx.incoming.cells)))
-      value.x <- c(cf.incoming[1, , drop = T], cf.incoming[2, , drop = T])
-
-      cf.incoming.sparse <- Matrix::sparseMatrix(
-        i = idx.i,
-        j = idx.j,
-        x = value.x,
-        dims = c(nC, 2),
-        dimnames = list(cell.names, c("x_cent", "y_cent")),
-        index1 = T
-      ) # matrix (dim: NROW(net0) x 2 or nC x 2)
-      return(cf.incoming.sparse)
-    },
-    simplify = F,
-    hint.message = "Computing incoming..."
-  )
-
-  cf.all.incoming <-
-    my_as_sparse3Darray(cf.all.incoming_, nonzero = T) # list=>3Darray
-  rm(cf.all.incoming_)
-  gc()
-
-
-  dimnames(cf.all.outgoing) <-
-    list(cell.names, colnames(data.spatial), signaling.name)
-  dimnames(cf.all.incoming) <- dimnames(cf.all.outgoing)
-
-  cf.all <-
-    list(outgoing = cf.all.outgoing, incoming = cf.all.incoming)
-  methods::slot(object, slot.name)$field <- cf.all
-  return(object)
+  field <- .sc_compute_communication_field(prob, coordinates, signaling, top, sparse)
+  cell$field <- field
+  result$cell <- cell
+  methods::slot(object, slot.name) <- result
+  .sc_validate_after_update(object)
 }
 
 

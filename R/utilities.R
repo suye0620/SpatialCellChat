@@ -1,3 +1,55 @@
+# ====== Internal helpers: CLI messaging and operation log ======
+
+#' Internal CLI wrapper for consistent user-facing messages
+#' @param text message text with {cli} inline formatting
+#' @param .type one of "info", "success", "danger", "warning", "bullet",
+#'   "header", "subheader", "text", "debug"
+#' @param .verbose verbosity level required (default inferred from .type;
+#'   override for fine control). Only shown when
+#'   getOption("SpatialCellChat.verbose", 1L) >= .verbose.
+#' @param ... passed to cli::cli_alert_*
+#' @noRd
+.cli <- function(text, .type = "info", ..., .verbose = NULL, .env = parent.frame()) {
+  lvl <- .verbose %||% switch(.type,
+    info      = 1L,
+    success   = 1L,
+    warning   = 0L,
+    danger    = 0L,
+    header    = 1L,
+    subheader = 1L,
+    text      = 2L,
+    progress  = 2L,
+    debug     = 3L,
+    1L)
+  v <- getOption("SpatialCellChat.verbose", 1L)
+  if (lvl > v) return(invisible(NULL))
+
+  switch(.type,
+    info      = cli::cli_alert_info(text, .envir = .env, ...),
+    success   = cli::cli_alert_success(text, .envir = .env, ...),
+    danger    = cli::cli_alert_danger(text, .envir = .env, ...),
+    warning   = cli::cli_alert_warning(text, .envir = .env, ...),
+    header    = cli::cli_h1(text, .envir = .env, ...),
+    subheader = cli::cli_h2(text, .envir = .env, ...),
+    text      = cli::cli_text(text, .envir = .env, ...),
+    cli::cli_alert_info(text, .envir = .env, ...)
+  )
+}
+
+#' Internal helper to log operations on a SpatialCellChat object
+#' @noRd
+.log_operation <- function(object, funcname, params = list()) {
+  entry <- list(
+    "function" = funcname,
+    time = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    params = params,
+    version = if (requireNamespace("SpatialCellChat", quietly = TRUE))
+      as.character(utils::packageVersion("SpatialCellChat")) else "development"
+  )
+  object@misc$.log <- c(object@misc$.log, list(entry))
+  object
+}
+
 #' @title savePlotWithCow
 #' @description
 #' Save a plot directly from `Plots` window in Rstudio with the help of \code{cowplot}.
@@ -386,50 +438,56 @@ cli.symbol <- function(symbol=NULL){
 #' When workers = 1, CellChat will run in sequential mode;
 #' Otherwise, CellChat will run in parallel mode with a respective number of future parallel clusters.
 #' @param gc Boolean. Whether the garbage collector run or not. It's an argument passed to Future().
-#' See details in \code{\link[future]{Future}}
-#' @param conda_env We use some functions coded with Python in CellChat. Users
-#' may need to set Python Lib Path here or otherwhere explicitly. For example, setEnvironment(workers = 2L,conda_env = "path/to/.conda/envs/env_name/")
-#' See details in \code{\link[reticulate]{use_condaenv}} or use `reticulate`'s other relevant functions to get a Python support.
-#' @param future.globals.maxSize Run \code{?future::future.globals.maxSize} to see details.
+#' Set the computation environment
 #'
+#' @param workers Integer > 0. 1 = sequential, >1 = multisession parallel.
+#' @param verbose Verbosity level: 0=quiet, 1=normal, 2=detailed.
+#'   Default reads \code{getOption("SpatialCellChat.verbose", 1L)}.
+#' @param future.globals.maxSize Passed to \code{options(future.globals.maxSize)}.
+#' @param gc Whether to run garbage collector on each future worker.
+#' @param conda_env Path to conda environment (passed to \code{reticulate::use_condaenv}).
 #' @export
-#'
 setEnvironment <- function(workers,
-                            future.globals.maxSize = 10000*1024^2,
-                            gc = T,
+                            verbose = getOption("SpatialCellChat.verbose", 1L),
+                            future.globals.maxSize = 10000 * 1024^2,
+                            gc = TRUE,
                             conda_env = NULL) {
-  if (is.null(conda_env)) {
-    NULL
-  } else {
+  if (!is.null(conda_env)) {
     reticulate::use_condaenv(conda_env)
   }
 
-  if (is.numeric(workers) & (workers > 0)) {
-    if (workers == 1) {
-      future::plan("sequential", gc = gc)
-    } else {
-      future::plan("multisession", workers = workers, gc = gc)
-    }
-    options(future.globals.maxSize = future.globals.maxSize)
-    future.strategy <- ifelse(
-      test = future::nbrOfWorkers() == 1,
-      yes = "sequential",
-      no = paste0("parallel with ", future::nbrOfWorkers(), " workers")
-    )
-    cat(paste0(
-      cli.symbol("info"),
-      " Future strategy in use: `",
-      future.strategy,
-      "`\n"
-    ))
+  if (!is.numeric(workers) || workers <= 0) {
+    .cli("workers must be a positive integer", .type = "danger")
+    return(invisible(NULL))
+  }
 
+  # Set global verbosity
+  options(
+    SpatialCellChat.verbose = verbose,
+    future.globals.maxSize = future.globals.maxSize
+  )
+
+  # Parallel strategy
+  if (workers == 1) {
+    future::plan("sequential", gc = gc)
   } else {
-    cat(cli.symbol("fail"), "Please check your `workers`'s number.")
+    future::plan("multisession", workers = workers, gc = gc)
+  }
+
+  # Progress bar: use cli handler (set once globally)
+  progressr::handlers(global = TRUE)
+  progressr::handlers("cli")
+
+  # Welcome banner
+  if (verbose >= 1L) {
+    .cli("SpatialCellChat", .type = "header")
+    if (workers == 1) {
+      .cli("Sequential mode", .type = "info")
+    } else {
+      .cli("Parallel with {workers} workers", .type = "success")
+    }
   }
 }
-
-#' my_as_sparse3Darray
-#' @description
 #' A faster realization in comparison to \code{\link[spatstat.sparse]{as.sparse3Darray}}
 #'
 #' @param x Data in another format (see Details in \code{\link[spatstat.sparse]{as.sparse3Darray}}.
@@ -464,7 +522,7 @@ my_as_sparse3Darray <- function (x, ... ,strict = FALSE, nonzero = FALSE)
       y <- sparse3Darray(, dims = dimx, dimnames = dimnames(x))
     }
     else {
-      ijk <- which(x != RelevantZero(x), arr.ind = TRUE)
+      ijk <- which(x != spatstat.utils::RelevantZero(x), arr.ind = TRUE)
       ijk <- cbind(as.data.frame(ijk), x[ijk])
       y <- sparse3Darray(i = ijk[, 1L], j = ijk[, 2L],
                          k = ijk[, 3L], x = ijk[, 4L], dims = dimx, dimnames = dimnames(x),strict = strict, nonzero = nonzero)
@@ -577,31 +635,47 @@ my_as_sparse3Darray <- function (x, ... ,strict = FALSE, nonzero = FALSE)
 #'
 #' @examples
 #' my_future_sapply(X=1:10,FUN = function(x){Sys.sleep(11-x);sqrt(x)})
-my_future_sapply <- function(X, FUN, ..., simplify = TRUE, USE.NAMES = TRUE, future.envir = parent.frame(),
-                             future.seed = T, future.label = "future_sapply-%d", hint.message = "Computing...", strategy.message = TRUE) {
-  future.strategy <- ifelse(test = future::nbrOfWorkers() == 1,
-                            yes = "sequential",
-                            no = paste0("parallel with ",future::nbrOfWorkers()," workers"))
-  if (strategy.message) {
-    cat(paste0(cli.symbol("info")," Future strategy in use: `",future.strategy,"`\n"))
+#' my_future_sapply
+#'
+#' @description
+#' future_sapply with progress bar and stable random number generation.
+#' Progress bar only shown when length(X) > 1 and workers > 1.
+#' Strategy info and handler setup are managed once by \code{setEnvironment}.
+#'
+#' @param X A vector-like object to iterate over.
+#' @param FUN A function taking at least one argument.
+#' @param ... Additional arguments passed to \code{FUN()}.
+#'   Any \code{future.*} arguments are passed to \code{future_lapply()}.
+#' @param simplify See \code{\link[base]{sapply}}.
+#' @param USE.NAMES See \code{\link[base]{sapply}}.
+#' @param future.seed A logical or integer seed.
+#'   See \code{\link[future.apply]{future_lapply}}.
+#' @param .progress Whether to show a progress bar (default TRUE; auto-disabled
+#'   for single iterations or sequential mode).
+#'
+#' @return A vector with same length and names as \code{X}.
+#' @export
+my_future_sapply <- function(X, FUN, ...,
+                              simplify = TRUE,
+                              USE.NAMES = TRUE,
+                              future.seed = TRUE,
+                              .progress = TRUE) {
+  FUN <- match.fun(FUN)
+  n <- length(X)
+  show_progress <- isTRUE(.progress) && n > 1 && future::nbrOfWorkers() > 1
+
+  if (show_progress) {
+    p <- progressr::progressor(along = X)
+    wrapper <- function(x) { res <- FUN(x); p(); res }
+  } else {
+    wrapper <- FUN
   }
 
-  progressr::handlers(global = T)
-  progressr::handlers(progressr::handler_progress(format = ":percent [:bar] :eta :message"))
-  p <- progressr::progressor(along = X)
-
-  FUN <- match.fun(FUN)
   answer <- future.apply::future_lapply(
     X = X,
-    FUN = function(x){
-      res <- FUN(x)
-      p(hint.message)
-      return(res)
-    },
+    FUN = wrapper,
     ...,
-    future.envir = future.envir,
-    future.seed = future.seed,
-    future.label = future.label
+    future.seed = future.seed
   )
 
   if (USE.NAMES && is.character(X) && is.null(names(answer)))
@@ -612,61 +686,48 @@ my_future_sapply <- function(X, FUN, ..., simplify = TRUE, USE.NAMES = TRUE, fut
 }
 
 #' my_future_lapply
+#'
 #' @description
-#' future_lapply with progress bar and stable random number generation
+#' future_lapply with progress bar and stable random number generation.
+#' Progress bar only shown when length(X) > 1 and workers > 1.
+#' Strategy info and handler setup are managed once by \code{setEnvironment}.
+#'
 #' @param X A vector-like object to iterate over.
 #' @param FUN A function taking at least one argument.
-#' @param ... (optional) Additional arguments passed to `FUN()`.
-#' For `future_*apply()` functions and `replicate()`, any `future.*` arguments
-#' part of `\ldots` are passed on to `future_lapply()` used internally.
-#' @param future.seed A logical or an integer (of length one or seven),
-#'        or a list of `length(X)` with pre-generated random seeds.
-#'        For details, see \code{\link[future.apply]{future_lapply}}.
-#' @param simplify different from the `simplify` parameter in `my_future_sapply`.
-#'        If simplify = TRUE, we run \code{\link[base]{unlist}} upon the result.
-#' @param hint.message A hint message shown after the progress bar. By default,
-#' the message is "Computing..."
-#' @param strategy.message Whether to show the future stretegy information
-#' @param future.label If a character string, then each future is assigned
-#'        a label `sprintf(future.label, chunk_idx)`.  If TRUE, then the
-#'        same as `future.label = "future_lapply-%d"`.  If FALSE, no labels
-#'        are assigned.
+#' @param ... Additional arguments passed to \code{FUN()}.
+#'   Any \code{future.*} arguments are passed to \code{future_lapply()}.
+#' @param future.seed A logical or integer seed.
+#'   See \code{\link[future.apply]{future_lapply}}.
+#' @param simplify If TRUE, call \code{unlist()} on the result.
+#' @param .progress Whether to show a progress bar (default TRUE; auto-disabled
+#'   for single iterations or sequential mode).
 #'
-#' @return
-#' For `future_lapply()`, a list with same length and names as `X`.
-#' See \code{\link[base]{lapply}} for reference.
+#' @return A list with same length and names as \code{X}.
 #' @export
-#'
-#' @examples
-#' my_future_lapply(X=1:10,FUN = function(x){Sys.sleep(11-x);sqrt(x)})
-my_future_lapply <- function(X, FUN, ..., future.seed = T, simplify = F, hint.message = "Computing...",strategy.message = TRUE, future.label = "future_lapply-%d") {
-  future.strategy <- ifelse(test = future::nbrOfWorkers() == 1,
-                            yes = "sequential",
-                            no = paste0("parallel with ",future::nbrOfWorkers()," workers"))
-  if (strategy.message) {
-    cat(paste0(cli.symbol("info")," Future strategy in use: `",future.strategy,"`\n"))
+my_future_lapply <- function(X, FUN, ...,
+                              future.seed = TRUE,
+                              simplify = FALSE,
+                              .progress = TRUE) {
+  FUN <- match.fun(FUN)
+  n <- length(X)
+  show_progress <- isTRUE(.progress) && n > 1 && future::nbrOfWorkers() > 1
+
+  if (show_progress) {
+    p <- progressr::progressor(along = X)
+    wrapper <- function(x) { res <- FUN(x); p(); res }
+  } else {
+    wrapper <- FUN
   }
 
-  progressr::handlers(global = T)
-  progressr::handlers(progressr::handler_progress(format = ":percent [:bar] :eta :message"))
-  p <- progressr::progressor(along = X)
   res_ <- future.apply::future_lapply(
     X = X,
-    FUN = function(x){
-      res <- FUN(x)
-      p(hint.message)
-      return(res)
-    },
+    FUN = wrapper,
     ...,
-    future.seed = future.seed,
-    future.label = future.label
+    future.seed = future.seed
   )
-  if(simplify){
-    res_ <- unlist(res_)
-  } else{
-    NULL
-  }
-  return(res_)
+
+  if (isTRUE(simplify)) res_ <- unlist(res_)
+  res_
 }
 
 #' Convert a CellChat object into a Seurat object
@@ -777,22 +838,97 @@ preProcessing <- function(object,slot.name=c("data.signaling","data")){
 }
 
 
-#' Normalize data using a scaling factor
-#'
-#' @param data.raw input raw data
-#' @param scale.factor the scaling factor used for each cell
-#' @param do.log whether do log transformation with pseudocount 1
-#' @export
-#'
-normalizeData <- function(data.raw, scale.factor = 10000, do.log = TRUE) {
-  # Scale counts within a sample
+# Internal sparse-safe normalization helper.
+.sc_normalize_matrix <- function(data.raw, scale.factor = 10000, do.log = TRUE) {
+  if (!is.matrix(data.raw) && !inherits(data.raw, "Matrix"))
+    stop("data.raw must be a numeric matrix or Matrix object", call. = FALSE)
+  if (length(dim(data.raw)) != 2L || any(dim(data.raw) < 1L))
+    stop("data.raw must have at least one gene and one cell", call. = FALSE)
+  values <- if (inherits(data.raw, "Matrix")) data.raw@x else as.vector(data.raw)
+  if (!is.numeric(values) || any(!is.finite(values)))
+    stop("data.raw must contain only finite numeric values", call. = FALSE)
+  if (any(values < 0))
+    stop("data.raw must contain non-negative counts", call. = FALSE)
+  if (length(scale.factor) != 1L || !is.numeric(scale.factor) ||
+      !is.finite(scale.factor) || scale.factor <= 0)
+    stop("scale.factor must be one positive finite number", call. = FALSE)
+  if (length(do.log) != 1L || !is.logical(do.log) || is.na(do.log))
+    stop("do.log must be TRUE or FALSE", call. = FALSE)
+
   library.size <- Matrix::colSums(data.raw)
-  #scale.factor <- median(library.size)
-  expr <- Matrix::t(Matrix::t(data.raw) / library.size) * scale.factor
-  if (do.log) {
-    data.norm <-log1p(expr)
+  zero.library <- which(!is.finite(library.size) | library.size <= 0)
+  if (length(zero.library)) {
+    cell.names <- colnames(data.raw)
+    bad.names <- if (is.null(cell.names)) as.character(zero.library) else cell.names[zero.library]
+    stop("cannot normalize cells with zero total counts: ",
+         paste(bad.names, collapse = ", "), call. = FALSE)
   }
-  return(data.norm)
+
+  if (inherits(data.raw, "Matrix")) {
+    data.norm <- methods::as(data.raw, "dgCMatrix")
+    column.lengths <- diff(data.norm@p)
+    data.norm@x <- data.norm@x /
+      rep.int(library.size, column.lengths) * scale.factor
+    if (isTRUE(do.log)) data.norm@x <- log1p(data.norm@x)
+    data.norm
+  } else {
+    data.norm <- sweep(data.raw, 2L, library.size, "/") * scale.factor
+    if (isTRUE(do.log)) data.norm <- log1p(data.norm)
+    data.norm
+  }
+}
+
+#' Normalize raw expression counts and optionally update a SpatialCellChat object.
+#'
+#' @param data.raw A raw count matrix or a SpatialCellChat object with
+#'   `assay$raw` populated.
+#' @param scale.factor The per-cell scaling factor.
+#' @param do.log Whether to apply a log1p transformation after scaling.
+#' @param verbose Whether to emit cli progress messages.
+#' @return A normalized matrix for matrix input, or an updated
+#'   SpatialCellChat object for object input.
+#' @export
+normalizeData <- function(data.raw, scale.factor = 10000, do.log = TRUE,
+                          verbose = TRUE) {
+  if (length(verbose) != 1L || !is.logical(verbose) || is.na(verbose))
+    stop("verbose must be TRUE or FALSE", call. = FALSE)
+
+  if (methods::is(data.raw, "SpatialCellChat")) {
+    object <- data.raw
+    raw <- assay(object, "raw")
+    if (is.null(raw))
+      stop("assay$raw is empty; provide raw counts before normalization", call. = FALSE)
+    if (isTRUE(verbose)) {
+      .cli("Normalizing assay$raw into assay$norm with scale factor {scale.factor} and log1p = {do.log}.",
+           .type = "info")
+    }
+    normalized <- .sc_normalize_matrix(raw, scale.factor = scale.factor, do.log = do.log)
+    assay(object, "norm") <- normalized
+    assay(object, "scale") <- NULL
+    assay(object, "smooth") <- NULL
+    assay(object, "signaling") <- NULL
+    params(object, "normalization") <- list(
+      method = "LogNormalize",
+      scale.factor = as.numeric(scale.factor),
+      do.log = isTRUE(do.log),
+      source = "assay$raw"
+    )
+    object <- .log_operation(object, "normalizeData", params = list(
+      scale.factor = as.numeric(scale.factor),
+      do.log = isTRUE(do.log),
+      source = "assay$raw"
+    ))
+    if (isTRUE(verbose)) .cli("Normalization complete; assay$norm is ready.", .type = "success")
+    return(object)
+  }
+
+  if (isTRUE(verbose)) {
+    .cli("Normalizing raw expression counts with scale factor {scale.factor} and log1p = {do.log}.",
+         .type = "info")
+  }
+  normalized <- .sc_normalize_matrix(data.raw, scale.factor = scale.factor, do.log = do.log)
+  if (isTRUE(verbose)) .cli("Normalization complete.", .type = "success")
+  normalized
 }
 
 
@@ -1024,80 +1160,176 @@ updateClusterLabels <- function(object, old.cluster.name = NULL, new.cluster.nam
 
 
 
-#' Subset the expression data of signaling genes for saving computation cost
-#'
-#' @param object CellChat object
-#' @param features default = NULL: subset the expression data of signaling genes in CellChatDB.use
-#'
-#' @return An updated CellChat object by assigning a subset of the data into the slot `data.signaling`
-#' @export
-#'
-subsetData <- function(object, features = NULL) {
-  interaction_input <- object@DB$interaction
-  if (object@options$datatype != "RNA") {
-    if ("annotation" %in% colnames(interaction_input) == FALSE) {
-      warning("A column named `annotation` is required in `object@DB$interaction` when running CellChat on spatial transcriptomics! The `annotation` column is now automatically added and all L-R pairs are assigned as `Secreted Signaling`, which means that these L-R pairs are assumed to mediate diffusion-based cellular communication.")
-      interaction_input$annotation <- "Secreted Signaling"
-    }
-  }
-  if ("annotation" %in% colnames(interaction_input) == TRUE) {
-    if (length(unique(interaction_input$annotation)) > 1) {
-      interaction_input$annotation <- factor(interaction_input$annotation, levels = c("Secreted Signaling", "ECM-Receptor", "Non-protein Signaling", "Cell-Cell Contact"))
-      interaction_input <- interaction_input[order(interaction_input$annotation), , drop = FALSE]
-      interaction_input$annotation <- as.character(interaction_input$annotation)
-    }
-    object@DB$interaction <- interaction_input
+.sc_clean_gene_names <- function(value) {
+  value <- as.character(value)
+  value[!is.na(value) & nzchar(value)]
+}
+
+.sc_complex_subunits <- function(complex_input) {
+  if (!is.data.frame(complex_input) || !nrow(complex_input)) return(list())
+  subunit_cols <- grep("subunit", colnames(complex_input), value = TRUE,
+                       ignore.case = TRUE)
+  if (!length(subunit_cols)) return(list())
+  ids <- rownames(complex_input)
+  if (is.null(ids)) ids <- as.character(seq_len(nrow(complex_input)))
+  result <- lapply(seq_len(nrow(complex_input)), function(index) {
+    .sc_clean_gene_names(unlist(complex_input[index, subunit_cols, drop = FALSE],
+                                use.names = FALSE))
+  })
+  names(result) <- ids
+  result <- result[lengths(result) > 0L & nzchar(names(result))]
+  result[!duplicated(names(result))]
+}
+
+.sc_db_signaling_genes <- function(interaction_input, DB) {
+  genes <- .sc_clean_gene_names(unlist(
+    interaction_input[, c("ligand", "receptor"), drop = FALSE],
+    use.names = FALSE
+  ))
+  complex_subunits <- .sc_complex_subunits(DB$complex)
+  complex_names <- intersect(genes, names(complex_subunits))
+  if (length(complex_names)) {
+    genes <- c(genes, unlist(complex_subunits[complex_names], use.names = FALSE))
   }
 
-  if (is.null(features)) {
-    DB <- object@DB
-    gene.use_input <- extractGene(DB)
-    gene.use <- intersect(gene.use_input, rownames(object@data))
+  cofactor_cols <- intersect(
+    c("agonist", "antagonist", "co_A_receptor", "co_I_receptor"),
+    colnames(interaction_input)
+  )
+  cofactor_names <- .sc_clean_gene_names(unlist(
+    interaction_input[, cofactor_cols, drop = FALSE],
+    use.names = FALSE
+  ))
+  cofactor_input <- DB$cofactor
+  if (length(cofactor_names) && is.data.frame(cofactor_input)) {
+    cofactor_subunits <- .sc_complex_subunits(cofactor_input)
+    for (name in cofactor_names) {
+      if (name %in% names(cofactor_subunits)) {
+        genes <- c(genes, cofactor_subunits[[name]])
+      } else {
+        genes <- c(genes, name)
+      }
+    }
   } else {
-    gene.use <- intersect(features, rownames(object@data))
+    genes <- c(genes, cofactor_names)
   }
-  object@data.signaling <- object@data[rownames(object@data) %in% gene.use, ]
-  return(object)
+  unique(.sc_clean_gene_names(genes))
+}
+
+.sc_lr_feature_state <- function(symbol, selected, gene.use, complex_subunits) {
+  symbol <- as.character(symbol)[[1L]]
+  if (is.na(symbol) || !nzchar(symbol))
+    return(c(available = FALSE, selected = FALSE))
+  members <- if (symbol %in% names(complex_subunits)) {
+    complex_subunits[[symbol]]
+  } else {
+    symbol
+  }
+  c(
+    available = length(members) > 0L && all(members %in% gene.use),
+    selected = symbol %in% selected ||
+      length(intersect(members, selected)) > 0L
+  )
+}
+#' Subset the expression data of signaling genes for saving computation cost
+#'
+#' @param object A SpatialCellChat object.
+#' @param features Optional explicit gene vector. If NULL, genes referenced by
+#'   the object's DB are selected.
+#'
+#' @return An updated SpatialCellChat object with the selected genes in
+#'   \code{assay$signaling}.
+#' @export
+#'
+
+subsetData <- function(object, features = NULL) {
+  object <- .sc_assert_spatial_cell_chat(object)
+  interaction_input <- object@DB$interaction
+  if (!is.data.frame(interaction_input) ||
+      !all(c("ligand", "receptor") %in% colnames(interaction_input)))
+    stop("object@DB$interaction must contain ligand and receptor columns",
+         call. = FALSE)
+
+  if (identical(object@misc$.datatype, "spatial") &&
+      !"annotation" %in% colnames(interaction_input)) {
+    warning("A column named `annotation` is required in `object@DB$interaction` when running CellChat on spatial transcriptomics! The `annotation` column is now automatically added and all L-R pairs are assigned as `Secreted Signaling`, which means that these L-R pairs are assumed to mediate diffusion-based cellular communication.")
+    interaction_input$annotation <- "Secreted Signaling"
+  }
+
+  if ("annotation" %in% colnames(interaction_input) &&
+      length(unique(interaction_input$annotation)) > 1L) {
+    annotation <- as.character(interaction_input$annotation)
+    annotation_order <- c(
+      "Secreted Signaling", "ECM-Receptor", "Non-protein Signaling",
+      "Cell-Cell Contact"
+    )
+    rank <- match(annotation, annotation_order)
+    unknown <- is.na(rank)
+    if (any(unknown)) {
+      rank[unknown] <- length(annotation_order) + seq_len(sum(unknown))
+    }
+    order_index <- order(rank, seq_along(rank))
+    interaction_input <- interaction_input[order_index, , drop = FALSE]
+    interaction_input$annotation <- annotation[order_index]
+  }
+  if ("annotation" %in% colnames(interaction_input))
+    object@DB$interaction <- interaction_input
+
+  norm <- assay(object, "norm")
+  if (is.null(norm))
+    stop("assay$norm is required before running subsetData", call. = FALSE)
+  gene.use_input <- if (is.null(features)) {
+    .sc_db_signaling_genes(interaction_input, object@DB)
+  } else {
+    .sc_clean_gene_names(features)
+  }
+  gene.use <- intersect(gene.use_input, rownames(norm))
+  assay(object, "signaling") <- norm[rownames(norm) %in% gene.use, , drop = FALSE]
+  object <- .log_operation(object, "subsetData", params = list(
+    features = if (is.null(features)) NULL else gene.use_input,
+    n.genes = length(gene.use)
+  ))
+  methods::validObject(object)
+  object
 }
 
 
-#' Identify over-expressed signaling genes associated with each cell group or spatially variable features independent of cell groups
+#' Identify over-expressed signaling genes associated with each cell group or
+#' spatially variable features independent of cell groups.
 #'
-#' USERS can use customized gene set as over-expressed signaling genes by setting `object@var.features[[features.name]] <- features.sig`
-#' The Bonferroni corrected/adjusted p value can be obtained via `object@var.features[[paste0(features.name, ".info")]]`. Note that by default `features.name = "features"`
+#' Results are stored in \code{object@misc$.var.features}: the selected gene
+#' vector uses \code{features.name}, and the differential-expression or spatial
+#' statistics table uses \code{paste0(features.name, ".info")}.
 #'
-#' @param object CellChat object
-#' @param do.grid Boolean. Whether to do "grid" operation to speed up computation.
-#' @param data.use a customed data matrix. Default: data.use = NULL and the expression matrix in the slot 'data.signaling' is used
-#' @param selection.method Method for selecting (spatially) variable features.
-#' @param group.by cell group information; default is `object@idents`; otherwise it should be one of the column names of the meta slot
-#' @param idents.use a subset of cell groups used for analysis
-#' @param invert whether invert the idents.use
-#' @param group.dataset dataset origin information in a merged CellChat object; set it as one of the column names of meta slot when identifying the highly enriched genes in one dataset for each cell group
-#' @param pos.dataset the dataset name used for identifying highly enriched genes in this dataset for each cell group
-#' @param features.name a char name used for storing the over-expressed signaling genes in `object@var.features[[features.name]]`
-#' @param only.pos Only return positive markers
-#' @param features features used for identifying Over Expressed genes. default use all features
-#' @param return.object whether return the object; otherwise return a data frame consisting of over-expressed signaling genes associated with each cell group
-#' @param thresh.pc Threshold of the percent of cells expressed in one cluster
-#' @param thresh.fc Threshold of Log Fold Change
-#' @param thresh.p Threshold of p-values
+#' @param object A SpatialCellChat object.
+#' @param do.grid Whether to aggregate cells into a spatial grid first.
+#' @param data.use Optional custom expression matrix; otherwise
+#'   \code{assay$signaling} is used.
+#' @param selection.method One of \code{"wilcox"}, \code{"moransi"}, or
+#'   \code{"meringue"}.
+#' @param group.by Metadata column used for Wilcoxon groups; defaults to
+#'   \code{idents}.
+#' @param idents.use Optional subset of groups; \code{invert} reverses it.
+#' @param group.dataset Optional metadata column for dataset-specific testing.
+#' @param pos.dataset Dataset value to test when \code{group.dataset} is set.
+#' @param features.name Name under \code{misc$.var.features} for the result.
+#' @param only.pos Whether to keep only positive markers.
+#' @param features Optional expression features to test.
+#' @param return.object Whether to return the object or the statistics table.
+#' @param thresh.pc Minimum expressing-cell fraction.
+#' @param thresh.fc Minimum log fold change.
+#' @param thresh.p Maximum p-value.
 #' @inheritParams makeGridSpatialCellChat
 #'
-#' @importFrom stats sd wilcox.test
-#' @importFrom stats p.adjust
-#'
-#' @return A CellChat object or a data frame. If returning a CellChat object, two new elements named 'features.name' and paste0(features.name, ".info") will be added into the list `object@var.features`
-#' `object@var.features[[features.name]]` is a vector consisting of the identified over-expressed signaling genes;
-#' `object@var.features[[paste0(features.name, ".info")]]` is a data frame returned from the differential expression analysis / the simple filtering
+#' @return A SpatialCellChat object or a data frame of feature statistics.
 #' @export
 #'
 identifyOverExpressedGenes <- function(
     object,
-    do.grid = F,
+    do.grid = FALSE,
     cellsize = c(5, 5),
     what = "polygons",
-    square = T,
+    square = TRUE,
     data.use = NULL,
     selection.method = c("wilcox", "moransi", "meringue"),
     features.name = "features",
@@ -1112,44 +1344,30 @@ identifyOverExpressedGenes <- function(
     thresh.pc = 0,
     thresh.fc = 0,
     thresh.p = 0.05
-
 ){
+  object <- .sc_assert_spatial_cell_chat(object)
   selection.method <- match.arg(selection.method)
+  if (length(features.name) != 1L || !is.character(features.name) ||
+      is.na(features.name) || !nzchar(features.name))
+    stop("features.name must be a single non-empty string", call. = FALSE)
+  if (length(return.object) != 1L || !is.logical(return.object) ||
+      is.na(return.object))
+    stop("return.object must be TRUE or FALSE", call. = FALSE)
 
-  # For code test
-  # object = mousebrainGrid
-  # data.use=NULL
-  # # selection.method = c("wilcox", "moransi", "nnSVG", "simple")
-  # selection.method = c("moransi")
-  # features.name = "features"
-  # group.by = NULL
-  # idents.use = NULL
-  # invert = FALSE
-  # group.dataset = NULL
-  # pos.dataset = NULL
-  # only.pos = TRUE
-  # features = NULL
-  # return.object = TRUE
-  # thresh.pc = 0
-  # thresh.fc = 0
-  # thresh.p = 0.05
-
-  if(do.grid){
-    # make grid SpatialCellChat
+  info.name <- paste0(features.name, ".info")
+  if (isTRUE(do.grid)) {
     grid.object <- makeGridSpatialCellChat(
       object = object,
+      data.slot = "norm",
       cellsize = cellsize,
       what = what,
       square = square
     )
     grid.object@DB <- object@DB
     grid.object <- subsetData(grid.object)
-
-
-    # recursive definition
     grid.object <- identifyOverExpressedGenes(
       object = grid.object,
-      do.grid=F,
+      do.grid = FALSE,
       data.use = NULL,
       selection.method = selection.method,
       features.name = features.name,
@@ -1165,236 +1383,207 @@ identifyOverExpressedGenes <- function(
       thresh.fc = thresh.fc,
       thresh.p = thresh.p
     )
+    if (!isTRUE(return.object))
+      return(grid.object@misc$.var.features[[info.name]])
+    object@misc$.var.features <- grid.object@misc$.var.features
+    object@images$.grid <- list(
+      object = grid.object,
+      within.nGrid = grid.object@images$.grid$within.nGrid,
+      recommended.contact.range = grid.object@images$.grid$recommended.contact.range
+    )
+    object <- .log_operation(object, "identifyOverExpressedGenes", params = list(
+      do.grid = TRUE,
+      selection.method = selection.method,
+      features.name = features.name
+    ))
+    methods::validObject(object)
+    return(object)
+  }
 
-    if (return.object) {
-      object@var.features <- grid.object@var.features
-      misc(object,"grid.object") <- grid.object
-      return(object)
-    } else {
-      markers.all = grid.object@var.features$features.info
-      return(markers.all)
-    }
-
+  X <- if (is.null(data.use)) assay(object, "signaling") else data.use
+  if (is.null(X) || !is.matrix(X) && !inherits(X, "Matrix"))
+    stop("assay$signaling or data.use must be a matrix-like object",
+         call. = FALSE)
+  if (length(dim(X)) != 2L || is.null(rownames(X)) || is.null(colnames(X)))
+    stop("signaling expression data must have row and column names", call. = FALSE)
+  if (nrow(X) < 3L)
+    stop("Please check `assay$signaling` and ensure that you have run `subsetData` and that the signaling matrix has at least three genes", call. = FALSE)
+  cell.names <- colnames(assay(object, "norm"))
+  if (!setequal(colnames(X), cell.names))
+    stop("signaling expression columns must contain exactly the object cell names",
+         call. = FALSE)
+  X <- X[, cell.names, drop = FALSE]
+  features.use <- if (is.null(features)) {
+    rownames(X)
   } else {
-    if (!is.list(object@var.features)) {
-      stop("Please update your CellChat object via `updateCellChat()`")
-    }
-    if (is.null(data.use)) {
-      X <- object@data.signaling
-      if (nrow(X) < 3) {stop("Please check `object@data.signaling` and ensure that you have run `subsetData` and that the data matrix `object@data.signaling` looks OK.")}
-    } else {
-      X <- data.use
-    }
+    intersect(.sc_clean_gene_names(features), rownames(X))
+  }
+  data.matrix <- as.matrix(X[features.use, , drop = FALSE])
 
-    if (is.null(features)) {
-      features.use <- row.names(X)
-    } else {
-      features.use <- intersect(features, row.names(X))
-    }
-    data.use <- X[features.use,]
-    data.use <- as.matrix(data.use)
+  empty_markers <- function() data.frame(
+    clusters = character(), features = character(), pvalues = numeric(),
+    logFC = numeric(), pct.1 = numeric(), pct.2 = numeric(),
+    pvalues.adj = numeric(), stringsAsFactors = FALSE
+  )
+  markers.all <- empty_markers()
+  features.sig <- character()
 
-
+  if (length(features.use)) {
     if (selection.method == "wilcox") {
-      cat(cli.symbol(),"Choose variable features via Wilcox test using available cell group information...","\n")
-      ### perform differential expression analysis using available cell group information
       if (is.null(group.by)) {
         labels <- object@idents
-        if (!is.factor(labels)) {
-          message("Use the joint cell labels from the merged CellChat object")
-          labels <- object@idents$joint
-        }
       } else {
+        if (length(group.by) != 1L || !is.character(group.by) ||
+            !group.by %in% colnames(object@meta))
+          stop("group.by must name a metadata column", call. = FALSE)
         labels <- object@meta[[group.by]]
+        names(labels) <- rownames(object@meta)
+        labels <- labels[cell.names]
       }
-      if (!is.factor(labels)) {
-        labels <- factor(labels)
-      }
-      level.use <- levels(labels)[levels(labels) %in% unique(labels)]
+      if (length(labels) != ncol(data.matrix) || anyNA(labels))
+        stop("group labels must contain one non-missing value per cell", call. = FALSE)
+      if (!is.factor(labels)) labels <- factor(labels)
+      level.use <- levels(labels)[levels(labels) %in% unique(as.character(labels))]
       if (!is.null(idents.use)) {
-        if (invert) {
-          level.use <- level.use[!(level.use %in% idents.use)]
+        idents.use <- as.character(idents.use)
+        level.use <- if (isTRUE(invert)) {
+          level.use[!(level.use %in% idents.use)]
         } else {
-          level.use <- level.use[level.use %in% idents.use]
+          level.use[level.use %in% idents.use]
         }
       }
-      numCluster <- length(level.use)
-
+      labels.character <- as.character(labels)
+      labels.dataset <- NULL
       if (!is.null(group.dataset)) {
+        if (length(group.dataset) != 1L || !is.character(group.dataset) ||
+            !group.dataset %in% colnames(object@meta))
+          stop("group.dataset must name a metadata column", call. = FALSE)
+        if (length(pos.dataset) != 1L || is.na(pos.dataset) ||
+            !nzchar(as.character(pos.dataset)))
+          stop("pos.dataset must be provided with group.dataset", call. = FALSE)
         labels.dataset <- as.character(object@meta[[group.dataset]])
-        if (!(pos.dataset %in% unique(labels.dataset))) {
-          cat(cli.symbol(),"Please set pos.dataset to be one of the following dataset names: ", unique(as.character(labels.dataset)))
-          stop()
-        }
+        names(labels.dataset) <- rownames(object@meta)
+        labels.dataset <- labels.dataset[cell.names]
+        if (!(as.character(pos.dataset) %in% unique(labels.dataset)))
+          stop("pos.dataset must name a value present in group.dataset", call. = FALSE)
       }
 
-      mean.fxn <- function(x) {
-        return(log(x = mean(x = expm1(x = x)) + 1))
-      }
-      labels <- as.character(labels)
-      genes.de <- vector("list", length = numCluster)
-      for (i in 1:numCluster) {
-        features <- features.use
-        if (is.null(group.dataset)) {
-          cell.use1 <- which(labels == level.use[i])
-          cell.use2 <- base::setdiff(1:length(labels), cell.use1)
+      mean.fxn <- function(value) log(mean(expm1(value)) + 1)
+      genes.de <- vector("list", length(level.use))
+      for (i in seq_along(level.use)) {
+        cell.use1 <- if (is.null(labels.dataset)) {
+          which(labels.character == level.use[[i]])
         } else {
-          cell.use1 <- which((labels == level.use[i]) & (labels.dataset == pos.dataset))
-          cell.use2 <- which((labels == level.use[i]) & (labels.dataset != pos.dataset))
+          which(labels.character == level.use[[i]] &
+                  labels.dataset == as.character(pos.dataset))
         }
-
-        # feature selection (based on percentages)
-        thresh.min <- 0
-        pct.1 <- round(
-          x = rowSums(data.use[features, cell.use1, drop = FALSE] > thresh.min) /
-            length(x = cell.use1),
-          digits = 3
-        )
-        pct.2 <- round(
-          x = rowSums(data.use[features, cell.use2, drop = FALSE] > thresh.min) /
-            length(x = cell.use2),
-          digits = 3
-        )
-        data.alpha <- cbind(pct.1, pct.2)
-        colnames(x = data.alpha) <- c("pct.1", "pct.2")
-        alpha.min <- apply(X = data.alpha, MARGIN = 1, FUN = max)
-        names(x = alpha.min) <- rownames(x = data.alpha)
-        features <- names(x = which(x = alpha.min > thresh.pc))
-        if (length(x = features) == 0) {
-          #stop("No features pass thresh.pc threshold")
-          next
-        }
-
-        # feature selection (based on average difference)
-        data.1 <- apply(X = data.use[features, cell.use1, drop = FALSE],MARGIN = 1,FUN = mean.fxn)
-        data.2 <- apply(X = data.use[features, cell.use2, drop = FALSE],MARGIN = 1,FUN = mean.fxn)
-        FC <- (data.1 - data.2)
-        if (only.pos) {
-          features.diff <- names(which(FC > thresh.fc))
+        cell.use2 <- if (is.null(labels.dataset)) {
+          setdiff(seq_along(labels.character), cell.use1)
         } else {
-          features.diff <- names(which(abs(FC) > thresh.fc))
+          which(labels.character == level.use[[i]] &
+                  labels.dataset != as.character(pos.dataset))
         }
+        if (!length(cell.use1) || !length(cell.use2)) next
 
-        features <- intersect(x = features, y = features.diff)
-        if (length(x = features) == 0) {
-          #  stop("No features pass thresh.fc threshold")
-          next
-        }
+        pct.1 <- round(rowSums(data.matrix[, cell.use1, drop = FALSE] > 0) /
+                         length(cell.use1), 3)
+        pct.2 <- round(rowSums(data.matrix[, cell.use2, drop = FALSE] > 0) /
+                         length(cell.use2), 3)
+        alpha <- cbind(pct.1 = pct.1, pct.2 = pct.2)
+        eligible <- rownames(alpha)[pmax(alpha[, "pct.1"], alpha[, "pct.2"]) > thresh.pc]
+        if (!length(eligible)) next
 
-        data1 <- data.use[features, cell.use1, drop = FALSE]
-        data2 <- data.use[features, cell.use2, drop = FALSE]
-
-        pvalues <- unlist(
-          x = my_future_lapply(
-            X = 1:nrow(x = data1),
-            FUN = function(x) {
-              # return(wilcox.test(data1[x, ], data2[x, ], alternative = "greater")$p.value)
-              return(wilcox.test(data1[x, ], data2[x, ])$p.value)
-            }
-          )
+        data.1 <- vapply(eligible, function(feature) {
+          mean.fxn(data.matrix[feature, cell.use1])
+        }, numeric(1))
+        data.2 <- vapply(eligible, function(feature) {
+          mean.fxn(data.matrix[feature, cell.use2])
+        }, numeric(1))
+        logFC <- data.1 - data.2
+        keep <- if (isTRUE(only.pos)) logFC > thresh.fc else abs(logFC) > thresh.fc
+        eligible <- eligible[keep]
+        if (!length(eligible)) next
+        data1 <- data.matrix[eligible, cell.use1, drop = FALSE]
+        data2 <- data.matrix[eligible, cell.use2, drop = FALSE]
+        pvalues <- vapply(seq_len(nrow(data1)), function(index) {
+          stats::wilcox.test(data1[index, ], data2[index, ])$p.value
+        }, numeric(1))
+        pval.adj <- stats::p.adjust(pvalues, method = "bonferroni", n = nrow(X))
+        genes.de[[i]] <- data.frame(
+          clusters = level.use[[i]],
+          features = eligible,
+          pvalues = pvalues,
+          logFC = logFC[eligible],
+          pct.1 = alpha[eligible, "pct.1"],
+          pct.2 = alpha[eligible, "pct.2"],
+          pvalues.adj = pval.adj,
+          stringsAsFactors = FALSE
         )
-
-        pval.adj = stats::p.adjust(
-          p = pvalues,
-          method = "bonferroni",
-          n = nrow(X)
-        )
-        genes.de[[i]] <- data.frame(clusters = level.use[i], features = as.character(rownames(data1)), pvalues = pvalues, logFC = FC[features], data.alpha[features,, drop = F],pvalues.adj = pval.adj, stringsAsFactors = FALSE)
       }
-
-      markers.all <- data.frame()
-      for (i in 1:numCluster) {
-        gde <- genes.de[[i]]
-        if (!is.null(gde)) {
-          gde <- gde[order(gde$pvalues, -gde$logFC), ]
-          gde <- subset(gde, subset = pvalues < thresh.p)
-          if (nrow(gde) > 0) {
-            markers.all <- rbind(markers.all, gde)
-          }
-        }
+      genes.de <- Filter(Negate(is.null), genes.de)
+      if (length(genes.de)) {
+        markers.all <- do.call(rbind, lapply(genes.de, function(markers) {
+          markers <- markers[order(markers$pvalues, -markers$logFC), , drop = FALSE]
+          markers[markers$pvalues < thresh.p, , drop = FALSE]
+        }))
+        rownames(markers.all) <- NULL
       }
-      if (only.pos & nrow(markers.all) > 0) {
-        markers.all <- subset(markers.all, subset = logFC > 0)
-      }
-      if (!is.null(group.dataset)) {
-        markers.all$datasets[markers.all$logFC > 0] <- pos.dataset
-        markers.all$datasets[markers.all$logFC < 0] <- setdiff(unique(labels.dataset), pos.dataset)
-        markers.all$datasets <- factor(markers.all$datasets, levels = levels(factor(object@meta[[group.dataset]])))
-        markers.all <- markers.all[order(markers.all$datasets, markers.all$pvalues, -markers.all$logFC), ]
+      if (isTRUE(only.pos) && nrow(markers.all))
+        markers.all <- markers.all[markers.all$logFC > 0, , drop = FALSE]
+      if (!is.null(labels.dataset)) {
+        datasets <- rep(NA_character_, nrow(markers.all))
+        datasets[markers.all$logFC > 0] <- as.character(pos.dataset)
+        datasets[markers.all$logFC < 0] <- setdiff(unique(labels.dataset), as.character(pos.dataset))[1L]
+        markers.all$datasets <- factor(datasets, levels = unique(labels.dataset))
+        markers.all <- markers.all[order(markers.all$datasets, markers.all$pvalues,
+                                         -markers.all$logFC), , drop = FALSE]
       }
       markers.all$features <- as.character(markers.all$features)
-      features.sig <- markers.all$features
-
-    } else if (selection.method == "moransi") {
-      cat(cli.symbol(),"Choose spatially variable features using Moran's I value...","\n")
-      coord <- object@images$coordinates
-
-      markers.all <- Seurat::RunMoransI(data = data.use, pos = coord, verbose = T)
-      # markers.all <- RunMoransI(data = data.use, pos = coord, verbose = FALSE)
-      features.sig <- markers.all %>%
-        dplyr::filter(p.value<thresh.p) %>%
-        dplyr::filter(!is.nan(observed)) %>%
-        rownames()
-      # markers.all <- Seurat::RunMarkVario(spatial.location = coord, data = X)
-
-    } else if (selection.method == "meringue") {
-      cat(cli.symbol(),"Choose spatially variable features using 'MERINGUE' method...","\n")
-      # refer to: https://github.com/PYangLab/SVGbench
-      callSVG.MERINGUE = function(normMat, spatial_locs) {
-        w <- MERINGUE::getSpatialNeighbors(spatial_locs, filterDist = NA)
-        I <- MERINGUE::getSpatialPatterns(normMat, w)
-
-        return(I)
-      }
-
-      coord <- object@images$coordinates
-
-      markers.all <- callSVG.MERINGUE(normMat = data.use,spatial_locs = coord)
-      features.sig <- markers.all %>%
-        dplyr::filter(p.adj<thresh.p) %>%
-        dplyr::filter(!is.nan(observed)) %>%
-        rownames()
-
-    }
-
-    # else if (selection.method == "nnSVG") {
-    #   cat(cli.symbol(),"Choose spatially variable features using 'nnSVG' method...","\n")
-    #   set.seed(seed.use)
-    #   coord <- object@images$coordinates
-    #   n.cores <- min(future::availableCores(), n.cores)
-    #   svg <-
-    #     nnSVG::nnSVG(
-    #       data.use,
-    #       spatial_coords = as.matrix(coord),
-    #       n_threads = n.cores,
-    #       BPPARAM = BPPARAM,
-    #       verbose = T
-    #     )
-    #   markers.all <- svg[, c("LR_stat","rank","pval","padj")]
-    #   features.sig <- rownames(svg)[svg$pval < thresh.p]
-    #
-    # } else if (selection.method == "simple") {
-    #   cat(cli.symbol(),"Choose spatially variable features using 'simple' method...","\n")
-    #   nCell.perFeature <- Matrix::rowSums(data.use>0)# a named vector
-    #
-    #   markers.all <- as.data.frame(nCell.perFeature)
-    #   colnames(markers.all) <- c("nNonZeroCell")
-    #
-    #   features.sig <- names(nCell.perFeature)[nCell.perFeature>thresh.nCell.perFeature]
-    # }
-
-    object@var.features[[features.name]] <- features.sig
-    features.name <- paste0(features.name, ".info")
-    object@var.features[[features.name]] <- markers.all
-    cat(cli.symbol(),"The number of highly variable features is", length(features.sig), '\n')
-
-    if (return.object) {
-      return(object)
+      features.sig <- unique(markers.all$features)
     } else {
-      return(markers.all)
+      coord <- object@images$coordinates
+      if (is.null(coord))
+        stop("spatial coordinates are required for spatial feature selection",
+             call. = FALSE)
+      coord <- as.matrix(coord)
+      if (is.null(rownames(coord)) || !setequal(rownames(coord), cell.names))
+        stop("images$coordinates rownames must match expression cell names",
+             call. = FALSE)
+      coord <- coord[cell.names, , drop = FALSE]
+      if (selection.method == "moransi") {
+        if (!requireNamespace("Seurat", quietly = TRUE))
+          stop("Seurat is required for Moran's I feature selection", call. = FALSE)
+        markers.all <- Seurat::RunMoransI(
+          data = data.matrix, pos = coord, verbose = FALSE
+        )
+        p.value <- if ("p.value" %in% colnames(markers.all)) markers.all$p.value else rep(NA_real_, nrow(markers.all))
+        valid <- is.finite(p.value) & p.value < thresh.p
+        if ("observed" %in% colnames(markers.all)) valid <- valid & !is.nan(markers.all$observed)
+        features.sig <- intersect(rownames(markers.all)[valid], features.use)
+      } else {
+        if (!requireNamespace("MERINGUE", quietly = TRUE))
+          stop("MERINGUE is required for MERINGUE feature selection", call. = FALSE)
+        neighbors <- MERINGUE::getSpatialNeighbors(coord, filterDist = NA)
+        markers.all <- MERINGUE::getSpatialPatterns(data.matrix, neighbors)
+        p.value <- if ("p.adj" %in% colnames(markers.all)) markers.all$p.adj else markers.all$p.value
+        valid <- is.finite(p.value) & p.value < thresh.p
+        if ("observed" %in% colnames(markers.all)) valid <- valid & !is.nan(markers.all$observed)
+        features.sig <- intersect(rownames(markers.all)[valid], features.use)
+      }
     }
+  }
 
-  } # whether to do grid
+  if (!isTRUE(return.object)) return(markers.all)
+  object@misc$.var.features[[features.name]] <- features.sig
+  object@misc$.var.features[[info.name]] <- markers.all
+  object <- .log_operation(object, "identifyOverExpressedGenes", params = list(
+    do.grid = FALSE,
+    selection.method = selection.method,
+    features.name = features.name,
+    n.features = length(features.sig)
+  ))
+  methods::validObject(object)
+  object
 }
 
 
@@ -1476,110 +1665,87 @@ identifyOverExpressedLigandReceptor <- function(object, features.name = "feature
 }
 
 
-#' Identify over-expressed ligand-receptor interactions (pairs) within the used CellChatDB
+#' Identify over-expressed ligand-receptor interactions within the used DB.
 #'
-#' @param object CellChat object
-#' @param features.name a char name used for assess the results in `object@var.features[[features.name]]`
-#' @param features a vector of features to use. default use all over-expressed genes in `object@var.features[[features.name]]`
-#' @param variable.both variable.both = TRUE will require that both ligand and receptor from one pair are over-expressed;
+#' The signaling expression layer is read from \code{assay$signaling}, selected
+#' features are read from \code{misc$.var.features}, and the resulting table is
+#' stored in \code{LR$LRsig}.
 #'
-#' variable.both = FALSE will only require that either ligand or receptor from one pair is over-expressed, leading to more over-expressed ligand-receptor interactions (pairs) for further analysis.
-#' @param return.object whether returning a CellChat object. If FALSE, it will return a data frame containing the over-expressed ligand-receptor pairs
-#' @importFrom future nbrOfWorkers
-#' @importFrom future.apply future_sapply
-#' @importFrom pbapply pbsapply
-#' @importFrom dplyr select
-#'
-#' @return A CellChat object or a data frame. If returning a CellChat object, a new element named 'LRsig' will be added into the list `object@LR`
+#' @param object A SpatialCellChat object.
+#' @param features.name Name of the selected feature vector in
+#'   \\code{misc$.var.features}.
+#' @param features Optional explicit selected feature vector.
+#' @param variable.both If TRUE, both ligand and receptor must be selected;
+#'   otherwise either side may be selected. Both sides must be available in the
+#'   signaling layer in either mode.
+#' @param return.object Whether to return the object or the selected LR table.
+#' @return A SpatialCellChat object or a data frame of selected interactions.
 #' @export
 #'
-identifyOverExpressedInteractions <- function(object, features.name = "features", variable.both = TRUE, features = NULL, return.object = TRUE) {
-  gene.use <- row.names(object@data.signaling)
-  DB <- object@DB
-  if (is.null(features)) {
-    if (is.list(object@var.features)) {
-      features.sig <- object@var.features[[features.name]] # use the updated CellChat object 12/2020
-    } else {
-      stop("Please update your CellChat object via `updateCellChat()`")
-    }
+identifyOverExpressedInteractions <- function(object, features.name = "features",
+                                              variable.both = TRUE,
+                                              features = NULL,
+                                              return.object = TRUE) {
+  object <- .sc_assert_spatial_cell_chat(object)
+  if (length(features.name) != 1L || !is.character(features.name) ||
+      is.na(features.name) || !nzchar(features.name))
+    stop("features.name must be a single non-empty string", call. = FALSE)
+  if (length(variable.both) != 1L || !is.logical(variable.both) ||
+      is.na(variable.both))
+    stop("variable.both must be TRUE or FALSE", call. = FALSE)
+  if (length(return.object) != 1L || !is.logical(return.object) ||
+      is.na(return.object))
+    stop("return.object must be TRUE or FALSE", call. = FALSE)
 
+  signaling <- assay(object, "signaling")
+  if (is.null(signaling))
+    stop("assay$signaling is empty; run subsetData before identifying interactions",
+         call. = FALSE)
+  gene.use <- rownames(signaling)
+  if (is.null(features)) {
+    var.features <- object@misc$.var.features
+    if (!is.list(var.features) || !features.name %in% names(var.features))
+      stop("The input features.name does not exist in misc$.var.features. Please first run `identifyOverExpressedGenes`! ",
+           call. = FALSE)
+    features.sig <- var.features[[features.name]]
   } else {
     features.sig <- features
   }
+  features.sig <- unique(.sc_clean_gene_names(features.sig))
 
-  interaction_input <- DB$interaction
-  complex_input <- DB$complex
-  # my.sapply <- ifelse(
-  #   test = future::nbrOfWorkers() == 1,
-  #   yes = pbapply::pbsapply,
-  #   no = future.apply::future_sapply
-  # )
-  complexSubunits <- complex_input[, grepl("subunit" , colnames(complex_input))]
-  index.sig <- unlist(
-    x = my_future_lapply(
-      X = 1:nrow(complexSubunits),
-      FUN = function(x) {
-        complexsubunitsV <- unlist(complexSubunits[x,], use.names = F)
-        complexsubunitsV <- complexsubunitsV[complexsubunitsV != ""]
-        if (length(intersect(complexsubunitsV, features.sig)) > 0 & all(complexsubunitsV %in% gene.use)) {
-          return(x)
-        }
-      }
+  interaction_input <- object@DB$interaction
+  if (!is.data.frame(interaction_input) ||
+      !all(c("ligand", "receptor") %in% colnames(interaction_input)))
+    stop("object@DB$interaction must contain ligand and receptor columns",
+         call. = FALSE)
+  complex_subunits <- .sc_complex_subunits(object@DB$complex)
+  keep <- vapply(seq_len(nrow(interaction_input)), function(index) {
+    ligand <- .sc_lr_feature_state(
+      interaction_input$ligand[[index]], features.sig, gene.use, complex_subunits
     )
-  )
-  complexSubunits.sig <- complexSubunits[index.sig,]
-
-  index.use <- unlist(
-    x = my_future_lapply(
-      X = 1:nrow(complexSubunits),
-      FUN = function(x) {
-        complexsubunitsV <- unlist(complexSubunits[x,], use.names = F)
-        complexsubunitsV <- complexsubunitsV[complexsubunitsV != ""]
-        if (all(complexsubunitsV %in% gene.use)) {
-          return(x)
-        }
-      },
-      strategy.message = FALSE
+    receptor <- .sc_lr_feature_state(
+      interaction_input$receptor[[index]], features.sig, gene.use, complex_subunits
     )
-  )
-  complexSubunits.use <- complexSubunits[index.use,]
+    if (!all(c(ligand[["available"]], receptor[["available"]]))) return(FALSE)
+    if (isTRUE(variable.both)) {
+      all(c(ligand[["selected"]], receptor[["selected"]]))
+    } else {
+      any(c(ligand[["selected"]], receptor[["selected"]]))
+    }
+  }, logical(1))
+  pairLRsig <- interaction_input[keep, , drop = FALSE]
 
-  pairLR <- select(interaction_input, ligand, receptor)
-
-  if (variable.both) {
-    index.sig <- unlist(
-      x = my_future_lapply(
-        X = 1:nrow(pairLR),
-        FUN = function(x) {
-          if (all(unlist(pairLR[x,], use.names = F) %in% c(features.sig, rownames(complexSubunits.sig)))) {
-            return(x)
-          }
-        }
-      )
-    )
-  } else {
-    index.sig <- unlist(
-      x = my_future_lapply(
-        X = 1:nrow(pairLR),
-        FUN = function(x) {
-          # if (all(unlist(pairLR[x,], use.names = F) %in% c(features.sig, rownames(complexSubunits.sig)))) {
-          if (all(unlist(pairLR[x,], use.names = F) %in% c(gene.use, rownames(complexSubunits.use))) & (length(intersect(unlist(pairLR[x,], use.names = F), c(features.sig, rownames(complexSubunits.sig)))) > 0)) {
-            return(x)
-          }
-        },
-        strategy.message = FALSE
-      )
-    )
-  }
-
-  pairLRsig <- interaction_input[index.sig, ]
+  if (!isTRUE(return.object)) return(pairLRsig)
   object@LR$LRsig <- pairLRsig
-  cat(cli.symbol(),"The number of highly variable ligand-receptor pairs used for signaling inference is", nrow(pairLRsig), '\n')
-  if (return.object) {
-    return(object)
-  } else {
-    return(pairLRsig)
-  }
+  object <- .log_operation(object, "identifyOverExpressedInteractions", params = list(
+    features.name = features.name,
+    variable.both = variable.both,
+    n.interactions = nrow(pairLRsig)
+  ))
+  methods::validObject(object)
+  cat(cli.symbol(), "The number of highly variable ligand-receptor pairs used for signaling inference is ",
+      nrow(pairLRsig), "\n", sep = "")
+  object
 }
 
 

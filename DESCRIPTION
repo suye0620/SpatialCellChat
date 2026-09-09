@@ -15,13 +15,14 @@ Imports: ALRA, cli, colorspace, sf, purrr, stringr, future, future.apply, pbappl
         cowplot, methods, ComplexHeatmap, RSpectra, Rfast, Rcpp,
         reticulate, scales, sna, forcats, reshape2, FNN,
         shape, Seurat (>= 4.0.0), spatstat.sparse, magrittr, patchwork, plyr, ggpubr,
-        ggnetwork, BiocGenerics, BiocNeighbors, ggnewscale, progressr, uwot, ks, rlang
+        ggnetwork, BiocGenerics, BiocNeighbors, ggnewscale, progressr, uwot, ks, rlang,
+        htmlwidgets, htmltools
 LinkingTo: Rcpp, RcppEigen
 Suggests: rmarkdown, knitr, roxygen2, SingleCellExperiment,
         SummarizedExperiment, gg.gap, wordcloud, raster, 
         SeuratObject, metR, oce, plotly, rstudioapi, scattermore, shiny, spdep, tidyr,
         RcppML, gtools, scatterpie, rliger, SNFtool, pryr, RcppEigen, Rtsne, expm, progress
-RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 NeedsCompilation: yes
 Packaged: 2026-02
+Config/roxygen2/version: 8.0.0

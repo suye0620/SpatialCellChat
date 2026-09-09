@@ -21,7 +21,7 @@ communicationDistPlot2 <-  function(
     }
   }
   interaction.range <- object@options$parameter$interaction.range
-  res <- object@images$result.computeCellDistance
+  res <- object@images$.distance
 
   # long-range distance
   d.spatial <- res$d.spatial
@@ -98,7 +98,7 @@ communicationDistPlot <-  function(
     density.alpha=0.5
 ) {
   interaction.range <- object@options$parameter$interaction.range
-  res <- object@images$result.computeCellDistance
+  res <- object@images$.distance
 
   # long-range distance
   d.spatial <- res$d.spatial
@@ -178,339 +178,421 @@ communicationDistPlot <-  function(
 }
 
 
+#' @title Internal grid-size and membership helpers
+#'
+#' These helpers deliberately operate on the caller's coordinate frame and
+#' already-created `sf` objects. They do not change coordinate orientation or
+#' CRS metadata.
+#' @noRd
+.sc_resolve_grid_size <- function(
+    coordinates,
+    cellsize = NULL,
+    grid.resolution = NULL,
+    ratio = NULL
+) {
+  coordinates <- as.matrix(coordinates)
+  if (!is.numeric(coordinates) || length(dim(coordinates)) != 2L ||
+      ncol(coordinates) < 2L)
+    stop("coordinates must be a numeric matrix with at least two columns", call. = FALSE)
+  if (!nrow(coordinates))
+    stop("coordinates must contain at least one row", call. = FALSE)
+  if (any(!is.finite(coordinates)))
+    stop("coordinates must contain finite numeric values", call. = FALSE)
+
+  if (is.null(grid.resolution)) grid.resolution <- 2
+  if (length(grid.resolution) != 1L || !is.numeric(grid.resolution) ||
+      is.na(grid.resolution) || !is.finite(grid.resolution) ||
+      grid.resolution <= 0)
+    stop("grid.resolution must be a finite numeric scalar greater than zero",
+         call. = FALSE)
+  grid.resolution <- as.numeric(grid.resolution)
+
+  if (!is.null(cellsize)) {
+    if (!is.numeric(cellsize) || !length(cellsize) %in% c(1L, 2L))
+      stop("cellsize must be a positive numeric vector of length 1 or 2",
+           call. = FALSE)
+    if (any(!is.finite(cellsize)) || any(cellsize <= 0))
+      stop("cellsize must contain finite numeric values greater than zero",
+           call. = FALSE)
+    base.cellsize <- as.numeric(cellsize)
+    source <- "user-supplied"
+    nearest.distance.method <- NULL
+  } else {
+    if (nrow(coordinates) < 2L)
+      stop("coordinates must contain at least two points", call. = FALSE)
+    k <- min(2L, nrow(coordinates) - 1L)
+    neighbors <- BiocNeighbors::findKNN(
+      X = coordinates,
+      k = k,
+      get.index = TRUE,
+      get.distance = TRUE,
+      num.threads = 1L,
+      BNPARAM = BiocNeighbors::VptreeParam()
+    )
+    neighbor.index <- as.matrix(neighbors$index)
+    neighbor.distance <- as.matrix(neighbors$distance)
+    row.index <- matrix(seq_len(nrow(coordinates)),
+                        nrow = nrow(coordinates), ncol = ncol(neighbor.index))
+    keep <- is.finite(neighbor.distance) &
+      !is.na(neighbor.index) & neighbor.index != row.index
+    if (!any(keep))
+      stop("unable to find a non-self nearest neighbor for coordinates",
+           call. = FALSE)
+    base.cellsize <- min(neighbor.distance[keep])
+    source <- "nearest-neighbor"
+    nearest.distance.method <- "BiocNeighbors::findKNN"
+  }
+
+  effective.cellsize <- if (length(base.cellsize) == 1L) {
+    rep(base.cellsize, 2L)
+  } else {
+    base.cellsize[seq_len(2L)]
+  }
+  effective.cellsize <- effective.cellsize * grid.resolution
+
+  if (!is.null(ratio)) {
+    if (length(ratio) != 1L || !is.numeric(ratio) || is.na(ratio) ||
+        !is.finite(ratio) || ratio <= 0)
+      stop("ratio must be a finite numeric scalar greater than zero",
+           call. = FALSE)
+    ratio <- as.numeric(ratio)
+  }
+  list(
+    base.cellsize = base.cellsize,
+    effective.cellsize = effective.cellsize,
+    grid.resolution = grid.resolution,
+    ratio = ratio,
+    physical.cellsize = if (is.null(ratio)) NULL else effective.cellsize * ratio,
+    calibrated = !is.null(ratio),
+    source = source,
+    nearest.distance.method = nearest.distance.method
+  )
+}
+.sc_grid_membership <- function(points, grid) {
+  hits <- sf::st_intersects(points, grid, sparse = TRUE)
+  grid.index <- unlist(hits, use.names = FALSE)
+  point.index <- rep.int(seq_along(hits), lengths(hits))
+  n_grid <- length(sf::st_geometry(grid))
+  grid.counts <- tabulate(grid.index, nbins = n_grid)
+  list(
+    hits = hits,
+    point.counts = lengths(hits),
+    grid.counts = grid.counts,
+    point.index = point.index,
+    grid.index = grid.index
+  )
+}
+
 #' @title computeGridSize
 #' @description
-#' Use this function to view SpatialCellChat object after the "grid" operation and visualize it.
+#' Estimate a grid cell size and optionally preview the resulting grid. This
+#' function does not aggregate expression data or mutate the object.
 #'
-#' @param object CellChat object
-#' @param grid.resolution Numeric. By default, it is set to be 2.
-#' @param do.plot Boolean. If FALSE, only print hints in terminal.
-#' @param cellsize NULL or Numeric. If NULL, the function will tell you the default `cellsize` in the SpatialCellChat object.
-#' If not NULL and be Numeric, the new cellsize will be equal to cellsize*grid.resolution.
-#' Note: We use [sf::st_make_grid()] to make grid data, so the param is a numeric vector
-#' of length 1 or 2 with target cellsize, please see details in [sf::st_make_grid()]:
-#' for square or rectangular cells the width and height, for hexagonal cells the distance between
-#' opposite edges (edge length is cellsize/sqrt(3)). A length units object can be passed,
-#' or an area unit object with area size of the square or hexagonal cell.
-#' @param what Character. One of: "polygons", "corners", or "centers". See details in [sf::st_make_grid()]
-#' @param square Boolean. If FALSE, create hexagonal grid. See details in [sf::st_make_grid()]
+#' @details
+#' Coordinates are read from the canonical `images$coordinates` matrix. Grid
+#' geometry uses its first two analysis axes (`x`, `y`) without swapping or
+#' transforming them. With `cellsize = NULL`, the minimum non-self
+#' nearest-neighbor distance is estimated exactly without a dense pairwise
+#' distance matrix. `grid.resolution` multiplies the resolved size
+#' component-wise. When `images$spatial.factors$ratio` is unavailable, output
+#' reports raw coordinate units and does not claim a physical scale.
+#' Diagnostics use `getOption("SpatialCellChat.verbose", 1L)`: level 0 keeps
+#' warnings and errors visible, level 1 emits the concise summary, level 2 adds
+#' grid diagnostics, and level 3 reports sparse allocation details.
 #'
-#' @return ggplot
+#' @param object SpatialCellChat object with canonical spatial coordinates.
+#' @param cellsize NULL or a positive finite numeric vector of length 1 or 2.
+#'   NULL estimates the minimum non-self nearest-neighbor distance.
+#' @param grid.resolution Positive finite numeric multiplier, defaulting to 2.
+#' @param do.plot Boolean. If TRUE, return a `ggplot` preview; if FALSE,
+#'   print diagnostics and return `NULL` invisibly.
+#' @param what Character. One of `"polygons"`, `"corners"`, or `"centers"`.
+#' @param square Boolean. If FALSE, create a hexagonal grid.
+#' @return A `ggplot` when `do.plot = TRUE`; otherwise invisible `NULL`.
 #' @export
 computeGridSize <- function(
     object,
-    cellsize=NULL,
-    grid.resolution=NULL,
-    do.plot=T,
+    cellsize = NULL,
+    grid.resolution = NULL,
+    do.plot = TRUE,
     what = "polygons",
-    square = T
-){
-
-  # object <- cortexChat
-  # cellsize=NULL;grid.resolution=NULL
-  # what = "polygons";
-  # square = T
+    square = TRUE
+) {
+  object <- .sc_assert_spatial_cell_chat(object)
   coordinates <- object@images$coordinates
+  if (is.null(coordinates) || ncol(coordinates) < 2L)
+    stop("images$coordinates must contain at least x and y columns", call. = FALSE)
+  coordinates <- as.matrix(coordinates[, seq_len(2L), drop = FALSE])
+  if (!is.numeric(coordinates) || any(!is.finite(coordinates)))
+    stop("images$coordinates must contain finite numeric values", call. = FALSE)
+  colnames(coordinates) <- c("x_cent", "y_cent")
 
-  # if (ncol(coordinates) == 2) {
-  #   colnames(coordinates) <- c("x_cent","y_cent")
-  #   temp_coord = coordinates
-  #   coordinates[,1] = temp_coord[,2]
-  #   coordinates[,2] = temp_coord[,1]
-  # } else {
-  #   stop("Please check the input 'coordinates' and make sure it is a two column matrix.")
-  # }
-
-  # some hints about contact.range and spot size in the new grid SpatialCellChat
   spatial.factors <- object@images$spatial.factors
+  ratio <- if (is.list(spatial.factors)) spatial.factors$ratio else NULL
+  resolved <- .sc_resolve_grid_size(
+    coordinates = coordinates,
+    cellsize = cellsize,
+    grid.resolution = grid.resolution,
+    ratio = ratio
+  )
+  newcellsize <- resolved$effective.cellsize
+  n_points <- nrow(coordinates)
+  shape <- if (isTRUE(square)) "square" else "hexagonal"
+  resolution <- resolved$grid.resolution
+  base <- resolved$base.cellsize
+  effective_x <- newcellsize[[1L]]
+  effective_y <- newcellsize[[2L]]
 
-  if(( !is.null(cellsize) ) & is.integer(cellsize)){
-    spot.size <- cellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-    cat(cli.symbol(3),"The `cellsize` you input is ",cellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
+  .cli("Grid-size preview", .type = "header")
+  .cli("Input: {.val {n_points}} points; using {.val x/y} axes", .type = "info")
+  .cli("Cellsize source: {.val {resolved$source}}; base={.val {base}}; resolution={.val {resolution}}",
+       .type = "text", .verbose = 2L)
+  .cli("Effective grid cellsize: x={.val {effective_x}}, y={.val {effective_y}}; resolution={.val {resolution}}",
+       .type = "text", .verbose = 1L)
+  if (resolved$calibrated) {
+    physical_x <- resolved$physical.cellsize[[1L]]
+    physical_y <- resolved$physical.cellsize[[2L]]
+    .cli("Calibration: ratio={.val {ratio}}; physical cellsize={.val {physical_x}} x {.val {physical_y}}",
+         .type = "text", .verbose = 1L)
+  } else {
+    .cli("Calibration: {.val uncalibrated}; physical scale is unavailable",
+         .type = "warning", .verbose = 0L)
   }
-  if(is.null(cellsize)){
-    cell2cellDist <- Rfast::Dist(coordinates)
-    diag(cell2cellDist) <- NA
-    cellsize <- min(cell2cellDist,na.rm = T)
-    spot.size <- cellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-    cat(cli.symbol(3),"The default `cellsize` in the SpatialCellChat object is ",cellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
+
+  if (!isTRUE(do.plot))
+    return(invisible(NULL))
+
+  df.sf <- sf::st_as_sf(
+    data.frame(coordinates, cell_type = object@idents),
+    coords = c("x_cent", "y_cent"),
+    remove = FALSE
+  )
+  sf::st_crs(df.sf) <- 3857
+  square_grid <- sf::st_make_grid(
+    df.sf,
+    cellsize = newcellsize,
+    what = what,
+    square = square
+  )
+  square_grid_sf <- sf::st_sf(square_grid)
+  square_grid_sf$grid_id <- seq_along(square_grid)
+
+  membership <- .sc_grid_membership(df.sf, square_grid_sf)
+  within_nGrid <- membership$point.counts
+  grid_nspots <- membership$grid.counts
+  n_grid <- length(grid_nspots)
+  n_occupied <- sum(grid_nspots > 0L)
+  n_empty <- n_grid - n_occupied
+  n_unassigned <- sum(within_nGrid == 0L)
+  n_multi_hit <- sum(within_nGrid > 1L)
+  n_hits <- sum(within_nGrid)
+  occupancy_pct <- if (n_grid) 100 * n_occupied / n_grid else 0
+  .cli("Grid: {.val {shape}}/{.val {what}}; generated={.val {n_grid}}; occupied={.val {n_occupied}} ({sprintf('%.1f', occupancy_pct)}%); empty={.val {n_empty}}",
+       .type = "text", .verbose = 1L)
+  .cli("Assignment: {.val {n_points - n_unassigned}} assigned; {.val {n_unassigned}} unassigned; {.val {n_multi_hit}} multi-grid points; hits={.val {n_hits}}",
+       .type = if (n_unassigned) "warning" else "success",
+       .verbose = if (n_unassigned) 0L else 1L)
+  .cli("Sparse membership: {.val {n_hits}} point-grid hits; no dense point-grid matrix allocated",
+       .type = "debug", .verbose = 3L)
+  .cli("Use `cellsize = c({effective_x}, {effective_y})` in `makeGridSpatialCellChat()`.",
+       .type = "info", .verbose = 1L)
+
+  if (is.null(object@idents)) {
+    df.sf$cell_type <- factor("SpatialCellChatObj", levels = "SpatialCellChatObj")
   }
-
-  if(is.null(grid.resolution)) {grid.resolution <- 2}
-  newcellsize <- cellsize*grid.resolution
-  spot.size <- newcellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-  cat(cli.symbol(),"If you do grid, the new `cellsize` will be ",newcellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
-
-  if(do.plot){
-    df.sf <-
-      sf::st_as_sf(coordinates,
-                   coords = c("x_cent", "y_cent"),
-                   remove = FALSE)
-    sf::st_crs(df.sf) <- 3857
-
-    square_grid <-
-      sf::st_make_grid(df.sf,
-                       cellsize = newcellsize,
-                       what = what,
-                       square = square)
-
-    # convert `square_grid` into sf and add grid IDs
-    square_grid_sf = sf::st_sf(square_grid) %>%
-      # add grid ID
-      dplyr::mutate(grid_id = seq_len(length(lengths(square_grid))))
-
-    WithinMat <- sf::st_intersects(df.sf, square_grid_sf, sparse = F)
-
-    within_nGrid <- rowSums(WithinMat)
-    grid_nspots <- colSums(WithinMat)
-    cat(cli.symbol(),"The \"Grid\" operation will generate about ",sum(grid_nspots!=0)," new spots.\n")
-
-    if(all(within_nGrid>0)){
-      cat(cli.symbol(symbol = "success"),"All spots have been assigned to grids respectively.\n")
-    } else {
-      cat(cli.symbol(symbol = "fail"),"Some spots have not been assigned to grids respectively.\n")
-    }
-
-    if(is.null(object@idents)){
-      df.sf$cell_type <- factor("SpatialCellChatObj",levels = c("SpatialCellChatObj"))
-    } else {
-      df.sf$cell_type <- object@idents
-    }
-
-    color.use <- scPalette(nlevels(df.sf$cell_type))
-    names(color.use) <- levels(df.sf$cell_type)
-
-    p <- ggplot() +
-      ggplot2::geom_sf(data = square_grid)+
-      ggplot2::geom_sf(data = df.sf,mapping = aes(color=cell_type))+
-      scale_color_manual(values = color.use, na.value = "grey40")+
-      # scale_y_reverse()+
-      theme_minimal()+theme(
-        axis.ticks = element_blank(),
-        axis.text = element_blank(),
-        # axis.title.y = element_blank(),
-        # plot.background = element_blank(),
-        # panel.grid.major = element_blank(),
-        # panel.grid.minor = element_blank(),
-      )+ theme(legend.key = element_blank())+
-      labs(color="Cell Type")
-    return(p)
-  }
+  color.use <- scPalette(nlevels(df.sf$cell_type))
+  names(color.use) <- levels(df.sf$cell_type)
+  ggplot() +
+    ggplot2::geom_sf(data = square_grid) +
+    ggplot2::geom_sf(data = df.sf, mapping = aes(color = cell_type)) +
+    scale_color_manual(values = color.use, na.value = "grey40") +
+    theme_minimal() + theme(
+      axis.ticks = element_blank(),
+      axis.text = element_blank()
+    ) +
+    theme(legend.key = element_blank()) +
+    labs(color = "Cell Type")
 }
 
 
 #' @title makeGridSpatialCellChat
 #'
-#' @param object CellChat object
-#' @param data.slot A CellChat object may have 5 slots to store data matrix:
-#' data.raw,data,data.signaling,data.scale,data.project, choose one data slot
-#' to make a new grid CellChat object. By default, use "data".
-# #' @param re.normalize Boolean. Wether to normalize the data in the data.slot you choose
-# #' with the function `normalizeData`. See details in [SpatialCellChat::normalizeData()]
-#' @param cellsize Numeric vector of length 1 or 2. We use [sf::st_make_grid()] to make grid data. It is a numeric vector
-#' of length 1 or 2 with target cellsize, please see details in [sf::st_make_grid()]:
-#' for square or rectangular cells the width and height, for hexagonal cells the distance between
-#' opposite edges (edge length is cellsize/sqrt(3)). A length units object can be passed,
-#' or an area unit object with area size of the square or hexagonal cell.
+#' @description
+#' Aggregate a SpatialCellChat object into spatial grid cells while retaining
+#' cell identities, centroids, counts, and the selected assay layer.
 #'
-#' Tips: Please run `computeGridSize` to get a proper `cellsize`.the unit of the `cellsize` you input is "pixel" or a unit used in old CellChat object's coordinates
-#' @param what Character. One of: "polygons", "corners", or "centers". See details in [sf::st_make_grid()]
-#' @param square Boolean. If FALSE, create hexagonal grid. See details in [sf::st_make_grid()]
-#' @param idents.ties.method To determine the ident/cell group of each grid, we use [base::max.col()]
-#' to choose a ident containing the most cells per grid. See `ties.method` in [base::max.col()].
+#' @details
+#' Coordinates are read from canonical `images$coordinates`; grid geometry uses
+#' the first two analysis axes (`x`, `y`) without swapping or transforming them.
+#' Point-on-edge and point-on-corner membership follows
+#' [sf::st_intersects()], so a point may contribute to multiple grids. The
+#' `images$spatial.factors$ratio` value is retained for calibrated data;
+#' uncalibrated data use raw coordinate units and do not imply physical units.
+#' Invalid `cellsize` values (zero, negative, non-finite, or unsupported
+#' lengths) are rejected.
 #'
-#' @return CellChat object
+#' @param object SpatialCellChat object.
+#' @param data.slot Assay layer used to make the grid. One of `norm`, `raw`,
+#'   `scale`, `signaling`, or `smooth`; defaults to `norm`. The layer is read
+#'   from `object@assay`.
+#' @param cellsize Positive finite numeric vector of length 1 or 2. Grid
+#'   geometry uses the first two canonical `images$coordinates` axes (`x`,
+#'   `y`). Square cells use width and height; hexagonal cells use the distance
+#'   between opposite edges. Use `computeGridSize()` for an estimate.
+#' @param what Character. One of `"polygons"`, `"corners"`, or `"centers"`.
+#' @param square Boolean. If FALSE, create a hexagonal grid.
+#' @param idents.ties.method To determine the ident/cell group of each grid,
+#'   use [base::max.col()] to choose the ident containing the most cells.
+#'   See `ties.method` in [base::max.col()].
+#'
+#' @return SpatialCellChat object.
 #' @export
-#'
-#' @examples
-makeGridSpatialCellChat <- function(object,
-                                data.slot=c("data","data.raw","data.signaling","data.scale","data.project"),
-                                # re.normalize=F,
-                                cellsize = c(5, 5),
-                                what = "polygons",
-                                square = T,
-                                idents.ties.method = "first")
-{
+makeGridSpatialCellChat <- function(
+    object,
+    data.slot = c("norm", "raw", "scale", "signaling", "smooth"),
+    cellsize = c(5, 5),
+    what = "polygons",
+    square = TRUE,
+    idents.ties.method = "first"
+){
+  object <- .sc_assert_spatial_cell_chat(object)
   data.slot <- match.arg(data.slot)
   coordinates <- object@images$coordinates
+  if (is.null(coordinates) || ncol(coordinates) < 2L)
+    stop("images$coordinates must contain at least x and y columns", call. = FALSE)
+  coordinates <- as.data.frame(coordinates[, seq_len(2L), drop = FALSE])
   colnames(coordinates) <- c("x_cent", "y_cent")
+  resolved <- .sc_resolve_grid_size(
+    coordinates = as.matrix(coordinates[, c("x_cent", "y_cent"), drop = FALSE]),
+    cellsize = cellsize,
+    grid.resolution = 1
+  )
+  cellsize <- resolved$effective.cellsize
   coordinates$cell_type <- object@idents
 
-  # some hints about contact.range and spot size in the new grid SpatialCellChat
   spatial.factors <- object@images$spatial.factors
-  spot.size <- cellsize[[1]]*spatial.factors[["ratio"]]
-  cat(cli.symbol(3),"The `cellsize` you input is ",cellsize[[1]]," units(pixels). It is about ",spot.size," um in International System of Units.\n")
-
-  # `tol` can be the the half value of the minimum center-to-center distance(cellsize)
-  spatial.factors[["tol"]] <- spot.size/2
-  cat(cli.symbol(3),"A grid in the new object will have a spot diameter equal to ",spot.size," um. So the new `tol` in `spatial.factors` will be ",spatial.factors[["tol"]]," um.\n")
-
-
-  df.sf <-
-    sf::st_as_sf(coordinates,
-                 coords = c("x_cent", "y_cent"),
-                 remove = FALSE)
-  sf::st_crs(df.sf) <- 3857
-
-  square_grid <-
-    sf::st_make_grid(df.sf,
-                     cellsize = cellsize,
-                     what = what,
-                     square = square)
-
-  # convert `square_grid` into sf and add grid IDs
-  square_grid_sf = sf::st_sf(square_grid) %>%
-    # add grid ID
-    dplyr::mutate(grid_id = 1:length(lengths(square_grid)))
-
-  # nCell x nGrid
-  WithinMat <- sf::st_intersects(df.sf, square_grid_sf, sparse = F)
-
-  within_nGrid <- Matrix::rowSums(WithinMat)
-
-  if(all(within_nGrid>0)){
-    cat(cli.symbol(symbol = "success"),"All spots have been assigned to grids respectively.\n")
+  ratio <- if (is.list(spatial.factors) && !is.null(spatial.factors$ratio)) {
+    spatial.factors$ratio
   } else {
-    cat(cli.symbol(symbol = "fail"),"Some spots have not been assigned to grids respectively.\n")
+    1
   }
-  # Sum.Weight <- 1/within_nGrid
+  spot.size <- cellsize[[1L]] * ratio
+  grid.factors <- list(ratio = ratio, tol = spot.size / 2)
 
-  SpotsCounts_perGrid <- Matrix::colSums(WithinMat)
+  .cli("Making spatial grid", .type = "header")
+  .cli("Input: {.val {nrow(coordinates)}} points; layer={.val {data.slot}}",
+       .type = "info")
+  if (is.null(spatial.factors$ratio)) {
+    .cli("Calibration: {.val uncalibrated}; recommended contact range uses raw coordinate units",
+         .type = "warning", .verbose = 0L)
+  } else {
+    .cli("Cellsize: {.val {cellsize}} units; physical spot size is {.val {spot.size}}",
+         .type = "text", .verbose = 2L)
+  }
 
-  # create new idents
-  cat(cli.symbol(),"create new idents...\n")
-  LevelsIdents <- levels(object@idents)
-  PreviousIdents <- object@idents
-  within_Idents <- purrr::map(
-    .x = 1:NCOL(WithinMat),
-    .f = function(col) {
-      index.within <- WithinMat[, col, drop = T] # return a Boolean vec
-      new_col <- dplyr::if_else(index.within, PreviousIdents, NA)
-      return(new_col)
-    },
-    .progress = T
+  df.sf <- sf::st_as_sf(coordinates, coords = c("x_cent", "y_cent"),
+                        remove = FALSE)
+  sf::st_crs(df.sf) <- 3857
+  square_grid <- sf::st_make_grid(df.sf, cellsize = cellsize,
+                                  what = what, square = square)
+  square_grid_sf <- sf::st_sf(square_grid)
+  square_grid_sf$grid_id <- seq_along(square_grid)
+  membership <- .sc_grid_membership(df.sf, square_grid_sf)
+  within_n_grid <- membership$point.counts
+  spots.counts <- membership$grid.counts
+  occupied <- which(spots.counts > 0)
+  n_grid <- length(spots.counts)
+  n_unassigned <- sum(within_n_grid == 0L)
+  n_multi_hit <- sum(within_n_grid > 1L)
+  n_hits <- sum(within_n_grid)
+  if (!length(occupied))
+    stop("the requested grid does not contain any cells", call. = FALSE)
+  within.spots <- lapply(occupied, function(grid_id) {
+    membership$point.index[membership$grid.index == grid_id]
+  })
+  .cli("Grid: generated={.val {n_grid}}; occupied={.val {length(occupied)}}; empty={.val {n_grid - length(occupied)}}",
+       .type = "text", .verbose = 1L)
+  .cli("Assignment: {.val {nrow(coordinates) - n_unassigned}} assigned; {.val {n_unassigned}} unassigned; {.val {n_multi_hit}} multi-grid points; hits={.val {n_hits}}",
+       .type = if (n_unassigned) "warning" else "success",
+       .verbose = if (n_unassigned) 0L else 1L)
+  .cli("Sparse membership retained {.val {n_hits}} point-grid hits for aggregation",
+       .type = "debug", .verbose = 3L)
+  levels.idents <- levels(object@idents)
+  present.idents <- vapply(within.spots, function(index) {
+    counts <- tabulate(match(object@idents[index], levels.idents),
+                       nbins = length(levels.idents))
+    levels.idents[max.col(matrix(counts, nrow = 1L),
+                          ties.method = idents.ties.method)]
+  }, character(1))
+
+  new.names <- paste0("Grid", square_grid_sf$grid_id[occupied])
+  new.meta <- as.data.frame(do.call(rbind, lapply(within.spots, function(index) {
+    counts <- tabulate(match(object@idents[index], levels.idents),
+                       nbins = length(levels.idents))
+    setNames(as.list(counts), levels.idents)
+  })), stringsAsFactors = FALSE)
+  rownames(new.meta) <- new.names
+  new.meta$cell.type <- factor(present.idents, levels = levels.idents)
+  new.meta$spots.counts <- as.numeric(spots.counts[occupied])
+
+  new.coordinates <- do.call(rbind, lapply(within.spots, function(index) {
+    colMeans(coordinates[index, c("x_cent", "y_cent"), drop = FALSE])
+  }))
+  rownames(new.coordinates) <- new.names
+  colnames(new.coordinates) <- c("x", "y")
+
+  previous.data <- assay(object, data.slot)
+  if (is.null(previous.data))
+    stop("assay$", data.slot, " is empty", call. = FALSE)
+  new.data <- do.call(cbind, lapply(within.spots, function(index) {
+    Matrix::rowMeans(previous.data[, index, drop = FALSE])
+  }))
+  rownames(new.data) <- rownames(previous.data)
+  colnames(new.data) <- new.names
+  if (!inherits(new.data, "dgCMatrix")) new.data <- methods::as(new.data, "dgCMatrix")
+
+  object.grid <- createSpatialCellChat(
+    object = new.data,
+    meta = new.meta,
+    group.by = "cell.type",
+    input.assay = "norm",
+    datatype = "spatial",
+    coordinates = new.coordinates,
+    spatial.factors = grid.factors
   )
-
-  # Convert WithinMat into list object
-  within_Spots <- purrr::map(
-    .x = 1:NCOL(WithinMat),
-    .f = function(col) {
-      index.within <- WithinMat[, col, drop = T] # return a vec
-      new_col <- which(index.within == T)
-      return(new_col)
-    },
-    .progress = T
+  object.grid@DB <- object@DB
+  object.grid@images$.grid <- list(
+    within.nGrid = within_n_grid,
+    recommended.contact.range = spot.size
   )
-
-  # create new meta data
-  cat(cli.symbol(),"create new meta data...\n")
-
-  NewMeta <- pbapply::pbsapply(
-    X = seq_along(within_Idents),
-    FUN = function(i) {
-      table_ <- within_Idents[[i]] %>% table() %>% as.vector()
-      return(table_)
-    }
-  ) %>% t()
-  colnames(NewMeta) <- LevelsIdents
-
-  PresentIdents <-
-    LevelsIdents[max.col(NewMeta, ties.method = idents.ties.method)]
-
-  NewMeta <- as.data.frame(NewMeta)
-  NewMeta[["cell.type"]] <- PresentIdents
-  NewMeta[["spots.counts"]] <- SpotsCounts_perGrid
-  NewMeta <- NewMeta[SpotsCounts_perGrid > 0, ]
-
-  # NewCoordinates <- square_grid_sf[SpotsCounts_perGrid > 0, ]
-
-  # new cell names
-  NewSpotsNames <-
-    stringr::str_c("Grid", square_grid_sf$grid_id[SpotsCounts_perGrid > 0])
-
-  # NewCoordinates[["cell.type"]] <- NewMeta$cell.type
-
-  # which spots within a specific grid
-  within_Spots <- within_Spots[SpotsCounts_perGrid > 0]
-  cat(cli.symbol(),"create new coordinates...\n")
-  NewCoordinates_ <- pbapply::pbsapply(
-    X = seq_along(within_Spots),
-    FUN = function(grid_) {
-      idx <- within_Spots[[grid_]] # idx in previous coordinate
-      coor_ <- coordinates[idx, c("x_cent", "y_cent"),drop=F] %>% colMeans()
-      return(coor_)
-    }
-  ) %>% t()
-  # NewCoordinates <- cbind(NewCoordinates, NewCoordinates_)
-
-  PreviousDataInput <- methods::slot(object, data.slot)
-  cat(cli.symbol(),"create new expression data input...\n")
-  NewDataInput <- pbapply::pbsapply(
-    X = seq_along(within_Spots),
-    FUN = function(grid_) {
-      idx <- within_Spots[[grid_]] # idx in previous coordinate
-      # idx.weight <- Sum.Weight[idx]
-
-      # gene x cell
-      # maybe need weight-sum!!!
-      # now use `rowMeans`, calculate mean for each gene's expression.
-      # expr_: nGene x 1
-      expr_ <- PreviousDataInput[, idx, drop = F] %>% Matrix::rowMeans()
-      # expr_ <- sapply(
-      #   X = 1:NCOL(expr_),
-      #   FUN = function(col){
-      #     expr_[,col] <- expr_[,col]*idx.weight[[col]]
-      #   },
-      #   simplify = T
-      # ) %>% Matrix::rowSums()
-      return(expr_)
-    }
-  )
-
-  NewDataInput <- as(NewDataInput,Class = "CsparseMatrix")
-
-  # NewCoordinates_dist <- Rfast::Dist(NewCoordinates_)
-  # diag(NewCoordinates_dist) <- NA
-  # min(NewCoordinates_dist, na.rm = T)
-
-  # set names of all objects
-  rownames(NewDataInput) <- rownames(PreviousDataInput)
-  colnames(NewDataInput) <- NewSpotsNames
-  rownames(NewMeta) <- NewSpotsNames
-  rownames(NewCoordinates_) <- NewSpotsNames
-  colnames(NewCoordinates_) <- c("x_cent", "y_cent")
-  NewMeta$cell.type <- factor(NewMeta$cell.type, levels = LevelsIdents)
-
-  # create a SpatialCellChat Object
-  data.input <- NewDataInput
-  # if(re.normalize){
-  #   # seems unnecessary
-  #   data.input <- normalizeData(NewDataInput)
-  # }else{
-  #   data.input <- NewDataInput
-  # }
-
-
-  meta <- NewMeta
-  coordinates <- NewCoordinates_ %>% as.data.frame()
-
-
-  object_grid <-
-    createSpatialCellChat(
-      object = data.input,
-      meta = meta,
-      group.by = "cell.type",
-      datatype = "spatial",
-      coordinates = coordinates,
-      spatial.factors = spatial.factors
-    )
-  object_grid@images[["within_nGrid"]] <- within_nGrid
-  object_grid@images[["recommended.contact.range"]] <- spot.size
-
-  cat(cli.symbol(1),"Making grid is done. A recommended contact.range is stored in object@images.\n")
-  return(object_grid)
+  .cli("Making grid is done; recommended contact.range is stored in images$.grid",
+       .type = "success")
+  object.grid
 }
 
+
+.spatial_distance_cache_matches <- function(distance, interaction.range,
+                                            contact.range, ratio = NULL,
+                                            tol = NULL) {
+  if (!is.list(distance) ||
+      !all(c("d.spatial", "adj.contact", ".parameters") %in% names(distance)) ||
+      !is.list(distance[[".parameters"]]))
+    return(FALSE)
+  params <- distance[[".parameters"]]
+  expected <- list(
+    interaction.range = interaction.range,
+    contact.range = contact.range,
+    ratio = ratio,
+    tol = if (is.null(tol)) 0 else tol
+  )
+  same <- function(name) {
+    actual <- params[[name]]
+    wanted <- expected[[name]]
+    if (is.null(actual) || is.null(wanted)) return(identical(actual, wanted))
+    isTRUE(all.equal(as.numeric(actual), as.numeric(wanted), check.attributes = FALSE))
+  }
+  all(vapply(names(expected), same, logical(1)))
+}
 
 #' compute cell-cell distance and cell-cell contact adjacency matrix
 #'
@@ -518,24 +600,26 @@ makeGridSpatialCellChat <- function(object,
 #' Compute cell-cell distance based on the spatial coordinates and
 #' generate cell-cell contact adjacency matrix with a contact.range restriction
 #'
-#' @param coordinates a data matrix in which each row gives the spatial locations/coordinates of each cell/spot
+#' @param coordinates Numeric matrix or data.frame; each row gives the spatial location of one cell/spot. Two- and three-dimensional coordinates are supported.
 #' @param interaction.range Numeric(must positive). The maximum interaction/diffusion range of ligands. This hard threshold is used to filter out the connections between spatially distant cells
 #' @param contact.range Numeric. The interaction range (Unit: microns) to restrict the contact-dependent signaling.
 #' For spatial transcriptomics in a single-cell resolution, `contact.range` is approximately equal to the estimated cell diameter (i.e., the cell center-to-center distance), which means that contact-dependent and juxtacrine signaling can only happens when the two cells are contact to each other.
 #' Typically, `contact.range = 10`, which is a typical human cell size. However, for low-resolution spatial data such as 10X visium, it should be the cell center-to-center distance (i.e., `contact.range = 100` for visium data).
 #' Users can run the function `computeCellDistance` to get the center-to-center distance in the result's "d.spatial" key, which will help decide the value of `contact.range`.
-#' @param tol Numeric. set a distance tolerance when computing cell-cell distances and contact adjacent matrix. Typically, `tol` should equal to the half value of cell/spot size in the unit of um.
-#' For example, for 10X visium, `tol` can be set as `65/2`; for slide-seq, `tol` can be set as `10/2`.
-#' If the cell/spot size is not known, we provide a function `computeCellDistance` to compute the center-to-center distance. `tol` can be the the half value of the minimum center-to-center distance.
-#' By default `tol = 10/2`.
+#' @param tol Numeric. Add a non-negative tolerance when applying the interaction and contact thresholds, in the same physical unit as `interaction.range`. `NULL` is treated as zero.
+#' Typically, `tol` should equal half the cell/spot diameter; for example, `65/2` for 10X Visium or `10/2` for Slide-seq.
 #'
-#' @param ratio NULL or Numeric. ratio The conversion factor when converting spatial coordinates from Pixels or other units to Micrometers (i.e.,Microns).
+#' If the cell/spot size is not known, `tol` can be set to zero while `contact.range` is chosen from the returned center-to-center distances.
 #'
-#' For example, setting `ratio = 0.18` indicates that 1 pixel equals 0.18um in the coordinates.
-#' For 10X visium, it is the ratio of the theoretical spot size (i.e., 65um) over the number of pixels that span the diameter of a theoretical spot size in the full-resolution image (i.e., 'spot.size.fullres' in the 'scalefactors_json.json' file).
+#' @param ratio NULL or Numeric. Conversion factor from coordinate units to the physical unit used by `interaction.range` and `contact.range` (for example, micrometers). `NULL` means the coordinates are already expressed in that working unit.
 #'
-#' @return List. A list has two keys: "d.spatial" and "adj.contact", storing cell-cell distance matrix and cell-cell contact adjacency matrix
-#' @export
+#' For example, setting `ratio = 0.18` indicates that 1 pixel equals 0.18um; distances are returned in micrometers after conversion.
+#' For 10X Visium, this is the theoretical spot size (65um) divided by the full-resolution spot diameter in pixels (`spot.size.fullres`).
+#'
+#' @return List. The `d.spatial` and `adj.contact` keys store the cell-cell
+#' distance and contact adjacency matrices. `.parameters` records the
+#' thresholds used to build the cache so downstream plots do not silently
+#' reuse a cache made with different ranges.
 #'
 #' @examples
 computeCellDistance <- function (
@@ -546,56 +630,89 @@ computeCellDistance <- function (
     tol = 10/2
 )
 {
-  if (ncol(coordinates) == 2) {
-    colnames(coordinates) <- c("x_cent", "y_cent")
-  }
-  else {
-    stop(cli.symbol(2),"Please check the input 'coordinates' and make sure it is a two column matrix.")
-  }
-  # calculate the distances
-  d.spatial <- Rfast::Dist(coordinates)
-  NC <- NCOL(d.spatial);gc()
+  if (is.data.frame(coordinates) || inherits(coordinates, "Matrix"))
+    coordinates <- as.matrix(coordinates)
+  if (!is.matrix(coordinates) || length(dim(coordinates)) != 2L ||
+      !ncol(coordinates) %in% c(2L, 3L))
+    stop("coordinates must be a numeric matrix with two or three columns", call. = FALSE)
+  if (!is.numeric(coordinates) || any(!is.finite(coordinates)))
+    stop("coordinates must contain finite numeric values", call. = FALSE)
+  n_cells <- nrow(coordinates)
+  if (n_cells < 1L)
+    stop("coordinates must contain at least one row", call. = FALSE)
 
-  cat(cli.symbol(),paste0("Apply a predefined spatial distance threshold based on the interaction length(=",interaction.range,"um)...\n"))
-  # ((interaction.range+tol)/ratio) will convert the interaction range's unit
-  # into `pixel/specific unit` used in coordinates from `um`
-  # d.spatial[d.spatial > ((interaction.range+tol)/ratio)] <- 0
-  interaction.range.threshold <- ((interaction.range+tol)/ratio)
+  validate_scalar <- function(value, name, lower = 0, strictly_positive = FALSE) {
+    if (length(value) != 1L || !is.numeric(value) || is.na(value) ||
+        !is.finite(value) ||
+        (strictly_positive && value <= lower) ||
+        (!strictly_positive && value < lower))
+      stop(name, " must be a finite numeric scalar ",
+           if (strictly_positive) "greater than " else "at least ", lower,
+           call. = FALSE)
+    as.numeric(value)
+  }
+  interaction.range <- validate_scalar(interaction.range, "interaction.range",
+                                       strictly_positive = TRUE)
+  contact.range <- validate_scalar(contact.range, "contact.range")
+  tol <- if (is.null(tol)) 0 else validate_scalar(tol, "tol")
+  if (!is.null(ratio))
+    ratio <- validate_scalar(ratio, "ratio", strictly_positive = TRUE)
 
-  SparseMatSlots <- purrr::map_dfr(
-    .x = 1:NC,
-    .f = function(j){
-      i=which(d.spatial[,j]<=interaction.range.threshold & d.spatial[,j]>0)
-      x=d.spatial[i,j,drop=T]
-      j=rep.int(j,length(i))
-      return(data.frame("i"=i,"j"=j,"x"=x))
-    },
-    .progress=T
+  # `interaction.range` and `contact.range` are physical distances.  When a
+  # coordinate-to-physical conversion is absent, the caller has declared that
+  # the coordinate unit is already the working unit.
+  threshold <- interaction.range + tol
+  if (!is.null(ratio)) threshold <- threshold / ratio
+
+  neighbors <- BiocNeighbors::queryNeighbors(
+    X = coordinates,
+    query = coordinates,
+    threshold = threshold,
+    get.index = TRUE,
+    get.distance = TRUE,
+    num.threads = 1L,
+    BNPARAM = BiocNeighbors::VptreeParam()
   )
-
-  # long-range distance
+  index <- neighbors$index
+  distance <- neighbors$distance
+  row_index <- rep.int(seq_len(n_cells), lengths(index))
+  col_index <- unlist(index, use.names = FALSE)
+  distance <- unlist(distance, use.names = FALSE)
+  keep <- logical(length(distance))
+  if (length(distance))
+    keep <- row_index != col_index & distance > 0 & is.finite(distance)
+  if (length(distance) && any(keep)) {
+    i <- row_index[keep]
+    j <- col_index[keep]
+    x <- distance[keep]
+    if (!is.null(ratio)) x <- x * ratio
+  } else {
+    i <- integer()
+    j <- integer()
+    x <- numeric()
+  }
+  coordinate_names <- rownames(coordinates)
   d.spatial <- Matrix::sparseMatrix(
-    i=SparseMatSlots$i,
-    j=SparseMatSlots$j,
-    x = SparseMatSlots$x,
-    repr = "C",
-    symmetric = F,
-    index1 = T  # i and j are interpreted as 1-based indices
+    i = i, j = j, x = x,
+    dims = c(n_cells, n_cells),
+    dimnames = list(coordinate_names, coordinate_names),
+    repr = "C"
   )
-  gc()
-
-  # scale the distances
-  if (!is.null(ratio)) {
-    d.spatial@x <- d.spatial@x * ratio
-  }
-
-  # short-range distance based on contact.range
-  adj.contact <- createCellCellContactMatrixFrom_dspatial(d.spatial = d.spatial,
-                                                          tol = tol,
-                                                          contact.threshold = contact.range)
-
-  res <- list("d.spatial" = d.spatial, "adj.contact" = adj.contact)
-  return(res)
+  adj.contact <- createCellCellContactMatrixFrom_dspatial(
+    d.spatial = d.spatial,
+    tol = tol,
+    contact.threshold = contact.range
+  )
+  list(
+    d.spatial = d.spatial,
+    adj.contact = adj.contact,
+    .parameters = list(
+      interaction.range = interaction.range,
+      contact.range = contact.range,
+      ratio = ratio,
+      tol = tol
+    )
+  )
 }
 
 #' create a cell-cell contact matrix from `d.spatial` object

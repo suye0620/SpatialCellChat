@@ -1,3 +1,38 @@
+# Shared plotly layout helpers. Keep these as plain objects/functions so all
+# plotly branches use one legend and one scene convention.
+custom_legend <- list(
+  orientation = "v", x = 1.02, xanchor = "left",
+  y = 1, yanchor = "top", bgcolor = "rgba(0,0,0,0)",
+  font = list(size = 12)
+)
+
+generate_grid_nrows <- function(nrow = 1L) {
+  if (length(nrow) != 1L || !is.numeric(nrow) || is.na(nrow) ||
+      nrow < 1 || nrow != as.integer(nrow))
+    stop("nrow must be a positive integer", call. = FALSE)
+  list(rows = as.integer(nrow), columns = 1L, pattern = "independent")
+}
+
+generate_custom_scenes3d <- function(row = 0, z.space = 0,
+                                     projection = "orthographic", zoom = 2.5) {
+  if (length(row) != 1L || !is.numeric(row) || is.na(row) || row < 0)
+    stop("row must be a non-negative number", call. = FALSE)
+  if (length(z.space) != 1L || !is.numeric(z.space) || is.na(z.space) || z.space < 0)
+    stop("z.space must be a non-negative number", call. = FALSE)
+  projection <- match.arg(projection, c("orthographic", "perspective"))
+  eye <- if (row == 0) list(x = 1.6, y = 1.6, z = 1.2) else
+    list(x = 1.6, y = 1.6, z = 0.6)
+  list(
+    xaxis = list(title = "x", showgrid = TRUE, gridcolor = "#f0f0f0", zeroline = FALSE),
+    yaxis = list(title = "y", showgrid = TRUE, gridcolor = "#f0f0f0", zeroline = FALSE),
+    zaxis = list(title = "z", showgrid = TRUE, gridcolor = "#f0f0f0", zeroline = FALSE),
+    aspectmode = "manual",
+    aspectratio = list(x = 1, y = 1, z = 0.35 + z.space),
+    camera = list(eye = eye, projection = list(type = projection)),
+    zoom = zoom
+  )
+}
+
 #' @title Spatial Cell-Cell Communication Distance Plot
 #' @description
 #' SpatialCellChat uses cell-cell distances as communication constraint. Use this
@@ -16,72 +51,74 @@
 #' By default `tol = NULL` means distance tolerance equals to spot.size/2 or cell.diameter/2.
 #' @param density.alpha Numeric. Control the transparency of the plot.
 #'
-#' @return ggplot
+#' @return A ggplot object for one signaling type, or a patchwork object for `both`.
 #' @export
 spatialCCCDistPlot <- function(
     object,
-    signaling.type=c("both","Secreted","Contact"),
+    signaling.type = c("both", "Secreted", "Contact"),
     interaction.range = 250,
     contact.range = 10,
-    tol = NULL, # will be removed in the future
-    density.alpha=0.5
-){
+    tol = NULL,
+    density.alpha = 0.5
+) {
   signaling.type <- match.arg(signaling.type)
-  if(is.null(object@images$result.computeCellDistance)){
-    data.spatial <- object@images$coordinates %>% BiocGenerics::as.data.frame()
-    ratio <- object@images$spatial.factors[["ratio"]]
-    if(is.null(tol)) tol <- object@images$spatial.factors[["tol"]] else NULL
+  coordinates <- object@images$coordinates
+  if (is.null(coordinates))
+    stop("spatialCCCDistPlot requires images$coordinates", call. = FALSE)
 
-    # compute the cell-to-cell distances
-    # res is a list object, containing `d.spatial` matrix and `adj.contact` matrix!
-    res <- computeCellDistance(coordinates = data.spatial,
-                               ratio = ratio,
-                               interaction.range = interaction.range,
-                               contact.range = contact.range,
-                               tol = tol)
-  } else {
-    res <- object@images$result.computeCellDistance
+  res <- object@images$.distance
+  factors <- object@images$spatial.factors
+  ratio <- if (is.list(factors)) factors$ratio else NULL
+  if (is.null(tol) && is.list(factors)) tol <- factors$tol
+  has_distance <- .spatial_distance_cache_matches(
+    res,
+    interaction.range = interaction.range,
+    contact.range = contact.range,
+    ratio = ratio,
+    tol = tol
+  )
+  if (!has_distance) {
+    res <- computeCellDistance(
+      coordinates = coordinates,
+      ratio = ratio,
+      interaction.range = interaction.range,
+      contact.range = contact.range,
+      tol = tol
+    )
   }
 
-  # long-range distance
   d.spatial <- res$d.spatial
-  # short-range distance adjacent matrix for contact-dependent and juxtacrine signaling
-  adj.contact <- d.spatial*res$adj.contact
+  adj.contact <- d.spatial * res$adj.contact
+  df.Secreted <- data.frame(x = as.numeric(d.spatial@x))
+  df.Contact <- data.frame(x = as.numeric(adj.contact@x))
+  x.limit <- c(0, interaction.range + 10)
 
-  df.Secreted <- data.frame(
-    x = d.spatial@x
-  )
-  df.Contact <- data.frame(
-    x = adj.contact@x
-  )
-
-  my.theme <- theme_bw() +theme(
-    # axis.ticks = element_blank(),
-    # axis.text = element_blank(),
-    axis.title.y = element_blank(),
-    # plot.background = element_rect(linetype = "transparent")
-  )
-
-  p.Secreted <- ggplot(df.Secreted) +
-    geom_density( aes(x = x, y = ..density..), fill="#69b3a2",alpha= density.alpha)+
-    scale_y_continuous(expand = expansion(c(0, 0)), breaks = NULL, labels = NULL) +
-    scale_x_continuous(limits = c(0, (interaction.range+10)),breaks = seq(0, (interaction.range+10), by = 20))+
-    xlab("interaction range (um)")+my.theme
-
-  p.Contact <- ggplot(df.Contact) +
-    geom_density( aes(x = x, y = ..density..),fill= "#404080",alpha=density.alpha)+
-    scale_y_continuous(expand = expansion(c(0, 0)), breaks = NULL, labels = NULL) +
-    scale_x_continuous(limits = c(0, (interaction.range+10)),breaks = seq(0, (interaction.range+10), by = 20))+
-    xlab("contact range (um)")+my.theme
-
-  if(signaling.type == "both"){
-    p <- patchwork::wrap_plots(p.Secreted,p.Contact,nrow = 2,ncol = 1)
-    return(p)
-  } else if(signaling.type == "Secreted"){
-    return(p.Secreted)
-  } else if(signaling.type == "Contact"){
-    return(p.Contact)
+  make_density <- function(data, fill, x_label) {
+    plot <- ggplot(data, aes(x = x)) +
+      scale_y_continuous(expand = expansion(c(0, 0)), breaks = NULL, labels = NULL) +
+      scale_x_continuous(limits = x.limit,
+                         breaks = seq(0, x.limit[[2]], by = 20)) +
+      xlab(x_label) +
+      theme_bw() +
+      theme(axis.title.y = element_blank())
+    if (nrow(data) >= 2L && any(is.finite(data$x))) {
+      plot + geom_density(
+        aes(y = after_stat(density)),
+        fill = fill, alpha = density.alpha, na.rm = TRUE
+      )
+    } else {
+      plot + geom_blank()
+    }
   }
+
+  p.Secreted <- make_density(df.Secreted, "#69b3a2", "interaction range (um)")
+  p.Contact <- make_density(df.Contact, "#404080", "contact range (um)")
+  if (signaling.type == "both")
+    patchwork::wrap_plots(p.Secreted, p.Contact, nrow = 2L, ncol = 1L)
+  else if (signaling.type == "Secreted")
+    p.Secreted
+  else
+    p.Contact
 }
 
 #' @title Visualize spatial cell groups such as signaling sources and targets
@@ -111,114 +148,262 @@ spatialCCCDistPlot <- function(
 #' @param legend.spacing a two-elements vector respectively specifying legend.key.spacing.x and legend.key.spacing.y for spacing apart legend key-label pairs
 #' @return
 #' @export
-spatialDimPlot <- function(object, color.use = NULL, group.by = NULL, sources.use = NULL, targets.use = NULL, idents.use = NULL,
-                           proportion = NULL, radius = NULL, radius.size = 0.55,
-                           alpha = 1, shape.by = 16, title.name = NULL, point.size = 2.4,
-                           legend.size = 3, legend.text.size = 8, legend.position = "right", legend.spacing = c(0, -8), ncol = 1, byrow = FALSE){
-  coordinates <- object@images$coordinates
-  if (NCOL(coordinates) == 2) {
-    colnames(coordinates) <- c("x_cent","y_cent")
-    temp_coordinates = coordinates
-    coordinates[,1] = temp_coordinates[,2]
-    coordinates[,2] = temp_coordinates[,1]
-  } else {
-    stop("Please check the input 'coordinates' and make sure it is a two column matrix.")
-  }
+spatialDimPlotPoints <- function(object, color.use = NULL, group.by = NULL,
+                                 sources.use = NULL, targets.use = NULL, idents.use = NULL,
+                                 proportion = NULL, radius = NULL, radius.size = 0.55,
+                                 alpha = 1, shape.by = 16, title.name = NULL, point.size = 2.4,
+                                 legend.size = 3, legend.text.size = 8,
+                                 legend.position = "right", legend.spacing = c(0, -8),
+                                 ncol = 1, byrow = FALSE, plot_coordinates = NULL,
+                                 raster = NULL, image.alpha = 0.5, coord_limits = NULL) {
+  coordinates <- plot_coordinates %||% object@images$coordinates
+  if (is.null(coordinates) || NCOL(coordinates) != 2L)
+    stop("coordinates must be a two-column matrix", call. = FALSE)
+  coordinates <- as.matrix(coordinates)
+  if (!is.numeric(coordinates) || any(!is.finite(coordinates)))
+    stop("coordinates must contain finite numeric values", call. = FALSE)
+  if (is.null(rownames(coordinates)))
+    rownames(coordinates) <- colnames(object@assay$norm)
+  if (!identical(rownames(coordinates), colnames(object@assay$norm)))
+    stop("coordinates rownames must match expression cell names", call. = FALSE)
+  colnames(coordinates) <- c("imagerow", "imagecol")
+  plot_data <- data.frame(
+    x_cent = coordinates[, "imagecol"],
+    y_cent = coordinates[, "imagerow"],
+    row.names = rownames(coordinates)
+  )
 
   if (is.null(group.by)) {
     labels <- object@idents
   } else {
-    labels = object@meta[,group.by]
-    # avoid loss of factor levels
-    if(!is.factor(labels)) labels <- factor(labels)
+    if (length(group.by) != 1L || !is.character(group.by) ||
+        !group.by %in% colnames(object@meta))
+      stop("group.by must name one metadata column", call. = FALSE)
+    labels <- object@meta[[group.by]]
+    if (!is.factor(labels)) labels <- factor(labels)
   }
   cells.level <- levels(labels)
 
   if (!is.null(idents.use)) {
     if (is.numeric(idents.use)) {
+      if (anyNA(cells.level[idents.use])) stop("idents.use contains invalid group indices", call. = FALSE)
       idents.use <- cells.level[idents.use]
     }
     group <- rep("Others", length(labels))
-    group[(labels %in% idents.use)] <- idents.use
-    group = factor(group, levels = c(idents.use, "Others"))
-
+    group[labels %in% idents.use] <- as.character(labels[labels %in% idents.use])
+    group <- factor(group, levels = c(idents.use, "Others"))
     if (is.null(color.use)) {
       color.use.all <- scPalette(nlevels(labels))
-
-      # get the first 2 colors, then convert the 3th color to "grey90"
-      color.use <- color.use.all[match(c(idents.use), levels(labels))]
-
-      color.use[nlevels(group)] <- "grey90"
-      names(color.use) <- c(idents.use, "Others")
+      color.use <- color.use.all[match(idents.use, levels(labels))]
+      color.use <- c(color.use, Others = "grey90")
+      names(color.use)[seq_along(idents.use)] <- idents.use
     }
     labels <- group
-  }
-
-  if (is.null(sources.use) & is.null(targets.use)){
-    if (is.null(color.use)) {
-      color.use <- scPalette(nlevels(labels))
-      # Assign Colors by Factor in ggplot2
-      # https://statisticalpoint.com/color-by-factor-ggplot2/#:~:text=How%20to%20Assign%20Colors%20by%20Factor%20in%20ggplot2,the%20following%20syntax%3A%20ggplot%28df%2C%20aes%28x%3Dx_variable%2C%20y%3Dy_variable%2C%20color%3Dcolor_variable%29%29%20%2B
-      names(color.use) <- levels(labels)
-    }
-  } else {
+  } else if (!is.null(sources.use) || !is.null(targets.use)) {
     if (is.numeric(sources.use)) {
+      if (anyNA(cells.level[sources.use])) stop("sources.use contains invalid group indices", call. = FALSE)
       sources.use <- cells.level[sources.use]
     }
     if (is.numeric(targets.use)) {
+      if (anyNA(cells.level[targets.use])) stop("targets.use contains invalid group indices", call. = FALSE)
       targets.use <- cells.level[targets.use]
     }
-
+    selected <- unique(c(sources.use, targets.use))
     group <- rep("Others", length(labels))
-    group[(labels %in% sources.use)] <- sources.use
-    group[(labels %in% targets.use)] <- targets.use
-    group = factor(group, levels = c(sources.use, targets.use, "Others"))
-
+    group[labels %in% selected] <- as.character(labels[labels %in% selected])
+    group <- factor(group, levels = c(selected, "Others"))
     if (is.null(color.use)) {
       color.use.all <- scPalette(nlevels(labels))
-      color.use <- color.use.all[match(c(sources.use, targets.use), levels(labels))]
-      color.use[nlevels(group)] <- "grey90"
-      names(color.use) <- c(sources.use, targets.use, "Others")
+      color.use <- color.use.all[match(selected, levels(labels))]
+      color.use <- c(color.use, Others = "grey90")
+      names(color.use)[seq_along(selected)] <- selected
     }
     labels <- group
+  } else if (is.null(color.use)) {
+    color.use <- scPalette(nlevels(labels))
+    names(color.use) <- levels(labels)
   }
 
-
+  plot_data$labels <- labels
+  raster_layer <- NULL
+  if (!is.null(raster)) {
+    image_array <- raster$image
+    image_dim <- dim(image_array)
+    if (is.null(image_array) || !is.array(image_array) || length(image_dim) < 2L ||
+        length(image_dim) > 3L)
+      stop("raster$image must be a 2D image or a 3D RGB/RGBA array", call. = FALSE)
+    if (length(image.alpha) != 1L || !is.numeric(image.alpha) ||
+        is.na(image.alpha) || image.alpha < 0 || image.alpha > 1)
+      stop("image.alpha must be a number between 0 and 1", call. = FALSE)
+    if (length(image_dim) == 3L && image_dim[3] == 3L && image.alpha < 1) {
+      alpha_channel <- array(image.alpha, dim = c(image_dim[1], image_dim[2], 1L))
+      image_array <- array(c(as.vector(image_array), as.vector(alpha_channel)),
+                           dim = c(image_dim[1], image_dim[2], 4L))
+    }
+    raster_layer <- annotation_raster(
+      raster = image_array, xmin = 0, xmax = image_dim[2],
+      ymin = 0, ymax = image_dim[1], interpolate = TRUE
+    )
+  }
 
   if (is.null(proportion)) {
-    gg <- ggplot(data = coordinates,aes(x=x_cent,y=y_cent,colour = labels))+
-      geom_point(alpha = alpha, size = point.size, shape=shape.by) +
+    gg <- ggplot(data = plot_data, aes(x = x_cent, y = y_cent, colour = labels))
+    if (!is.null(raster_layer)) gg <- gg + raster_layer
+    gg <- gg + geom_point(alpha = alpha, size = point.size, shape = shape.by) +
       scale_color_manual(values = color.use, na.value = "grey90") +
-      guides(color = guide_legend(override.aes = list(size=legend.size), ncol = ncol, byrow = byrow))
+      guides(color = guide_legend(override.aes = list(size = legend.size),
+                                  ncol = ncol, byrow = byrow))
   } else {
-    proportion = as.data.frame(proportion)
-    #proportion = proportion[,mixedsort(colnames(proportion))]
-    df <- cbind(proportion,coordinates)
-    ct.select = levels(labels) # colnames(proportion)
-    if(is.null(radius)){
-      radius = (max(coordinates$x_cent) - min(coordinates$x_cent)) * (max(coordinates$y_cent) - min(coordinates$y_cent))
-      radius = radius / nrow(coordinates)
-      radius = radius / pi
-      radius = sqrt(radius) * radius.size
-    }else{
-      radius = radius
+    proportion <- as.data.frame(proportion)
+    if (nrow(proportion) != nrow(plot_data))
+      stop("proportion must have one row per cell", call. = FALSE)
+    ct.select <- levels(labels)
+    if (!all(ct.select %in% colnames(proportion)))
+      stop("proportion must contain one column for every plotted group", call. = FALSE)
+    df <- cbind(proportion[, ct.select, drop = FALSE], plot_data)
+    if (is.null(radius)) {
+      radius <- diff(range(plot_data$x_cent)) * diff(range(plot_data$y_cent)) /
+        nrow(plot_data) / pi
+      radius <- sqrt(max(radius, 0)) * radius.size
     }
-    gg <- ggplot() + scatterpie::geom_scatterpie(aes(x=x_cent, y=y_cent,r = radius), data = df,
-                                                 cols = ct.select, color=NA) + #+ coord_fixed(ratio = 1*max(data$x)/max(data$y)) + scale_fill_manual(values =  colors)
+    gg <- ggplot()
+    if (!is.null(raster_layer)) gg <- gg + raster_layer
+    gg <- gg + scatterpie::geom_scatterpie(
+      aes(x = x_cent, y = y_cent, r = radius), data = df,
+      cols = ct.select, color = NA
+    ) +
       scale_fill_manual(values = color.use, na.value = "grey90") +
-      guides(fill = guide_legend(override.aes = list(size=legend.size), ncol = ncol, byrow = byrow))
+      guides(fill = guide_legend(override.aes = list(size = legend.size),
+                                 ncol = ncol, byrow = byrow))
   }
-  gg <- gg + theme(legend.position = legend.position, legend.key.spacing.y = unit(legend.spacing[2], 'pt'), legend.key.spacing.x = unit(legend.spacing[1], 'pt')) +
-    theme(legend.title = element_blank(), legend.text = element_text(size = legend.text.size, margin = margin(l = 0)))  + # , legend.key.size = unit(0.4, "inches")
-    theme(panel.background = element_blank(),axis.ticks = element_blank(), axis.text = element_blank()) + xlab(NULL) + ylab(NULL) + theme(legend.key = element_blank()) +
-    coord_fixed()+scale_y_reverse()
-  #coord_fixed(ratio = 1*diff(range(coordinates$x_cent))/diff(range(coordinates$y_cent))) + scale_y_reverse()
 
-  if (!is.null(title.name)){
+  coord_args <- list()
+  if (!is.null(coord_limits)) {
+    if (!is.list(coord_limits) || !all(c("xlim", "ylim") %in% names(coord_limits)))
+      stop("coord_limits must contain xlim and ylim", call. = FALSE)
+    coord_args <- list(xlim = coord_limits$xlim, ylim = coord_limits$ylim, expand = FALSE)
+  }
+  gg <- gg +
+    theme(legend.position = legend.position,
+          legend.key.spacing.y = unit(legend.spacing[2], "pt"),
+          legend.key.spacing.x = unit(legend.spacing[1], "pt"),
+          legend.title = element_blank(),
+          legend.text = element_text(size = legend.text.size, margin = margin(l = 0)),
+          panel.background = element_blank(), axis.ticks = element_blank(),
+          axis.text = element_blank(), legend.key = element_blank()) +
+    do.call(coord_fixed, coord_args) + scale_y_reverse() + xlab(NULL) + ylab(NULL)
+  if (!is.null(title.name))
     gg <- gg + ggtitle(title.name) + theme(plot.title = element_text(hjust = 0.5, vjust = 0, size = 10))
-  }
-  return(gg)
+  gg
+}
 
+#' Visualize SpatialCellChat groups on coordinates or a Visium image.
+#' @param object A SpatialCellChat object.
+#' @param image Whether to draw the optional histology image.
+#' @param image.alpha Alpha for the histology image.
+#' @param color.use defining the colors for groups.
+#' @param group.by Metadata column used for grouping.
+#' @param sources.use Source groups to highlight.
+#' @param targets.use Target groups to highlight.
+#' @param idents.use Groups to highlight.
+#' @param proportion Optional cell-type proportion data frame.
+#' @param radius Optional pie radius.
+#' @param radius.size Relative pie radius.
+#' @param alpha Point alpha.
+#' @param shape.by Point shape.
+#' @param title.name Optional plot title.
+#' @param point.size Point size.
+#' @param image Whether to draw the optional histology image.
+#' @param image.alpha Alpha for the histology image.
+#' @param crop Whether to crop the plot to the observed spot coordinates.
+#' @param legend.size Legend point size.
+#' @param legend.text.size Legend text size.
+#' @param legend.position Legend position.
+#' @param legend.spacing Legend spacing.
+#' @param ncol Number of legend columns.
+#' @param byrow Whether legends fill by row.
+#' @export
+spatialDimPlot <- function(object, color.use = NULL, group.by = NULL,
+                           sources.use = NULL, targets.use = NULL, idents.use = NULL,
+                           proportion = NULL, radius = NULL, radius.size = 0.55,
+                           alpha = 1, shape.by = 16, title.name = NULL, point.size = 2.4,
+                           image = TRUE, image.alpha = 0.5, crop = TRUE,
+                           legend.size = 3, legend.text.size = 8,
+                           legend.position = "right", legend.spacing = c(0, -8),
+                           ncol = 1, byrow = FALSE) {
+  rasters <- object@images$rasters
+  raster <- NULL
+  image.name <- NULL
+  image.explicit <- is.character(image)
+  if (image.explicit) {
+    if (length(image) != 1L || is.na(image) || !nzchar(image))
+      stop("image must be FALSE, TRUE, or one raster name", call. = FALSE)
+    if (!length(rasters) || !image %in% names(rasters))
+      stop("requested raster was not found in object@images$rasters", call. = FALSE)
+    image.name <- image
+    raster <- rasters[[image.name]]
+  } else if (isTRUE(image) && length(rasters)) {
+    image.name <- names(rasters)[[1L]]
+    raster <- rasters[[1L]]
+  }
+
+  plot_coordinates <- NULL
+  coord_limits <- NULL
+  if (!is.null(raster)) {
+    spot.coordinates <- raster$spot.coordinates
+    cell.names <- rownames(object@images$coordinates)
+    has.spot.coordinates <- is.data.frame(spot.coordinates) &&
+      all(c("imagerow", "imagecol") %in% colnames(spot.coordinates)) &&
+      !is.null(rownames(spot.coordinates)) && all(cell.names %in% rownames(spot.coordinates))
+    if (!has.spot.coordinates) {
+      if (image.explicit)
+        stop("selected raster must contain imagerow/imagecol spot.coordinates for plotting", call. = FALSE)
+      raster <- NULL
+    } else {
+      spot.coordinates <- spot.coordinates[cell.names, , drop = FALSE]
+      plot_coordinates <- as.matrix(spot.coordinates[, c("imagerow", "imagecol"), drop = FALSE])
+      rownames(plot_coordinates) <- cell.names
+      image.dim <- dim(raster$image)
+      if (isTRUE(crop)) {
+        x.range <- range(spot.coordinates$imagecol, na.rm = TRUE)
+        y.range <- range(spot.coordinates$imagerow, na.rm = TRUE)
+        x.padding <- max(diff(x.range) * 0.02, 1)
+        y.padding <- max(diff(y.range) * 0.02, 1)
+        coord_limits <- list(
+          xlim = c(x.range[1] - x.padding, x.range[2] + x.padding),
+          ylim = c(y.range[2] + y.padding, y.range[1] - y.padding)
+        )
+      } else {
+        coord_limits <- list(xlim = c(0, image.dim[2]), ylim = c(image.dim[1], 0))
+      }
+    }
+  }
+
+  spatialDimPlotPoints(
+    object = object,
+    color.use = color.use,
+    group.by = group.by,
+    sources.use = sources.use,
+    targets.use = targets.use,
+    idents.use = idents.use,
+    proportion = proportion,
+    radius = radius,
+    radius.size = radius.size,
+    alpha = alpha,
+    shape.by = shape.by,
+    title.name = title.name,
+    point.size = point.size,
+    legend.size = legend.size,
+    legend.text.size = legend.text.size,
+    legend.position = legend.position,
+    legend.spacing = legend.spacing,
+    ncol = ncol,
+    byrow = byrow,
+    plot_coordinates = plot_coordinates,
+    raster = raster,
+    image.alpha = image.alpha,
+    coord_limits = coord_limits
+  )
 }
 
 
@@ -2985,7 +3170,7 @@ netVisual_bubble <- function(object, sources.use = NULL, targets.use = NULL, sig
                                       thresh = thresh)
     df.all <- data.frame()
     for (ii in 1:length(comparison)) {
-      cells.level <- levels(object@idents[[comparison[ii]]])
+      cells.level <- levels(object@idents)
       if (is.numeric(sources.use)) {
         sources.use <- cells.level[sources.use]
       }
@@ -5555,24 +5740,65 @@ netVisual_CommunField <- function(
 }
 
 
+.sc_resolve_arrow_width <- function(value, name = "arrow.line.width") {
+  if (!is.numeric(value) || !length(value) %in% c(1L, 2L) ||
+      any(!is.finite(value)) || any(value <= 0) ||
+      (length(value) == 2L && value[1L] > value[2L])) {
+    stop(name, " must be one or two positive finite numeric values in ascending order",
+         call. = FALSE)
+  }
+  if (length(value) == 1L) rep(as.numeric(value), 2L) else as.numeric(value)
+}
+
+
 #' @title netVisual_CommunFieldGrid
+#' @description
+#' Aggregate and plot a communication vector field on a spatial grid.
+#'
+#' @details
+#' Grid geometry is built from the first two canonical `images$coordinates`
+#' axes after the existing visualization coordinate preparation is applied;
+#' this preserves the prior plotting orientation without introducing a new
+#' axis swap or transformation. A `NULL` `cellsize` uses the minimum non-self
+#' nearest-neighbor distance without a dense pairwise distance matrix;
+#' explicit sizes must be positive finite numeric vectors of length 1 or 2.
+#' `grid.resolution` is a positive finite multiplier. When
+#' `images$spatial.factors$ratio` is unavailable, coordinates remain in raw
+#' units and no physical scale is reported.
+#'
 #' @param object SpatialCellChat object
 #' @param signaling a signaling pathway or ligand-receptor pair to visualize
-#' @param slot.name the slot name of object. Set is to be "netP" if input signaling is a pathway name; Set is to be "net" if input signaling is a ligand-receptor pair
-#' @param pattern "outgoing" or "incoming"
-#' @param cellsize an integer specifying the spatial resolution (in pixels) used to construct the grid. If \code{NULL}, the minimum pairwise distance between spatial coordinates is used as the default cell size.
-#' @param what a character string specifying the type of geometry returned by \code{sf::st_make_grid}. Default is "polygons"
-#' @param square a logical value indicating whether the grid cells should be square
-#' @param grid.resolution an integer specifying the scaling factor applied to \code{cellsize} when constructing the grid
-#' @param grid.field.mean a character string specifying how vector fields within each grid cell are aggregated. Options include \code{"median"} or \code{"sum"}
+#' @param slot.name the slot name of object. Set to `"netP"` if input signaling
+#'   is a pathway name; set to `"net"` if input signaling is a ligand-receptor
+#'   pair.
+#' @param pattern `"outgoing"` or `"incoming"`
+#' @param cellsize Positive finite numeric vector of length 1 or 2. If `NULL`,
+#'   the minimum non-self nearest-neighbor distance is estimated without a
+#'   dense pairwise distance matrix.
+#' @param what Grid geometry returned by [sf::st_make_grid]: `"polygons"`,
+#'   `"corners"`, or `"centers"`.
+#' @param square Logical; if FALSE, use hexagonal cells.
+#' @param grid.resolution Positive finite numeric multiplier applied
+#'   component-wise to `cellsize`; defaults to 2.
+#' @param grid.field.mean A character string specifying how vector fields within
+#'   each grid cell are aggregated: `"median"` or `"sum"`.
 #' @param color.use defining the color for each cell group
 #' @param point.size the size of spots
 #' @param image.alpha the transparency of individual spots
 #' @param min.mag a numeric value specifying the minimum vector magnitude required for arrows to be displayed
+#' @param arrow.skip number of interpolated grid locations skipped between
+#'   displayed arrows. `NULL` adaptively targets at most 12 arrows per axis.
+
 #' @param arrow.line.color the color of arrows
+#' @param arrow.line.width one or two positive values controlling arrow width;
+#'   a two-value range maps width to vector magnitude
 #' @param arrow.line.alpha the transparency of arrows
 #' @param arrow.angle the angle of arrows
 #' @param arrow.length the length of arrows
+#' @param arrow.type the grid arrowhead type
+#' @param lineend the arrow line ending style
+
+
 #' @param legend.size the size of legend
 #' @param legend.text.size the text size on the legend
 #' @param title.name title name of the plot
@@ -5595,11 +5821,14 @@ netVisual_CommunFieldGrid <- function(
     point.size = 2,
     image.alpha = 0.3,
     min.mag = 0,
-    arrow.line.color = "black",
-    # arrow.line.width = 0.7,
+    arrow.skip = NULL,
+    arrow.line.color = "grey20",
+    arrow.line.width = c(0.35, 1.4),
     arrow.line.alpha = 0.9,
     arrow.angle = 22.5,
     arrow.length = 0.5,
+    arrow.type = "closed",
+    lineend = "round",
     ...,
     legend.size = 2,
     legend.text.size = 8,
@@ -5607,6 +5836,7 @@ netVisual_CommunFieldGrid <- function(
 ){
   pattern <- match.arg(pattern)
   grid.field.mean <- match.arg(grid.field.mean)
+  arrow.line.width <- .sc_resolve_arrow_width(arrow.line.width)
 
   if (pattern == "outgoing") {
     arrow.ends = "last"
@@ -5622,7 +5852,10 @@ netVisual_CommunFieldGrid <- function(
     }
   }
 
-  field <- my_as_sparse3Darray(methods::slot(object, slot.name)$field[[pattern]])
+  field <- methods::slot(object, slot.name)$cell$field[[pattern]]
+  if (!inherits(field, "SparseChatArray")) {
+    stop("communication fields must be stored as cell-level SparseChatArray results", call. = FALSE)
+  }
 
   siganling_name = dimnames(field)[[3]]
   if (!(signaling %in% siganling_name)) {
@@ -5634,7 +5867,7 @@ netVisual_CommunFieldGrid <- function(
   field.use[, 1] = temp_field.use[, 2]
   field.use[, 2] = temp_field.use[, 1]
 
-  coordinates <- object@images$coordinates
+  coordinates <- object@images$coordinates[, seq_len(2L), drop = FALSE]
   temp_coordinates = coordinates
   coordinates[, 1] = temp_coordinates[, 2]
   coordinates[, 2] = temp_coordinates[, 1]
@@ -5646,56 +5879,68 @@ netVisual_CommunFieldGrid <- function(
   cells.level <- levels(labels)
   df.field <- data.frame(coordinates, field.use, mag = field.mag, labels)
 
-  # some hints about contact.range and spot size in the new grid SpatialCellChat
   spatial.factors <- object@images$spatial.factors
-
-  if(( !is.null(cellsize) ) & is.integer(cellsize)){
-    spot.size <- cellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-    cat(cli.symbol(3),"The `cellsize` you input is ",cellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
+  ratio <- if (is.list(spatial.factors)) spatial.factors$ratio else NULL
+  resolved <- .sc_resolve_grid_size(
+    coordinates = coordinates[, seq_len(2L), drop = FALSE],
+    cellsize = cellsize,
+    grid.resolution = grid.resolution,
+    ratio = ratio
+  )
+  newcellsize <- resolved$effective.cellsize
+  shape <- if (isTRUE(square)) "square" else "hexagonal"
+  .cli("Communication field grid", .type = "header")
+  .cli("Cellsize source: {.val {resolved$source}}; effective={.val {newcellsize}}; resolution={.val {resolved$grid.resolution}}",
+       .type = "text", .verbose = 1L)
+  if (resolved$calibrated) {
+    .cli("Calibration: ratio={.val {ratio}}; physical cellsize={.val {resolved$physical.cellsize}}",
+         .type = "text", .verbose = 1L)
+  } else {
+    .cli("Calibration: {.val uncalibrated}; physical scale is unavailable",
+         .type = "warning", .verbose = 0L)
   }
-  if(is.null(cellsize)){
-    cell2cellDist <- Rfast::Dist(coordinates)
-    diag(cell2cellDist) <- NA
-    cellsize <- min(cell2cellDist,na.rm = T)
-    spot.size <- cellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-    cat(cli.symbol(3),"The default `cellsize` in the SpatialCellChat object is ",cellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
-  }
 
-  if(is.null(grid.resolution)) {grid.resolution <- 2}
-  newcellsize <- cellsize*grid.resolution
-  spot.size <- newcellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-  cat(cli.symbol(),"Do grid to show communication flow, the new `cellsize` will be ",newcellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
-
-
-  df.field <-
-    sf::st_as_sf(df.field,
-                 coords = c("x_cent", "y_cent"),
-                 remove = FALSE)
+  df.field <- sf::st_as_sf(df.field,
+                           coords = c("x_cent", "y_cent"),
+                           remove = FALSE)
   sf::st_crs(df.field) <- 3857
+  square_grid <- sf::st_make_grid(df.field, cellsize = newcellsize,
+                                  what = what, square = square)
+  square_grid_sf <- sf::st_sf(square_grid)
+  square_grid_sf$grid_id <- seq_along(square_grid)
 
-  square_grid <-
-    sf::st_make_grid(df.field,
-                     cellsize = newcellsize,
-                     what = what,
-                     square = square)
+  membership <- .sc_grid_membership(df.field, square_grid_sf)
+  n_grid <- length(membership$grid.counts)
+  n_occupied <- sum(membership$grid.counts > 0L)
+  n_unassigned <- sum(membership$point.counts == 0L)
+  n_multi_hit <- sum(membership$point.counts > 1L)
+  .cli("Grid: {.val {shape}}/{.val {what}}; generated={.val {n_grid}}; occupied={.val {n_occupied}}; empty={.val {n_grid - n_occupied}}",
+       .type = "text", .verbose = 1L)
+  .cli("Assignment: {.val {nrow(df.field) - n_unassigned}} assigned; {.val {n_unassigned}} unassigned; {.val {n_multi_hit}} multi-grid points",
+       .type = if (n_unassigned) "warning" else "success",
+       .verbose = if (n_unassigned) 0L else 1L)
+  contained <- split(
+    membership$point.index,
+    factor(membership$grid.index, levels = seq_len(n_grid))
+  )
 
-  ## convert `square_grid` into sf and add grid IDs
-  square_grid_sf = sf::st_sf(square_grid) %>%
-    # add grid ID
-    dplyr::mutate(grid_id = seq_len(length(lengths(square_grid))))
-
-  if(grid.field.mean=="median"){
+  if (grid.field.mean == "median") {
     field.mean <- median
-  } else if (grid.field.mean=="sum"){
+  } else {
     field.mean <- sum
   }
-
-  field.gridded = square_grid_sf %>%
-    mutate(id = 1:n(),
-           contained = lapply(sf::st_intersects(square_grid,df.field),identity),
-           obs = sapply(contained, length),
-           u = sapply(contained, function(x) {field.mean( df.field[x,,drop=F]$dx, na.rm = TRUE )}),
-           v = sapply(contained, function(x) {field.mean( df.field[x,,drop=F]$dy, na.rm = TRUE )}))
+  field.gridded <- square_grid_sf %>%
+    mutate(
+      id = seq_len(n()),
+      contained = unname(contained),
+      obs = vapply(contained, length, integer(1)),
+      u = vapply(contained, function(x) {
+        field.mean(df.field[x, , drop = FALSE]$dx, na.rm = TRUE)
+      }, numeric(1)),
+      v = vapply(contained, function(x) {
+        field.mean(df.field[x, , drop = FALSE]$dy, na.rm = TRUE)
+      }, numeric(1))
+    )
 
   # field.gridded = field.gridded %>% select(obs, u, v) %>% na.omit()
 
@@ -5750,6 +5995,18 @@ netVisual_CommunFieldGrid <- function(
   uv.se.use <- purrr::map_dbl(.x = uv.se.use,.f = function(x){return(length(x))})
   uv.se.omit <- which(uv.se.use==0)
 
+  if (is.null(arrow.skip)) {
+    n.arrow.locations <- max(length(unique(uv.se$lon)), length(unique(uv.se$lat)))
+    arrow.skip <- max(0L, ceiling(n.arrow.locations / 12L) - 1L)
+  } else if (length(arrow.skip) != 1L || !is.numeric(arrow.skip) ||
+             is.na(arrow.skip) || !is.finite(arrow.skip) ||
+             arrow.skip < 0 || arrow.skip != as.integer(arrow.skip)) {
+    stop("arrow.skip must be NULL or one non-negative integer", call. = FALSE)
+  } else {
+    arrow.skip <- as.integer(arrow.skip)
+  }
+  .cli("Arrow sampling: skip={.val {arrow.skip}} interpolated locations between displayed arrows",
+       .type = "text", .verbose = 1L)
   uv.se[uv.se.omit,c("u","v","vel")] <- 0
 
   if (is.null(color.use)) {
@@ -5783,24 +6040,36 @@ netVisual_CommunFieldGrid <- function(
         x = lon,
         y = -lat,
         dx = u,
-        dy = -v
+        dy = -v,
+        size = after_stat(norm_mag)
       ),
       data = uv.se,
       color = arrow.line.color,
       min.mag = min.mag,
-      # linewidth = arrow.line.width,
+      skip = arrow.skip,
       alpha = arrow.line.alpha,
-      ... = ...,
+      arrow = grid::arrow(
+        arrow.angle,
+        grid::unit(arrow.length, "lines"),
+        ends = arrow.ends,
+        type = arrow.type
+      ),
+      lineend = lineend,
+      ...,
       arrow.angle = arrow.angle,
       arrow.length = arrow.length,
       arrow.ends = arrow.ends
     )+
-    metR::scale_mag(guide = "none")+
+    scale_size_continuous(range = arrow.line.width, guide = "none")+
     # geom_sf(data =current.gridded.na,mapping = aes(geometry=square_grid),color="white",fill="white",linewidth=0)+
     # scale_fill_gradientn(name = "Current",colours = oceColorsVelocity(120),
     #                      limits = c(0,1.6), breaks = seq(0.1,1.6,.3))+
     scChat_theme_opts+#coord_fixed()+  #scale_y_reverse()+
-    theme(legend.position = "right") + xlab(NULL) + ylab(NULL) +
+    theme(
+      legend.position = "right",
+      legend.text = element_text(size = legend.text.size),
+      legend.title = element_text(size = legend.text.size)
+    ) + xlab(NULL) + ylab(NULL) +
     coord_fixed()
   # coord_fixed(ratio = 1*diff(range(coordinates$x_cent))/diff(range(coordinates$y_cent)))
 
@@ -5822,28 +6091,57 @@ netVisual_CommunFieldGrid <- function(
 
 
 #' @title netVisual_CommunFlow
+#' @description
+#' Aggregate and plot communication streamlines on a spatial grid.
+#'
+#' @details
+#' Grid geometry is built from the first two canonical `images$coordinates`
+#' axes after the existing visualization coordinate preparation is applied;
+#' this preserves the prior plotting orientation without introducing a new
+#' axis swap or transformation. A `NULL` `cellsize` uses the minimum non-self
+#' nearest-neighbor distance without a dense pairwise distance matrix;
+#' explicit sizes must be positive finite numeric vectors of length 1 or 2.
+#' `grid.resolution` is a positive finite multiplier. When
+#' `images$spatial.factors$ratio` is unavailable, coordinates remain in raw
+#' units and no physical scale is reported.
+#'
 #' @param object SpatialCellChat object
 #' @param signaling a signaling pathway or ligand-receptor pair to visualize
-#' @param slot.name the slot name of object. Set is to be "netP" if input signaling is a pathway name; Set is to be "net" if input signaling is a ligand-receptor pair
-#' @param pattern "outgoing" or "incoming"
-#' @param cellsize an integer specifying the spatial resolution (in pixels) used to construct the grid. If \code{NULL}, the minimum pairwise distance between spatial coordinates is used as the default cell size.
-#' @param what a character string specifying the type of geometry returned by \code{sf::st_make_grid}. Default is "polygons"
-#' @param square a logical value indicating whether the grid cells should be square
-#' @param grid.resolution an integer specifying the scaling factor applied to \code{cellsize} when constructing the grid
-#' @param grid.field.mean a character string specifying how vector fields within each grid cell are aggregated. Options include \code{"median"} or \code{"sum"}
+#' @param slot.name the slot name of object. Set to `"netP"` if input signaling
+#'   is a pathway name; set to `"net"` if input signaling is a ligand-receptor
+#'   pair.
+#' @param pattern `"outgoing"` or `"incoming"`
+#' @param cellsize Positive finite numeric vector of length 1 or 2. If `NULL`,
+#'   the minimum non-self nearest-neighbor distance is estimated without a
+#'   dense pairwise distance matrix.
+#' @param what Grid geometry returned by [sf::st_make_grid]: `"polygons"`,
+#'   `"corners"`, or `"centers"`.
+#' @param square Logical; if FALSE, use hexagonal cells.
+#' @param grid.resolution Positive finite numeric multiplier applied
+#'   component-wise to `cellsize`; defaults to 2.
+#' @param grid.field.mean A character string specifying how vector fields within
+#'   each grid cell are aggregated: `"median"` or `"sum"`.
 #' @param color.use defining the color for each cell group
 #' @param point.size the size of spots
 #' @param image.alpha the transparency of individual spots
-#' @param L typical length of a streamline
-#' @param min.L minimum length of segments to show
-#' @param res resolution parameter. Higher numbers increases the resolution used for streamline integration
-#' @param n numeric indicating the number of points to draw
+#' @param L typical streamline length in coordinate units. `NULL` scales it to
+#'   four effective grid-cell widths.
+#' @param min.L minimum visible streamline length. `NULL` uses one quarter of
+#'   an effective grid-cell width to remove boundary fragments.
+
+#' @param res resolution parameter. Higher numbers increase the resolution used for streamline integration
+#' @param n number of streamline seeds on each axis. `NULL` derives a bounded
+#'   value from the occupied-grid count.
 #' @param jitter amount of jitter of the starting points
-#' @param arrow.line.color the color of arrows
-#' @param arrow.line.width the width of arrows
-#' @param arrow.line.alpha the transparency of arrows
-#' @param arrow.angle the angle of arrows
-#' @param arrow.length the length of arrows
+#' @param arrow.line.color the color of streamlines
+#' @param arrow.line.width one or two positive values controlling streamline width;
+#'   a two-value range maps width to local flow magnitude
+#' @param arrow.line.alpha the transparency of streamlines
+#' @param arrow.angle the angle of arrowheads
+#' @param arrow.length the length of arrowheads
+#' @param arrow.type the grid arrowhead type
+#' @param lineend the streamline line ending style
+
 #' @param legend.size the size of legend
 #' @param legend.text.size the text size on the legend
 #' @param title.name title name of the plot
@@ -5860,27 +6158,30 @@ netVisual_CommunFlow <- function(
     cellsize=NULL,
     what = "polygons",
     square = T,
-    grid.resolution=NULL,
-    grid.field.mean = c("median","sum"),
+    grid.resolution = NULL,
+    grid.field.mean = c("median", "sum"),
     color.use = NULL,
     point.size = 2,
-    image.alpha = 0.9,
-    L = 300,
-    min.L = 0,
+    image.alpha = 0.55,
+    L = NULL,
+    min.L = NULL,
     res = 0.5,
-    n = 30,
-    jitter=3,
-    arrow.line.color="grey40",
-    arrow.line.width=0.7,
-    arrow.line.alpha=0.6,
-    arrow.angle = 12,
-    arrow.length = 0.3,
+    n = NULL,
+    jitter = 1,
+    arrow.line.color = "grey25",
+    arrow.line.width = c(0.25, 1.15),
+    arrow.line.alpha = 0.72,
+    arrow.angle = 18,
+    arrow.length = 0.45,
+    arrow.type = "closed",
+    lineend = "round",
     ...,
     legend.size = 2,
     legend.text.size = 8,
     title.name = NULL
 ){
   pattern <- match.arg(pattern)
+  arrow.line.width <- .sc_resolve_arrow_width(arrow.line.width)
   grid.field.mean <- match.arg(grid.field.mean)
 
 
@@ -5898,7 +6199,10 @@ netVisual_CommunFlow <- function(
     }
   }
 
-  field <- my_as_sparse3Darray(methods::slot(object, slot.name)$field[[pattern]])
+  field <- methods::slot(object, slot.name)$cell$field[[pattern]]
+  if (!inherits(field, "SparseChatArray")) {
+    stop("communication fields must be stored as cell-level SparseChatArray results", call. = FALSE)
+  }
 
   siganling_name = dimnames(field)[[3]]
   if (!(signaling %in% siganling_name)) {
@@ -5910,7 +6214,7 @@ netVisual_CommunFlow <- function(
   field.use[, 1] = temp_field.use[, 2]
   field.use[, 2] = temp_field.use[, 1]
 
-  coordinates <- object@images$coordinates
+  coordinates <- object@images$coordinates[, seq_len(2L), drop = FALSE]
   temp_coordinates = coordinates
   coordinates[, 1] = temp_coordinates[, 2]
   coordinates[, 2] = temp_coordinates[, 1]
@@ -5922,56 +6226,93 @@ netVisual_CommunFlow <- function(
   cells.level <- levels(labels)
   df.field <- data.frame(coordinates, field.use, mag = field.mag, labels)
 
-  # some hints about contact.range and spot size in the new grid SpatialCellChat
   spatial.factors <- object@images$spatial.factors
-
-  if(( !is.null(cellsize) ) & is.integer(cellsize)){
-    spot.size <- cellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-    cat(cli.symbol(3),"The `cellsize` you input is ",cellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
+  ratio <- if (is.list(spatial.factors)) spatial.factors$ratio else NULL
+  resolved <- .sc_resolve_grid_size(
+    coordinates = coordinates[, seq_len(2L), drop = FALSE],
+    cellsize = cellsize,
+    grid.resolution = grid.resolution,
+    ratio = ratio
+  )
+  newcellsize <- resolved$effective.cellsize
+  shape <- if (isTRUE(square)) "square" else "hexagonal"
+  .cli("Communication flow grid", .type = "header")
+  .cli("Cellsize source: {.val {resolved$source}}; effective={.val {newcellsize}}; resolution={.val {resolved$grid.resolution}}",
+       .type = "text", .verbose = 1L)
+  if (resolved$calibrated) {
+    .cli("Calibration: ratio={.val {ratio}}; physical cellsize={.val {resolved$physical.cellsize}}",
+         .type = "text", .verbose = 1L)
+  } else {
+    .cli("Calibration: {.val uncalibrated}; physical scale is unavailable",
+         .type = "warning", .verbose = 0L)
   }
-  if(is.null(cellsize)){
-    cell2cellDist <- Rfast::Dist(coordinates)
-    diag(cell2cellDist) <- NA
-    cellsize <- min(cell2cellDist,na.rm = T)
-    spot.size <- cellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-    cat(cli.symbol(3),"The default `cellsize` in the SpatialCellChat object is ",cellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
-  }
 
-  if(is.null(grid.resolution)) {grid.resolution <- 2}
-  newcellsize <- cellsize*grid.resolution
-  spot.size <- newcellsize*spatial.factors[["ratio"]] %>% round(digits = 4)
-  cat(cli.symbol(),"Do grid to show communication flow, the new `cellsize` will be ",newcellsize," units(pixels). It is about ",spot.size," um in International System of Units.\n")
-
-
-  df.field <-
-    sf::st_as_sf(df.field,
-                 coords = c("x_cent", "y_cent"),
-                 remove = FALSE)
+  df.field <- sf::st_as_sf(df.field,
+                           coords = c("x_cent", "y_cent"),
+                           remove = FALSE)
   sf::st_crs(df.field) <- 3857
+  square_grid <- sf::st_make_grid(df.field,
+                                  cellsize = newcellsize,
+                                  what = what,
+                                  square = square)
+  square_grid_sf <- sf::st_sf(square_grid)
+  square_grid_sf$grid_id <- seq_along(square_grid)
 
-  square_grid <-
-    sf::st_make_grid(df.field,
-                     cellsize = newcellsize,
-                     what = what,
-                     square = square)
+  membership <- .sc_grid_membership(df.field, square_grid_sf)
+  n_grid <- length(membership$grid.counts)
+  n_occupied <- sum(membership$grid.counts > 0L)
+  n_unassigned <- sum(membership$point.counts == 0L)
+  n_multi_hit <- sum(membership$point.counts > 1L)
+  .cli("Grid: {.val {shape}}/{.val {what}}; generated={.val {n_grid}}; occupied={.val {n_occupied}}; empty={.val {n_grid - n_occupied}}",
+       .type = "text", .verbose = 1L)
+  .cli("Assignment: {.val {nrow(df.field) - n_unassigned}} assigned; {.val {n_unassigned}} unassigned; {.val {n_multi_hit}} multi-grid points",
+       .type = if (n_unassigned) "warning" else "success",
+       .verbose = if (n_unassigned) 0L else 1L)
+  grid.scale <- max(newcellsize)
+  if (is.null(L)) {
+    L <- 4 * grid.scale
+  } else if (length(L) != 1L || !is.numeric(L) || is.na(L) ||
+             !is.finite(L) || L <= 0) {
+    stop("L must be NULL or one positive finite number", call. = FALSE)
+  }
+  if (is.null(min.L)) {
+    min.L <- grid.scale / 4
+  } else if (length(min.L) != 1L || !is.numeric(min.L) || is.na(min.L) ||
+             !is.finite(min.L) || min.L < 0) {
+    stop("min.L must be NULL or one non-negative finite number", call. = FALSE)
+  }
+  if (is.null(n)) {
+    n <- min(12L, max(3L, ceiling(sqrt(n_occupied))))
+  } else if (length(n) != 1L || !is.numeric(n) || is.na(n) ||
+             !is.finite(n) || n < 1 || n != as.integer(n)) {
+    stop("n must be NULL or one positive integer", call. = FALSE)
+  } else {
+    n <- as.integer(n)
+  }
+  .cli("Flow rendering: length={.val {L}}; min.length={.val {min.L}}; seeds per axis={.val {n}}",
+       .type = "text", .verbose = 1L)
+  contained <- split(
+    membership$point.index,
+    factor(membership$grid.index, levels = seq_len(n_grid))
+  )
 
-  ## convert `square_grid` into sf and add grid IDs
-  square_grid_sf = sf::st_sf(square_grid) %>%
-    # add grid ID
-    dplyr::mutate(grid_id = seq_len(length(lengths(square_grid))))
-
-  if(grid.field.mean=="median"){
+  if (grid.field.mean == "median") {
     field.mean <- median
-  } else if (grid.field.mean=="sum"){
+  } else {
     field.mean <- sum
   }
-
-  field.gridded = square_grid_sf %>%
-    mutate(id = 1:n(),
-           contained = lapply(sf::st_intersects(square_grid,df.field),identity),
-           obs = sapply(contained, length),
-           u = sapply(contained, function(x) {field.mean( df.field[x,,drop=F]$dx, na.rm = TRUE )}),
-           v = sapply(contained, function(x) {field.mean( df.field[x,,drop=F]$dy, na.rm = TRUE )}))
+  field.gridded <- square_grid_sf %>%
+    mutate(
+      id = seq_len(n()),
+      contained = unname(contained),
+      obs = vapply(contained, length, integer(1)),
+      u = vapply(contained, function(x) {
+        field.mean(df.field[x, , drop = FALSE]$dx, na.rm = TRUE)
+      }, numeric(1)),
+      v = vapply(contained, function(x) {
+        field.mean(df.field[x, , drop = FALSE]$dy, na.rm = TRUE)
+      }, numeric(1))
+    )
 
   # field.gridded = field.gridded %>% select(obs, u, v) %>% na.omit()
 
@@ -6055,27 +6396,38 @@ netVisual_CommunFlow <- function(
         x = lon,
         y = -lat,
         dx = u,
-        dy = -v
+        dy = -v,
+        linewidth = after_stat(sqrt(dx^2 + dy^2))
       ),
       data = uv.se,
       color = arrow.line.color,
-      linewidth = arrow.line.width,
       alpha = arrow.line.alpha,
-      ... = ...,
+      arrow = grid::arrow(
+        arrow.angle,
+        grid::unit(arrow.length, "lines"),
+        ends = arrow.ends,
+        type = arrow.type
+      ),
+      lineend = lineend,
+      linejoin = "round",
+      ...,
       L = L,
       min.L = min.L,
       res = res,
       n = n,
-      jitter = jitter,
-      arrow.angle = arrow.angle,
-      arrow.length = arrow.length,
-      arrow.ends = arrow.ends
+      jitter = jitter
     ) +
+    scale_linewidth_continuous(range = arrow.line.width, guide = "none") +
+
     # geom_sf(data =current.gridded.na,mapping = aes(geometry=square_grid),color="white",fill="white",linewidth=0)+
     # scale_fill_gradientn(name = "Current",colours = oceColorsVelocity(120),
     #                      limits = c(0,1.6), breaks = seq(0.1,1.6,.3))+
     scChat_theme_opts+#coord_fixed()+  #scale_y_reverse()+
-    theme(legend.position = "right") + xlab(NULL) + ylab(NULL) +
+    theme(
+      legend.position = "right",
+      legend.text = element_text(size = legend.text.size),
+      legend.title = element_text(size = legend.text.size)
+    ) + xlab(NULL) + ylab(NULL) +
     coord_fixed()
   # coord_fixed(ratio = 1*diff(range(coordinates$x_cent))/diff(range(coordinates$y_cent))) #+ scale_y_reverse()
 
@@ -6281,7 +6633,7 @@ plotGeneExpression <- function(object, features = NULL, signaling = NULL, enrich
   type <- match.arg(type)
   meta <- object@meta
   if (is.list(object@idents)) {
-    meta$group.cellchat <- object@idents$joint
+    meta$group.cellchat <- object@idents
   } else {
     meta$group.cellchat <- object@idents
   }
@@ -7784,7 +8136,7 @@ plotly_spatialLRpairPlot_shiny <- function(
 #'
 #' @return a plotly plot
 #' @export
-plotly_spatialDimPlot <- function (
+plotly_spatialDimPlot <- function(
     object,
     group.by = NULL,
     group.highlight = NULL,
@@ -7798,279 +8150,177 @@ plotly_spatialDimPlot <- function (
     title.name = NULL,
     scene.name = "scene",
     point.size = 2,
-    show.legend = T,
+    show.legend = TRUE,
     legend.group.title = "labels",
     three.dim.z = 0
-){
-  method = match.arg(method)
+) {
+  method <- match.arg(method)
   coordinates <- object@images$coordinates
-  if (ncol(coordinates) == 2) {
-    colnames(coordinates) <- c("x_cent", "y_cent")
-    temp_coordinates = coordinates
-    coordinates[, 1] = temp_coordinates[, 2]
-    coordinates[, 2] = temp_coordinates[, 1]
-  }
-  else {
-    stop("Please check the input 'coordinates' and make sure it is a two column matrix.")
-  }
+  if (is.null(coordinates))
+    stop("plotly_spatialDimPlot requires images$coordinates", call. = FALSE)
+  coordinates <- as.data.frame(coordinates)
+  if (ncol(coordinates) < 2L || ncol(coordinates) > 3L)
+    stop("coordinates must have two or three columns", call. = FALSE)
+  names(coordinates)[seq_len(2L)] <- c("x_cent", "y_cent")
+  coordinates <- coordinates[, seq_len(2L), drop = FALSE]
+  cell_id <- rownames(coordinates)
+  if (is.null(cell_id)) cell_id <- as.character(seq_len(nrow(coordinates)))
+  coordinates$cell_id <- as.character(cell_id)
 
   if (is.null(group.by)) {
     labels <- object@idents
+  } else {
+    if (length(group.by) != 1L || !group.by %in% colnames(object@meta))
+      stop("group.by must name one metadata column", call. = FALSE)
+    labels <- factor(object@meta[[group.by]])
   }
-  else {
-    labels <-  object@meta[, group.by]
-    labels <- factor(labels)
-  }
+  labels <- factor(as.character(labels))
+  if (length(labels) != nrow(coordinates))
+    stop("group labels must have one value per coordinate", call. = FALSE)
   cells.level <- levels(labels)
-
   coordinates$spot_labels <- labels
-  coordinates$cell_id <- BiocGenerics::rownames(coordinates)
 
+  color_labels <- labels
   if (!is.null(idents.use)) {
     if (is.numeric(idents.use)) {
+      if (any(idents.use < 1 | idents.use > length(cells.level)))
+        stop("idents.use contains an invalid group index", call. = FALSE)
       idents.use <- cells.level[idents.use]
     }
-    group <- rep("Others", length(labels))
-    group[(labels %in% idents.use)] <- idents.use
-    group = factor(group, levels = c(idents.use, "Others"))
-
-    if (is.null(color.use)) {
-      color.use.all <- scPalette(nlevels(labels))
-
-      # get the first 2 colors, then convert the 3th color to "grey90"
-      color.use <- color.use.all[match(c(idents.use), levels(labels))]
-      color.use[nlevels(group)] <- "grey90"
-    }
-    labels <- group
-  }
-
-  if (is.null(sources.use) & is.null(targets.use)) {
-    if (is.null(color.use)) {
-      color.use <- scPalette(nlevels(labels))
-    }
-  } else {
-    if (is.numeric(sources.use)) {
-      sources.use <- cells.level[sources.use]
-    }
-    if (is.numeric(targets.use)) {
-      targets.use <- cells.level[targets.use]
-    }
-    group <- rep("Others", length(labels))
-    group[(labels %in% sources.use)] <- sources.use
-    group[(labels %in% targets.use)] <- targets.use
-    group = factor(group, levels = c(sources.use, targets.use,
-                                     "Others"))
-    if (is.null(color.use)) {
-      color.use.all <- scPalette(nlevels(labels))
-      # get the first 2 colors, then convert the 3th color to "grey
-      color.use <- color.use.all[match(c(sources.use,targets.use), levels(labels))]
-      color.use[nlevels(group)] <- "grey90"
-    }
-    labels <- group
-  }
-  coordinates$color_labels <- labels
-
-
-  if (!is.null(group.highlight) & !is.null(cells.highlight)) {
-    stop("Please don't input `group.highlight` or `cells.highlight` simultaneously.")
-  }
-
-  if (!is.null(group.highlight)) {
-    if (all(group.highlight %in% levels(coordinates$spot_labels))) {
-      coordinates <- dplyr::mutate(
-        coordinates,
-        spot_highlight = if_else(.data[["spot_labels"]] %in% group.highlight, F, T)
-      )
-    } else{
-      stop("`group.highlight` not in cell groups you used! Please check your input.")
-    }
-
-  }
-  if (!is.null(cells.highlight)) {
-    if(is.numeric(cells.highlight)){
-      coordinates$spot_highlight <- dplyr::if_else(seq_len(NROW(coordinates)) %in% cells.highlight,F,T)
-    } else{
-      if (all(cells.highlight %in% coordinates$cell_id)) {
-        coordinates <- dplyr::mutate(
-          coordinates,
-          spot_highlight = if_else(.data[["cell_id"]] %in% cells.highlight, F, T)
-        )
-      } else{
-        stop("`cells.highlight` has some wrong cell_ids! Please check your input.")
-      }
-    }
-  }
-  if(is.null(group.highlight) & is.null(cells.highlight)){
-    coordinates <- dplyr::mutate(coordinates, spot_highlight = F)
-  }
-
-  if (method == "3d") {
-    pl <- plotly::plot_ly(
-      data = coordinates[!coordinates$spot_highlight, ],
-      x = ~ x_cent,
-      y = ~ y_cent,
-      z = three.dim.z,
-      scene = scene.name,
-      color =  ~ color_labels,
-      colors = color.use,
-      opacity = 1,
-      legendgroup = legend.group.title,
-      legendgrouptitle = list(text = legend.group.title),
-      type = "scatter3d",
-      mode = "markers",
-      hoverinfo = 'text',
-      text = ~ paste(
-        "<i><b>cell type: ",
-        spot_labels,
-        "</b></i>",
-        '<br> x:',
-        x_cent,
-        ", y:",
-        y_cent,
-        '<br> cell id:',
-        cell_id
-      ),
-      marker = list(size = point.size,
-                    symbol = "0")
-    ) %>% plotly::add_trace(
-      data = coordinates[coordinates$spot_highlight, ],
-      x = ~ x_cent,
-      y = ~ y_cent,
-      z = three.dim.z,
-      scene = scene.name,
-      color =  ~ color_labels,
-      colors = color.use,
-      opacity = nohighlight.alpha,
-      legendgroup = legend.group.title,
-      legendgrouptitle = list(text = legend.group.title),
-      type = "scatter3d",
-      mode = "markers",
-      hoverinfo = 'text',
-      customdata = ~ cell_id,
-      text = ~ paste(
-        "<i><b>cell type: ",
-        spot_labels,
-        "</b></i>",
-        '<br> x:',
-        x_cent,
-        ", y:",
-        y_cent,
-        '<br> cell id:',
-        cell_id
-      ),
-      marker = list(size = point.size,
-                    symbol = "0")
-    ) %>%
-      plotly::layout(
-        title = title.name,
-        showlegend = show.legend,
-        grid = generate_grid_nrows(1),
-        scene = generate_custom_scenes3d(
-          row = 0,
-          projection = "orthographic",
-          zoom = 2.5
-        ),
-        legend = custom_legend
-      )
-
-  } else if (method == "2d") {
-    # pl.key <- plotly::highlight_key(coordinates,  ~ cell_id)
-    pl <- plotly::plot_ly(
-      data = coordinates[!coordinates$spot_highlight, ],
-      x = ~ x_cent,
-      y = ~ y_cent,
-      color =  ~ color_labels,
-      colors = color.use,
-      opacity = 1,
-      legendgroup = legend.group.title,
-      legendgrouptitle = list(text = legend.group.title),
-      hoverinfo = 'text',
-      text = ~ paste(
-        "<i><b>cell type: ",
-        spot_labels,
-        "</b></i>",
-        '<br> x:',
-        x_cent,
-        ", y:",
-        y_cent,
-        '<br>cell id:',
-        cell_id
-      ),
-      customdata = ~ cell_id,
-      marker = list(size = point.size+4,
-                    symbol = "0"),
-      type = "scatter",
-      mode = 'markers'
-    ) %>% plotly::add_trace(
-      data = coordinates[coordinates$spot_highlight, ],
-      x = ~ x_cent,
-      y = ~ y_cent,
-      color =  ~ color_labels,
-      colors = color.use,
-      opacity = nohighlight.alpha,
-      legendgroup = legend.group.title,
-      legendgrouptitle = list(text = legend.group.title),
-      hoverinfo = 'text',
-      text = ~ paste(
-        "<i><b>cell type: ",
-        spot_labels,
-        "</b></i>",
-        '<br> x:',
-        x_cent,
-        ", y:",
-        y_cent,
-        '<br>cell id:',
-        cell_id
-      ),
-      customdata = ~ cell_id,
-      marker = list(size = point.size+4,
-                    symbol = "0"),
-      type = "scatter",
-      mode = 'markers'
-    ) %>%
-      plotly::layout(
-        title = title.name,
-        yaxis = list(
-          autorange = "reversed",
-          title = "",
-          showgrid = FALSE,
-          ticks = "",
-          # ticktext = "",
-          tickvals = "",
-          scaleanchor = "x",
-          tickformat = "%0f",
-          showline = FALSE,
-          visible = FALSE
-        ),
-        xaxis = list(
-          title = "",
-          showgrid = FALSE,
-          ticks = "",
-          # ticktext = "",
-          tickvals = "",
-          tickformat = "%0f",
-          showline = FALSE,
-          visible = FALSE
-        ),
-        legend = custom_legend
-      )
-    # %>%plotly::highlight(
-    #   # on = "plotly_click",
-    #   # off = "plotly_doubleclick",
-    #   selectize = TRUE,
-    #   dynamic = TRUE,
-    #   color = RColorBrewer::brewer.pal(length(cells.level), "Dark2"),
-    #   persistent = TRUE,
-    #   selected = plotly::attrs_selected(opacity = nohighlight.alpha)
-    # )
-
-
-  } else {
-    stop(
-      "The parameter \"method\" in this function only supports for \"normal\",\"3d\"!\n Please check your input."
+    idents.use <- as.character(idents.use)
+    if (!all(idents.use %in% cells.level))
+      stop("idents.use contains an unknown group", call. = FALSE)
+    color_labels <- factor(
+      ifelse(as.character(labels) %in% idents.use, as.character(labels), "Others"),
+      levels = c(idents.use, "Others")
     )
   }
-  return(pl)
+
+  if (!is.null(sources.use) || !is.null(targets.use)) {
+    if (is.numeric(sources.use)) sources.use <- cells.level[sources.use]
+    if (is.numeric(targets.use)) targets.use <- cells.level[targets.use]
+    source_target <- unique(c(as.character(sources.use), as.character(targets.use)))
+    if (!all(source_target %in% cells.level))
+      stop("sources.use or targets.use contains an unknown group", call. = FALSE)
+    color_labels <- factor(
+      ifelse(as.character(labels) %in% source_target,
+             as.character(labels), "Others"),
+      levels = c(source_target, "Others")
+    )
+  }
+  coordinates$color_labels <- color_labels
+  if (is.null(color.use)) {
+    color.use <- scPalette(nlevels(color_labels))
+    names(color.use) <- levels(color_labels)
+  }
+
+  if (!is.null(group.highlight) && !is.null(cells.highlight))
+    stop("Please don't input `group.highlight` or `cells.highlight` simultaneously.",
+         call. = FALSE)
+  has_highlight <- !is.null(group.highlight) || !is.null(cells.highlight)
+  coordinates$spot_highlight <- FALSE
+  if (!is.null(group.highlight)) {
+    if (is.numeric(group.highlight)) {
+      if (any(group.highlight < 1 | group.highlight > length(cells.level)))
+        stop("group.highlight contains an invalid group index", call. = FALSE)
+      group.highlight <- cells.level[group.highlight]
+    }
+    group.highlight <- as.character(group.highlight)
+    if (!all(group.highlight %in% cells.level))
+      stop("group.highlight contains an unknown group", call. = FALSE)
+    coordinates$spot_highlight <- as.character(coordinates$spot_labels) %in% group.highlight
+  }
+  if (!is.null(cells.highlight)) {
+    if (is.numeric(cells.highlight)) {
+      if (any(cells.highlight < 1 | cells.highlight > nrow(coordinates)))
+        stop("cells.highlight contains an invalid row index", call. = FALSE)
+      coordinates$spot_highlight <- seq_len(nrow(coordinates)) %in% cells.highlight
+    } else {
+      cells.highlight <- as.character(cells.highlight)
+      if (!all(cells.highlight %in% coordinates$cell_id))
+        stop("cells.highlight contains unknown cell IDs", call. = FALSE)
+      coordinates$spot_highlight <- coordinates$cell_id %in% cells.highlight
+    }
+  }
+
+  html_escape <- function(value) {
+    value <- as.character(value)
+    value <- gsub("&", "&amp;", value, fixed = TRUE)
+    value <- gsub("<", "&lt;", value, fixed = TRUE)
+    value <- gsub(">", "&gt;", value, fixed = TRUE)
+    gsub('"', "&quot;", value, fixed = TRUE)
+  }
+  coordinates$hover_text <- paste0(
+    "<i><b>cell type: ", html_escape(coordinates$spot_labels),
+    "</b></i><br>x: ", coordinates$x_cent,
+    ", y: ", coordinates$y_cent,
+    "<br>cell id: ", html_escape(coordinates$cell_id)
+  )
+
+  focus <- if (has_highlight) coordinates[coordinates$spot_highlight, , drop = FALSE] else coordinates
+  background <- if (has_highlight) coordinates[!coordinates$spot_highlight, , drop = FALSE] else coordinates[0, , drop = FALSE]
+  if (method == "3d") {
+    pl <- plotly::plot_ly(
+      data = focus, x = ~x_cent, y = ~y_cent, z = three.dim.z,
+      scene = scene.name, color = ~color_labels, colors = color.use,
+      opacity = 1, legendgroup = legend.group.title,
+      legendgrouptitle = list(text = legend.group.title),
+      type = "scatter3d", mode = "markers", hoverinfo = "text",
+      text = ~hover_text, customdata = ~cell_id,
+      marker = list(size = point.size, symbol = "0")
+    )
+    if (nrow(background) > 0L) {
+      pl <- plotly::add_trace(
+        pl, data = background, x = ~x_cent, y = ~y_cent, z = three.dim.z,
+        scene = scene.name, color = ~color_labels, colors = color.use,
+        opacity = nohighlight.alpha, legendgroup = legend.group.title,
+        legendgrouptitle = list(text = legend.group.title),
+        type = "scatter3d", mode = "markers", hoverinfo = "text",
+        text = ~hover_text, customdata = ~cell_id,
+        marker = list(size = point.size, symbol = "0")
+      )
+    }
+    layout_args <- list(
+      title = title.name, showlegend = show.legend,
+      grid = generate_grid_nrows(1L), legend = custom_legend
+    )
+    layout_args[[scene.name]] <- generate_custom_scenes3d(
+      row = 0, projection = "orthographic", zoom = 2.5
+    )
+    pl <- do.call(plotly::layout, c(list(pl), layout_args))
+  } else {
+    pl <- plotly::plot_ly(
+      data = focus, x = ~x_cent, y = ~y_cent,
+      color = ~color_labels, colors = color.use,
+      opacity = 1, legendgroup = legend.group.title,
+      legendgrouptitle = list(text = legend.group.title),
+      hoverinfo = "text", text = ~hover_text, customdata = ~cell_id,
+      marker = list(size = point.size + 4, symbol = "0"),
+      type = "scatter", mode = "markers"
+    )
+    if (nrow(background) > 0L) {
+      pl <- plotly::add_trace(
+        pl, data = background, x = ~x_cent, y = ~y_cent,
+        color = ~color_labels, colors = color.use,
+        opacity = nohighlight.alpha, legendgroup = legend.group.title,
+        legendgrouptitle = list(text = legend.group.title),
+        hoverinfo = "text", text = ~hover_text, customdata = ~cell_id,
+        marker = list(size = point.size + 4, symbol = "0"),
+        type = "scatter", mode = "markers"
+      )
+    }
+    pl <- plotly::layout(
+      pl, title = title.name, yaxis = list(
+        autorange = "reversed", title = "", showgrid = FALSE,
+        ticks = "", tickvals = "", tickformat = "%0f",
+        showline = FALSE, visible = FALSE
+      ), xaxis = list(
+        title = "", showgrid = FALSE, ticks = "", tickvals = "",
+        tickformat = "%0f", showline = FALSE, visible = FALSE
+      ), legend = custom_legend
+    )
+  }
+  pl
 }
 
 
@@ -8206,15 +8456,24 @@ spatialLeePlot <- function(
         col.show = col.show
       )
     } else {
-      if(!is.null(object@images[["result.computeCellDistance"]])){
-        resCellDistance <- object@images[["result.computeCellDistance"]]
-      } else {
+      resCellDistance <- object@images$.distance
+      factors <- object@images$spatial.factors
+      ratio <- if (is.list(factors)) factors$ratio else NULL
+      tol.distance <- if (is.list(factors)) factors$tol else NULL
+      has_distance <- .spatial_distance_cache_matches(
+        resCellDistance,
+        interaction.range = interaction.range,
+        contact.range = contact.range,
+        ratio = ratio,
+        tol = tol.distance
+      )
+      if (!has_distance) {
         resCellDistance <- SpatialCellChat::computeCellDistance(
           coordinates = coords,
           interaction.range = interaction.range,
           contact.range = contact.range,
-          ratio = object@images[["spatial.factors"]]$ratio,
-          tol = object@images[["spatial.factors"]]$tol
+          ratio = ratio,
+          tol = tol.distance
         )
       }
 

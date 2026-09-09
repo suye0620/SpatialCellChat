@@ -5,3 +5,7 @@ ComputeSNN <- function(nn_ranked, prune) {
     .Call(`_SpatialCellChat_ComputeSNN`, nn_ranked, prune)
 }
 
+cpp_sum_layers <- function(matrices) {
+    .Call(`_SpatialCellChat_cpp_sum_layers`, matrices)
+}
+

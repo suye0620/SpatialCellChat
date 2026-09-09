@@ -1,0 +1,52 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+src/*.o
+src/*.so
+src/*.dll
+
+# test cache
+.test_cache/
+
+# renv library (not committed — only renv.lock + renv/activate.R go in)
+renv/library/
+renv/local/
+renv/cellar/
+renv/sandbox/
+renv/staging/
+
+# --- generated / diagnostic artifacts (not for VCS) ---
+# R build & check outputs
+..Rcheck/
+Rplots.pdf
+
+# large local test data (regenerable)
+tests_dev/simulated_data/
+tests_dev/test_data/
+tests_dev/*.png
+
+# throwaway prototype / diagnostic scaffolds
+tests_dev/audit_3dstack_prototype*
+viewer-diagnose/
+viewer-diagnose2/
+/docs/refactoring-plan.html
+
+# generated widget demo pages
+/commun-flow-*.html
+/commun-flow-*_files/
+/commun-flow-*.zip
+
+# local build outputs
+dist/
+
+# agent session memory (local workflow state)
+.workbuddy/
+
+# renv cached source tarballs (lockfile + activate.R are tracked)
+renv/*.tar.gz
+
+# one-off environment install scripts
+/install_deps.R
+/install_batch1.R
+/install_rfast2.R

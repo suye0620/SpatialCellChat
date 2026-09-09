@@ -23,9 +23,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_sum_layers
+S4 cpp_sum_layers(List matrices);
+RcppExport SEXP _SpatialCellChat_cpp_sum_layers(SEXP matricesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type matrices(matricesSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_sum_layers(matrices));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_SpatialCellChat_ComputeSNN", (DL_FUNC) &_SpatialCellChat_ComputeSNN, 2},
+    {"_SpatialCellChat_cpp_sum_layers", (DL_FUNC) &_SpatialCellChat_cpp_sum_layers, 1},
     {NULL, NULL, 0}
 };
 

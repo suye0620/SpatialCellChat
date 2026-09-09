@@ -1,0 +1,6 @@
+dependencies:
+  - name: spatialcellchat-commun-flow
+    version: 0.1.0
+    src: htmlwidgets
+    script: spatialcellchat-commun-flow.js
+    stylesheet: spatialcellchat-commun-flow.css
