@@ -1,7 +1,10 @@
 # ====== Test: setEnvironment, .cli, my_future_lapply/sapply ======
 # Run: Rscript tests_dev/test-parallel.R
 
-source("renv/activate.R")
+Sys.setenv(RENV_PATHS_LIBRARY = "renv/library")
+if (!nzchar(Sys.getenv("RENV_PROJECT"))) {
+  if (requireNamespace("renv", quietly = TRUE)) renv::load(getwd()) else source("renv/activate.R")
+}
 suppressPackageStartupMessages({
   library(Matrix); library(future); library(future.apply)
   library(progressr); library(cli)

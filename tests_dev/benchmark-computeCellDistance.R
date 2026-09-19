@@ -5,7 +5,10 @@
 # radius query. The reference intentionally materializes a dense distance
 # matrix to expose the memory/time cost of the pre-refactor approach.
 
-source("renv/activate.R")
+Sys.setenv(RENV_PATHS_LIBRARY = "renv/library")
+if (!nzchar(Sys.getenv("RENV_PROJECT"))) {
+  if (requireNamespace("renv", quietly = TRUE)) renv::load(getwd()) else source("renv/activate.R")
+}
 suppressPackageStartupMessages({
   library(Matrix)
   library(BiocNeighbors)

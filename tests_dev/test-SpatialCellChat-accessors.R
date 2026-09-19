@@ -1,7 +1,10 @@
 # Phase 2 accessor tests for the final SpatialCellChat schema
 
-setwd("F:/Rworkspace/SpatialCellChat")
-source("renv/activate.R")
+setwd(local({ a <- commandArgs(FALSE); f <- sub("^--file=", "", grep("^--file=", a, value = TRUE)); if (length(f)) dirname(dirname(normalizePath(f))) else getwd() }))
+Sys.setenv(RENV_PATHS_LIBRARY = "renv/library")
+if (!nzchar(Sys.getenv("RENV_PROJECT"))) {
+  if (requireNamespace("renv", quietly = TRUE)) renv::load(getwd()) else source("renv/activate.R")
+}
 suppressPackageStartupMessages({
   library(methods)
   library(Matrix)
@@ -9,6 +12,7 @@ suppressPackageStartupMessages({
   library(pbapply)
 })
 source("R/SpatialCellChat_class.R")
+source("R/utilities.R")  # .cli / .log_operation 单一权威定义在 utilities.R
 
 check <- function(label, condition) {
   if (!isTRUE(condition)) stop("[FAIL] ", label, call. = FALSE)

@@ -4,12 +4,16 @@
 # Tests: constructor, dim, object-level dimnames, print, [, [[,
 #        marginSums, as.data.frame, unsupported arithmetic, t
 
-source("renv/activate.R")
+Sys.setenv(RENV_PATHS_LIBRARY = "renv/library")
+if (!nzchar(Sys.getenv("RENV_PROJECT"))) {
+  if (requireNamespace("renv", quietly = TRUE)) renv::load(getwd()) else source("renv/activate.R")
+}
 suppressPackageStartupMessages({
   library(Matrix)
   library(Rcpp)
 })
 source("R/SpatialCellChat_class.R")
+Rcpp::sourceCpp("src/SpatialChat_Rcpp.cpp", rebuild = FALSE, showOutput = FALSE) # marginSums 依赖 cpp_sum_layers
 
 set.seed(42)
 ok <- 0; fail <- 0
