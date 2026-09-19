@@ -1,321 +1,405 @@
+# ====== computeCommunProb v2: per-LR expression helpers (internal) ======
+# Operate directly on the SPARSE scaled signaling layer (genes x cells).
+# Semantics mirror baseline computeExpr_LR/_complex/_coreceptor/_agonist/_antagonist;
+# per-LR rows are computed on demand with a per-symbol cache (genes repeat across
+# LR pairs, distinct names are far fewer than LR pairs).
+
+.sc_expr_row <- function(gene, sig, complex_subunits, cache) {
+  row <- cache[[gene]]
+  if (!is.null(row)) return(row)
+  if (gene %in% rownames(sig)) {
+    row <- as.numeric(sig[gene, ])
+  } else if (!is.null(sub <- complex_subunits[[gene]])) {
+    # Upstream .sc_lr_feature_state guarantees all subunits of an available
+    # complex are in gene.use; keep an explicit guard (stop vs baseline crash).
+    sub <- sub[sub %in% rownames(sig)]
+    if (!length(sub) || length(sub) != length(complex_subunits[[gene]]))
+      stop("complex '", gene, "' has subunits missing from assay$signaling; ",
+           "rerun `subsetData()` and `identifyOverExpressedInteractions()`",
+           call. = FALSE)
+    # baseline geometricMean semantics: exp(colMeans(log(x), na.rm=TRUE));
+    # log(0) = -Inf -> mean -Inf -> exp = 0, i.e. any zero subunit zeroes the complex
+    row <- geometricMean(as.matrix(sig[sub, , drop = FALSE]))
+  } else {
+    stop("gene/complex '", gene, "' not found in assay$signaling rows; ",
+         "please rerun `subsetData()`", call. = FALSE)
+  }
+  cache[[gene]] <- row
+  row
+}
+
+# Per-cell modulation factor for one cofactor entry (name row in DB$cofactor).
+# type: "A" (co-activation, 1+e), "I" (co-inhibition, 1+e), "agonist" (1+Hill(e)),
+#       "antagonist" (Hill^-1 = Kh^n/(Kh^n+e^n)). NULL name -> NULL (neutral skip).
+# Multi-gene member branch uses apply(..., 2, prod); the single-gene branch of the
+# baseline equals the length-1 product exactly (bitwise identical).
+.sc_cofactor_factor <- function(cof.name, cofactor_input, sig,
+                                type = c("A", "I", "agonist", "antagonist"),
+                                Kh = NULL, n = NULL, cache) {
+  type <- match.arg(type)
+  if (is.null(cof.name) || length(cof.name) != 1L || is.na(cof.name) || !nzchar(cof.name))
+    return(NULL)
+  key <- paste0(type, ".", cof.name, ".", format(Kh, digits = 17), ".", format(n, digits = 17))
+  f <- cache[[key]]
+  if (!is.null(f)) return(f)
+  cols <- grep("cofactor", colnames(cofactor_input))
+  ind <- cofactor_input[cof.name, cols]
+  genes <- as.character(unlist(ind, use.names = FALSE))
+  # presence filter only: preserve member order and duplicates (baseline semantics)
+  genes <- genes[genes != "" & genes %in% rownames(sig)]
+  if (!length(genes)) {
+    f <- rep(1, ncol(sig))
+  } else {
+    submat <- as.matrix(sig[genes, , drop = FALSE])
+    if (type == "A" || type == "I") {
+      f <- apply(1 + submat, 2, prod)
+    } else if (type == "agonist") {
+      f <- apply(1 + submat^n / (Kh^n + submat^n), 2, prod)
+    } else {
+      f <- apply(Kh^n / (Kh^n + submat^n), 2, prod)
+    }
+  }
+  cache[[key]] <- f
+  f
+}
+# v2 内部：手工 CSR（dgC -> 行指针 rp + 行内升序排列 ord + 条目列索引 jc）。
+# Matrix 无 dgC->dgR coerce 方法；radix order 稳定，行内保持列主序升序。
+.sc_csr_build <- function(m) {
+  ord <- order(m@i, method = "radix")
+  rp <- as.integer(c(0L, cumsum(tabulate(m@i + 1L, nbins = nrow(m)))))
+  jc <- rep.int(seq_len(ncol(m)), diff(m@p))
+  list(ord = ord, rp = rp, jc = jc)
+}
+
+# v2 内部：d 侧 pattern 行索引（等价 which(d[ci, ] > 0)：含显式零排除、含对角、升序）
+.sc_pattern_row <- function(csr, m, ci, cache) {
+  key <- as.character(ci)
+  v <- cache[[key]]
+  if (is.null(v)) {
+    s <- csr$rp[ci]; e <- csr$rp[ci + 1L]
+    seg <- csr$ord[(s + 1L):e]
+    v <- csr$jc[seg][m@x[seg] > 0]
+    cache[[key]] <- v
+  }
+  v
+}
+
 #' computeCommunProb
 #'
 #' @description
-#' Compute the communication probability/strength between any interacting individual cells
+#' Compute the communication probability/strength between any interacting individual
+#' cells with spatial distance constraints, on the final 11-slot object schema.
+#' Sparse optimized: per-LR work is O(nnz(P.spatial)) via the `cpp_prob_layer` kernel
+#' (single fused pass, OpenMP-capable); cell-level layers are bitwise identical to the
+#' baseline dense-crossprod implementation (see agent note 2026-09-10, Wave 1b tests).
 #'
-#' @param object CellChat object
-#' @param LR.use A subset of ligand-receptor interactions used in inferring communication network
-#' @param raw.use Whether use the raw data (i.e., `object@data.signaling`) or the projected data (i.e., `object@data.project`).
-#' Set raw.use = FALSE to use the projected data when analyzing single-cell data with shallow sequencing depth because the projected data could help to reduce the dropout effects of signaling genes, in particular for possible zero expression of subunits of ligands/receptors.
-#' @param Kh Parameter in Hill function
-#' @param n Parameter in Hill function
-#' @param distance.use Whether to use distance constraints to compute communication probability. Setting `distance.use = TRUE` indicates that the cell-cell communication probability is inversely proportional to the computed distance.
-#' @param tol NULL or Numeric. set a distance tolerance when computing cell-cell distances and contact adjacent matrix. By default `tol = NULL` means distance tolerance equals to spot.size/2 or cell.diameter/2.
-#' @param interaction.range The maximum interaction/diffusion length of ligands (Unit: microns). This hard threshold is used to filter out the connections between spatially distant individual cells
-#' @param scale.distance A scale or normalization factor for the spatial distances when setting `distance.use = TRUE`. For example, scale.distance equals 1, 0.1, 0.01, 0.001, 0.11, or 0.011. We choose this values such that the minimum value of the scaled distances is in [1,2]. This value is not necessary when setting `distance.use = FALSE`.
-#' @param use.AGAN Boolean. Whether to take agonist (AG) and antagonist (AN) into consideration when calculating the intercellular communication probability
-#' @param contact.range Numeric. The interaction range (Unit: microns) to restrict the contact-dependent signaling.
-#' For spatial transcriptomics in a single-cell resolution, `contact.range` is approximately equal to the estimated cell diameter (i.e., the cell center-to-center distance), which means that contact-dependent and juxtacrine signaling can only happens when the two cells are contact to each other.
-#' Typically, `contact.range = 10`, which is a typical human cell size. However, for low-resolution spatial data such as 10X visium, it should be the cell center-to-center distance (i.e., `contact.range = 100` for visium data).  The function \link{computeCellDistance} can compute the center-to-center distance.
-#' @param contact.dependent Boolean. Whether determining spatially proximal cell groups based on the `contact.range`. By default `contact.dependent = TRUE` when inferring contact-dependent and juxtacrine signaling (including ECM-Receptor and Cell-Cell Contact signaling classified in CellChatDB$interaction$annotation).
-#' If only focusing on `Secreted Signaling`, the `contact.dependent` will be automatically set as FALSE except for `contact.dependent.forced = TRUE`.
-#' @param contact.dependent.forced Boolean. Whether forcing to determine spatially proximal cell regions based on the `contact.range` for all cells/spots in the CellChat Object.
-#' Users can set `contact.dependent.forced = TRUE` to turn `Secreted Signaling` interactions into a contact manner.
+#' @param object A SpatialCellChat object with `assay$signaling` (from
+#' \link{subsetData}) and `LR$LRsig` (from \link{identifyOverExpressedInteractions}).
+#' @param LR.use Optional custom ligand-receptor table (same columns as `LR$LRsig`).
+#' @param raw.use Only `TRUE` is supported (the projected-data path via
+#' `projectData()` is not yet migrated to the final schema).
+#' @param Kh Hill-function EC50 parameter (input is globally max-scaled to [0, 1]).
+#' @param n Hill coefficient (n = 1 uses the division fast path in the kernel).
+#' @param distance.use Whether to weight communication by 1/(scaled distance).
+#' @param tol Distance tolerance (defaults to `images$spatial.factors$tol`).
+#' @param interaction.range Maximum diffusion length in microns.
+#' @param scale.distance Distance unit normalization; the check requires
+#' min(scaled distance) >= 1 so that SCL <= 1 keeps probabilities in [0, 1].
+#' The thesis formula SCL = 1/d corresponds to scale.distance = 1.
+#' @param use.AGAN Whether to include agonist/antagonist cofactor modulation.
+#' @param contact.dependent Whether `Cell-Cell Contact` signaling is restricted
+#' to the contact adjacency pattern.
+#' @param contact.range Contact range in microns (multiplied by the `tol`
+#' cell-radius tolerance, matching the thesis boundary convention).
+#' @param contact.dependent.forced Force all LRs to be contact-dependent.
+#' @param spill.dir Optional directory to stream per-LR layers to disk instead of
+#' accumulating them in memory (for cell counts where the output tensor exceeds
+#' RAM; `filterProbability` consumes and clears the spilled layers). NULL keeps
+#' all layers in memory (fine up to ~10 GB of output tensor).
+#' @param spill.backend Spill storage backend; currently only "rds" (per-layer
+#' saveRDS, bitwise lossless). Further backends (e.g. BPCells) are reserved.
+#' @param nthreads OpenMP threads for the kernel (default 1; results are bitwise
+#' identical for any thread count).
+#' @param parallel Whether to distribute LR iterations via `my_future_lapply`
+#' (default FALSE: after sparse optimization the sequential kernel is fastest;
+#' measured multisession scheduling overhead dominates at 4.6 ms/LR task size).
+#' @param future.scheduling Optional future.scheduling value passed through when
+#' parallel = TRUE (default: chunked to the number of workers).
+#' @param verbose Whether to emit progress and CLI messages.
 #'
-#' @return CellChat object
+#' @return A SpatialCellChat object with `net$cell$prob` as a SparseChatArray
+#' (nC x nC x nLR, one named dgCMatrix layer per LR pair) and parameters in
+#' `misc$.param$communication`.
 #' @export
 #'
-#' @examples
-computeCommunProb <- function (
+computeCommunProb <- function(
     object,
     LR.use = NULL,
     raw.use = TRUE,
     Kh = 0.5,
     n = 1,
     distance.use = TRUE,
-    tol = NULL, # will be removed in the future
+    tol = NULL,
     interaction.range = 250,
     scale.distance = 0.01,
-    use.AGAN = T,
+    use.AGAN = TRUE,
     contact.dependent = TRUE,
     contact.range = 10,
-    contact.dependent.forced = FALSE
-) {
-
- if (raw.use) {
-    data <- object@data.signaling
-    # scale the elements
-    data@x <- data@x/max(data@x)
-    data.use <- as.matrix(data)
-
-  } else {
-    data <- object@data.project
-    # scale
-    data.use <- data/max(data)
+    contact.dependent.forced = FALSE,
+    spill.dir = NULL,
+    spill.backend = c("rds"),
+    nthreads = 1L,
+    parallel = FALSE,
+    future.scheduling = NULL,
+    verbose = TRUE) {
+  t0 <- Sys.time()
+  object <- .sc_assert_spatial_cell_chat(object)
+  .cli("computeCommunProb", .type = "subheader")
+  if (!isTRUE(raw.use))
+    stop("raw.use = FALSE requires `projectData()` (assay$smooth), which is not ",
+         "yet migrated to the final schema; use raw.use = TRUE", call. = FALSE)
+  spill.backend <- match.arg(spill.backend)
+  if (!is.null(spill.dir)) {
+    if (!dir.exists(spill.dir)) dir.create(spill.dir, recursive = TRUE, showWarnings = FALSE)
+    .cli("Spill mode: layers stream to {.val {spill.dir}} (backend {.val {spill.backend}})",
+         .type = "info")
   }
 
+  # ---- LR table (baseline semantics preserved) ----
   if (is.null(LR.use)) {
-    pairLR.use <- object@LR$LRsig
+    pairLRsig <- object@LR$LRsig
+    if (is.null(pairLRsig) || !nrow(pairLRsig))
+      stop("`LR$LRsig` is empty; run `identifyOverExpressedInteractions()` first",
+           call. = FALSE)
   } else {
     if (length(unique(LR.use$annotation)) > 1) {
-      LR.use$annotation <-
-        factor(
-          LR.use$annotation,
-          levels = c(
-            "Secreted Signaling",
-            "ECM-Receptor",
-            "Non-protein Signaling",
-            "Cell-Cell Contact"
-          )
-        )
+      LR.use$annotation <- factor(LR.use$annotation,
+        levels = c("Secreted Signaling", "ECM-Receptor",
+                   "Non-protein Signaling", "Cell-Cell Contact"))
       LR.use <- LR.use[order(LR.use$annotation), , drop = FALSE]
       LR.use$annotation <- as.character(LR.use$annotation)
     }
-    pairLR.use <- LR.use
+    pairLRsig <- LR.use
   }
-
   complex_input <- object@DB$complex
   cofactor_input <- object@DB$cofactor
-
-  ptm = Sys.time()
-
-  pairLRsig <- pairLR.use
   group <- object@idents
   geneL <- as.character(pairLRsig$ligand)
   geneR <- as.character(pairLRsig$receptor)
   nLR <- nrow(pairLRsig)
   numCluster <- nlevels(group)
-  if (numCluster != length(unique(group))) {
-    stop(cli.symbol(2),"Please check `unique(object@idents)` and ensure that the factor levels are correct!\n         You may need to drop unused levels using 'droplevels' function. e.g.,\n         `meta$labels = droplevels(meta$labels, exclude = setdiff(levels(meta$labels),unique(meta$labels)))`")
-  }
+  if (numCluster != length(unique(group)))
+    stop("Please check `unique(object@idents)` and drop unused levels with ",
+         "`droplevels()` before running `computeCommunProb()`.", call. = FALSE)
 
-  nC <- ncol(data.use)
+  sig <- assay(object, "signaling")
+  if (is.null(sig) || sum(dim(sig)) == 0)
+    stop("assay$signaling is empty; run `subsetData()` first", call. = FALSE)
+  cell.names <- colnames(sig)
+  nC <- ncol(sig)
+  # 全局 max 缩放（基线语义：data@x/max(data@x)，支撑 Kh=0.5 半最大语义）；副本，不改对象
+  sig.scaled <- sig
+  sig.scaled@x <- sig.scaled@x / max(sig.scaled@x)
+  .cli("Input: assay$signaling ({.val {nrow(sig)}} signaling genes x {.val {nC}} cells); {.val {nLR}} LR pairs",
+       .type = "info")
 
-  # working on spatial transcriptomic data and preferring to infer interactions between individual cell
-  cat(cli.symbol(),"Analyzing spatial transcriptomic data and preferring to infer interactions between individual cells...\n")
-
-
-  data.spatial <- BiocGenerics::as.data.frame(object@images$coordinates)
-
-  ### previous ###
-  # spot.size.fullres <- object@images$scale.factors$spot
-  # spot.size <- object@images$scale.factors$spot.diameter
-
+  # ---- distance cache: validate or compute (baseline semantics) ----
   ratio <- object@images$spatial.factors[["ratio"]]
-  if(is.null(tol)) tol <- object@images$spatial.factors[["tol"]] else NULL
-
-  # compute the cell-to-cell distances
-  # res is a list object, containing `d.spatial` matrix and `adj.contact` matrix!
-  res <- computeCellDistance(coordinates = data.spatial,
-                             ratio = ratio,
-                             interaction.range = interaction.range,
-                             contact.range = contact.range,
-                             tol = tol)
-  # long-range distance
-  d.spatial <- res$d.spatial
-  # short-range distance adjacent matrix for contact-dependent and juxtacrine signaling
-  adj.contact <- res$adj.contact
-  gc()
-
-  if (distance.use) {
-    cat(paste0(cli.symbol(),"Run CellChat on spatial transcriptomic data using distances as constraints <<< [",
-               Sys.time(), "]\n"))
-    d.spatial@x <- d.spatial@x * scale.distance
-    d.min <- min(d.spatial@x, na.rm = F) # d.spatial@x has no NA
-    if (d.min < 1) {
-      cat(cli.symbol(),"The suggested minimum value of scaled distances is in [1,2], and the calculated value here is ", d.min,"\n")
-      stop(cli.symbol(2),"Please increase the value of `scale.distance` and use a value that is slighly smaller than ", format(1/d.min, digits = 2) ,"\n")
-    }
-    P.spatial <- createPspatialFrom_dspatial(d.spatial,distance.use = T)
-    d.spatial@x <- d.spatial@x / scale.distance
-  }  else {
-    cat(paste0(cli.symbol(),"Run CellChat on transcriptomic imaging data without distances as constraints <<< [",
-               Sys.time(), "]\n"))
-    P.spatial <- createPspatialFrom_dspatial(d.spatial,distance.use = F)
-
+  if (is.null(tol)) tol <- object@images$spatial.factors[["tol"]]
+  data.spatial <- as.matrix(object@images$coordinates)
+  cache.d <- object@images$.distance
+  expected <- list(interaction.range = interaction.range,
+                   contact.range = contact.range, ratio = ratio, tol = tol)
+  valid.cache <- is.list(cache.d) &&
+    all(c("d.spatial", "adj.contact", ".parameters") %in% names(cache.d)) &&
+    isTRUE(all.equal(cache.d$.parameters, expected)) &&
+    ncol(cache.d$d.spatial) == nC
+  if (!valid.cache) {
+    if (verbose) .cli("Distance cache absent or stale; recomputing with `computeCellDistance()`.", .type = "info")
+    res <- computeCellDistance(coordinates = data.spatial, ratio = ratio,
+                               interaction.range = interaction.range,
+                               contact.range = contact.range, tol = tol)
+    images(object, ".distance") <- res
+    cache.d <- res
   }
-  rm(d.spatial);gc()
+  res <- cache.d
 
-  # set a flag for contact.dependent signaling
+  # ---- P.spatial + loop invariants ----
+  if (distance.use) {
+    d.work <- cache.d$d.spatial
+    d.work@x <- d.work@x * scale.distance
+    d.min <- min(d.work@x)
+    if (d.min < 1)
+      stop(sprintf(paste0("The minimum scaled distance is %.3g but must be >= 1 ",
+                          "(SCL = 1/d must stay <= 1 for probability semantics). ",
+                          "Increase `scale.distance` to at least %.4g (current: %g)."),
+                   d.min, scale.distance / d.min, scale.distance), call. = FALSE)
+    P.spatial <- createPspatialFrom_dspatial(d.work, distance.use = TRUE)
+  } else {
+    P.spatial <- createPspatialFrom_dspatial(cache.d$d.spatial, distance.use = FALSE)
+  }
+  x0 <- P.spatial@x
+  row0 <- P.spatial@i
+  col0 <- rep.int(0L:(nC - 1L), diff(P.spatial@p))  # 0-based，与 row0/kernel C++ 索引一致
+  nnz.P <- length(x0)
+
+  # contact adjacency mask aligned to the P.spatial pattern (computed once)
+  adj.ts <- methods::as(cache.d$adj.contact, "TsparseMatrix")
+  idx <- match(adj.ts@i + adj.ts@j * nC, row0 + col0 * nC)
+  if (anyNA(idx)) stop("adj.contact pattern must be a subset of the distance pattern",
+                       call. = FALSE)
+  mask.one <- rep(1, nnz.P)
+  # 接触 LR 的掩码：仅 adj 位置保留（1），其余位置清 0（基线 P1_Pspatial * adj.contact
+  # 的元素乘语义 = 交集 pattern）
+  mask.contact <- numeric(nnz.P)
+  mask.contact[idx] <- adj.ts@x
+
+  # contact branch flags (baseline semantics)
   all.contact.dependent <- FALSE
   all.diffusible <- FALSE
   if (contact.dependent.forced == TRUE) {
-    # cat(cli.symbol(),"Run with `contact.dependent.forced = T` \n")
-    cat(cli.symbol(),"Force to run CellChat in a `contact-dependent` manner for all L-R pairs including secreted signaling.\n")
-    P.spatial <- P.spatial * adj.contact
+    mask.one <- mask.contact
     nLR1 <- nLR
     all.contact.dependent <- TRUE
-  } else{ # contact.dependent.forced == F
-    # cat(cli.symbol(),"Run with `contact.dependent.forced = F` \n")
-    if (contact.dependent == TRUE && length(unique(pairLRsig$annotation))>0 ) {
-      if (all(unique(pairLRsig$annotation) == c("Cell-Cell Contact") )) {
-        # all interactions in `pairLRsig` are contact-dependent signaling
-        cat(cli.symbol(),"All the input L-R pairs are `Cell-Cell Contact` signaling. Run CellChat in a contact-dependent manner. \n")
-        P.spatial <- P.spatial * adj.contact
-        nLR1 <- nLR
-        all.contact.dependent <- TRUE
-      } else if (all(unique(pairLRsig$annotation) %in% c("Secreted Signaling", "ECM-Receptor", "Non-protein Signaling"))) {
-        # all interactions in `pairLRsig` are not contact-dependent signaling
-        cat(cli.symbol(),"Molecules of all the input L-R pairs are diffusible. Run CellChat in a diffusion manner based on the `interaction.range`.\n")
-        nLR1 <- nLR
-        all.diffusible <- TRUE
-      } else {
-        # Interactions in `pairLRsig` have both contact-dependent signaling and secreted signaling
-        cat(cli.symbol(),"The input L-R pairs have both secreted signaling and contact-dependent signaling. Run CellChat in a contact-dependent manner for `Cell-Cell Contact` signaling, and in a diffusion manner based on the `interaction.range` for other L-R pairs. \n")
-        nLR1 <- max(which(pairLRsig$annotation %in% c("Secreted Signaling", "ECM-Receptor", "Non-protein Signaling")))
-      }
-    } else { # contact.dependent == F or `object@LR$LRsig` does not have `annotation` column, take all interactions as `Secreted Signaling` interactions
-      cat(cli.symbol(),"Run CellChat in a diffusion manner based on the `interaction.range` for all L-R pairs. \n")
-      cat(cli.symbol(3),"Set`contact.dependent = TRUE` if preferring a contact-dependent manner for `Cell-Cell Contact` signaling. \n")
+  } else if (contact.dependent == TRUE && length(unique(pairLRsig$annotation)) > 0) {
+    if (all(unique(pairLRsig$annotation) == "Cell-Cell Contact")) {
+      mask.one <- mask.contact
       nLR1 <- nLR
+      all.contact.dependent <- TRUE
+    } else if (all(unique(pairLRsig$annotation) %in%
+                   c("Secreted Signaling", "ECM-Receptor", "Non-protein Signaling"))) {
+      nLR1 <- nLR
+      all.diffusible <- TRUE
+    } else {
+      nLR1 <- max(which(pairLRsig$annotation %in%
+                          c("Secreted Signaling", "ECM-Receptor", "Non-protein Signaling")))
     }
+  } else {
+    nLR1 <- nLR
+  }
+  if (verbose) .cli("LR split: {.val {nLR1}} diffusible / {.val {nLR - nLR1}} contact-dependent (forced = {.val {contact.dependent.forced}})",
+                    .type = "text", .verbose = 2L)
+
+  # ---- per-LR loop ----
+  complex_subunits <- .sc_complex_subunits(complex_input)
+  expr.cache <- new.env(parent = emptyenv())
+  cof.cache <- new.env(parent = emptyenv())
+  ag.names <- as.character(pairLRsig$agonist)
+  an.names <- as.character(pairLRsig$antagonist)
+  has.ag <- !is.na(ag.names) & nzchar(ag.names)
+  has.an <- !is.na(an.names) & nzchar(an.names)
+  has.AGAN.lr <- use.AGAN & (has.ag | has.an)
+
+  layers <- vector("list", nLR)
+  names(layers) <- rownames(pairLRsig)
+  nnz.cum <- 0
+  guard.checked <- FALSE
+  guard.nLR <- max(5L, ceiling(nLR * 0.05))
+  GUARD.BYTES <- 16e9
+  spill.i <- 0L
+
+  run_one <- function(i) {
+    Li <- .sc_expr_row(geneL[i], sig.scaled, complex_subunits, expr.cache)
+    Ri <- .sc_expr_row(geneR[i], sig.scaled, complex_subunits, expr.cache)
+    fA <- .sc_cofactor_factor(pairLRsig$co_A_receptor[i], cofactor_input, sig.scaled,
+                              type = "A", cache = cof.cache)
+    fI <- .sc_cofactor_factor(pairLRsig$co_I_receptor[i], cofactor_input, sig.scaled,
+                              type = "I", cache = cof.cache)
+    if (!is.null(fA) && !is.null(fI)) Ri <- Ri * fA / fI
+    else if (!is.null(fA)) Ri <- Ri * fA
+    else if (!is.null(fI)) Ri <- Ri / fI
+    cmask <- if (i > nLR1) mask.contact else mask.one
+    out <- cpp_prob_layer(x0, row0, col0, Li, Ri, Kh = Kh, n = n,
+                          contact_mask = cmask,
+                          fAG = if (has.AGAN.lr[i] && has.ag[i])
+                            .sc_cofactor_factor(ag.names[i], cofactor_input, sig.scaled,
+                                                type = "agonist", Kh = Kh, n = n,
+                                                cache = cof.cache) else NULL,
+                          fAN = if (has.AGAN.lr[i] && has.an[i])
+                            .sc_cofactor_factor(an.names[i], cofactor_input, sig.scaled,
+                                                type = "antagonist", Kh = Kh, n = n,
+                                                cache = cof.cache) else NULL,
+                          nC = nC, nthreads = nthreads)
+    new("dgCMatrix", i = out$i, p = out$p, x = out$x, Dim = c(nC, nC))
   }
 
-
-  # compute the expression of ligand or receptor
-  dataLavg <- computeExpr_LR(geneL, data.use, complex_input)
-  dataRavg <- computeExpr_LR(geneR, data.use, complex_input)
-
-  # take account into the effect of co-activation and co-inhibition receptors
-  dataRavg.co.A.receptor <- computeExpr_coreceptor(cofactor_input,
-                                                   data.use, pairLRsig, type = "A")
-  dataRavg.co.I.receptor <- computeExpr_coreceptor(cofactor_input,
-                                                   data.use, pairLRsig, type = "I")
-  dataRavg <- dataRavg * dataRavg.co.A.receptor/dataRavg.co.I.receptor
-  rm(dataRavg.co.A.receptor,dataRavg.co.I.receptor);gc();
-
-
-  # compute the expression of agonist and antagonist
-  # index.agonist <- which(!is.na(pairLRsig$agonist) & pairLRsig$agonist != "")
-  # index.antagonist <- which(!is.na(pairLRsig$antagonist) & pairLRsig$antagonist != "")
-
-  # Compute the communication probability/strength between any interacting individual cells for each LR pair
-  Prob.cell_ <- my_future_lapply(
-    X = 1:nLR,
-    FUN = function(i) {
-
-      x_ <- as(matrix(dataLavg[i,],nrow = 1),"TsparseMatrix")
-      y_ <- as(matrix(dataRavg[i,],nrow = 1),"TsparseMatrix")
-      # dataLR <- Matrix::crossprod(matrix(dataLavg[i,],nrow = 1),
-      #                             matrix(dataRavg[i,],nrow = 1))
-      # dataLR <- as(dataLR, Class = "dgCMatrix");gc();
-      dataLR <- Matrix::crossprod(x_,y_)
-
-
-      # dataLR is a sparse Matrix => P1 will be a sparse Matrix too
-      P1 <- HillFunctionFordataLR(dataLR = dataLR, Kh = Kh, n = n)
-
-      # P1_Pspatial is a dgCMatrix
-      P1_Pspatial <- P1 * P.spatial;rm(P1);gc()
-
-      if (!use.AGAN) { # use.AGAN = F
-
-        # ####################################
-        # Codes below are necessary because we still need to take some contact-dependent signalings
-        # into consideration when `use.AGAN=F`
-        if (i > nLR1) {
-          P1_Pspatial <- P1_Pspatial * adj.contact
-        }
-        # ####################################
-
-        # Pnull.cell is a sparse matrix
-        Pnull.cell = P1_Pspatial
-        dimnames(Pnull.cell) <- list(NULL,NULL)
-        return(Pnull.cell)
-
-      } else { # use.AGAN = T
-
-        if (i > nLR1) {
-          P1_Pspatial <- P1_Pspatial * adj.contact
-        }
-
-        # if P1_Pspatial is all-zero matrix, iteration can be terminated in advance
-        if (sum(P1_Pspatial) == 0){
-          # For test: sum(P1_Pspatial) == 0
-          Pnull.cell = P1_Pspatial
-          dimnames(Pnull.cell) <- list(NULL,NULL)
-          return(Pnull.cell)
+  if (isTRUE(parallel)) {
+    sched <- if (is.null(future.scheduling)) ceiling(nLR / max(future::nbrOfWorkers(), 1L)) else future.scheduling
+    Prob.cell_ <- my_future_lapply(seq_len(nLR), run_one,
+                                   future.scheduling = sched, future.seed = TRUE)
+    names(Prob.cell_) <- rownames(pairLRsig)
+    nnz.cum <- sum(vapply(Prob.cell_, function(m) length(m@x), numeric(1)))
+  } else {
+    if (verbose) {
+      progressr::with_progress({
+        pr <- progressr::progressor(along = seq_len(nLR))
+        lapply(seq_len(nLR), function(i) {
+          layer <- run_one(i)
+          nnz.cum <<- nnz.cum + length(layer@x)
+          if (!guard.checked && i >= guard.nLR) {
+            guard.checked <<- TRUE
+            proj <- nnz.cum / i * nLR * 12
+            if (proj > GUARD.BYTES && is.null(spill.dir))
+              stop(sprintf(paste0("Projected cell-level output tensor is ~%.1f GB ",
+                                  "(> %.0f GB in-memory threshold). Set `spill.dir` to ",
+                                  "stream layers to disk, or reduce broadly expressed ",
+                                  "LR pairs."), proj / 1e9, GUARD.BYTES / 1e9),
+                   call. = FALSE)
+          }
+          pr(sprintf("LR %d/%d", i, nLR))
+          if (!is.null(spill.dir)) {
+            saveRDS(layer, file.path(spill.dir, paste0(names(layers)[i], ".rds")),
+                    compress = FALSE)
+          } else {
+            layers[[i]] <<- layer
+          }
+          NULL
+        })
+      })
+    } else {
+      lapply(seq_len(nLR), function(i) {
+        layer <- run_one(i)
+        nnz.cum <<- nnz.cum + length(layer@x)
+        if (!is.null(spill.dir)) {
+          saveRDS(layer, file.path(spill.dir, paste0(names(layers)[i], ".rds")),
+                  compress = FALSE)
         } else {
-
-          # For test: is.element(i, index.agonist)
-          # data.agonist => P2
-          data.agonist <- computeExpr_agonist(
-            data.use = data.use,
-            pairLRsig,
-            cofactor_input,
-            index.agonist = i,
-            Kh = Kh,
-            n = n
-          )
-
-          # P_ = P1*Pspatial*P2
-          P_ <- myElementwiseProduct(P1_Pspatial,data.agonist)
-
-
-          # data.antagonist => P3
-          data.antagonist <- computeExpr_antagonist(
-            data.use = data.use,
-            pairLRsig,
-            cofactor_input,
-            index.antagonist = i,
-            Kh = Kh,
-            n = n
-          )
-
-          # Note: Pnull.cell = P1*Pspatial*P2*P3
-          Pnull.cell <- myElementwiseProduct(P_,data.antagonist)
-          rm(P_)
-          # Pnull.cell is "dgCMatrix"
-          dimnames(Pnull.cell) <- list(NULL,NULL)
-          return(Pnull.cell)
+          layers[[i]] <<- layer
         }
-      }
-    },
-    simplify = F # return a list
-  )
-
-  # bind the Prob.cell `list` => a `sparse3Darray`
-  # then the Prob.cell's shape will be (nC,nC,nLR)
-  Prob.cell <- my_as_sparse3Darray(Prob.cell_)
-  cat(cli.symbol(),"The number of cells and L-R pairs in Dim(Prob.cell):",dim(Prob.cell),"\n")
-
-  # set `Prob.cell`'s names
-  dimnames(Prob.cell) <- list(colnames(data.use), colnames(data.use),
-                              rownames(pairLRsig))
-  names(Prob.cell_) <- rownames(pairLRsig)
-
-  Tmp <- list(prob.cell = Prob.cell_,Lavg=dataLavg,Ravg=dataRavg) # !important, for parallel iteration
-  net <- list(prob.cell = Prob.cell, tmp = Tmp)
-  execution.time = Sys.time() - ptm
-  object@options$run.time <- as.numeric(execution.time,
-                                        units = "secs")
-  object@images$.distance <- res
-  object@options$parameter <- list(
-    raw.use = raw.use,
-    # spot.size = spot.size,
-    # spot.size.fullres = spot.size.fullres,
-    ratio = ratio,
-    tol = tol,
-    Kh = Kh,
-    n = n,
-    nLR = nLR,
-    nLR1 = nLR1,
-    scale.distance = scale.distance,
-    use.AGAN = use.AGAN,
-    distance.use = distance.use,
-    interaction.range = interaction.range,
-    contact.dependent = contact.dependent,
-    contact.range = contact.range,
+        NULL
+      })
+    }
+    if (verbose) .cli("Layers computed: {.val {nLR}}; total nnz = {.val {nnz.cum}}", .type = "info")
+  }
+  if (is.null(spill.dir)) {
+    prob.array <- SparseChatArray(layers)
+    dimnames(prob.array) <- list(cell.names, cell.names, rownames(pairLRsig))
+    object@net$cell$prob <- prob.array
+  } else {
+    # spill 模式：层在磁盘上，net$cell$prob 由 filterProbability 流式回填（validator 容忍 NULL）
+    object@net$cell$prob <- NULL
+  }
+  object@misc$.param$communication <- list(
+    raw.use = raw.use, Kh = Kh, n = n, nLR = nLR, nLR1 = nLR1,
+    layer.names = rownames(pairLRsig),
+    scale.distance = scale.distance, use.AGAN = use.AGAN,
+    distance.use = distance.use, interaction.range = interaction.range,
+    contact.range = contact.range, contact.dependent = contact.dependent,
     contact.dependent.forced = contact.dependent.forced,
-    all.contact.dependent = all.contact.dependent,
-    all.diffusible = all.diffusible
+    all.contact.dependent = all.contact.dependent, all.diffusible = all.diffusible,
+    spill.dir = if (is.null(spill.dir)) NULL else normalizePath(spill.dir),
+    spill.backend = if (is.null(spill.dir)) NULL else spill.backend,
+    spill.count = if (is.null(spill.dir)) NULL else spill.i,
+    run.time = as.numeric(Sys.time() - t0, units = "secs")
   )
-
-  object@net <- net
-  cat(paste0(cli.symbol(symbol = "success")," CellChat inference is done. Parameter values are stored in `object@options$parameter` <<< [",
-             Sys.time(), "]", "\n"))
-
-  return(object)
+  object <- .log_operation(object, "computeCommunProb", params = list(
+    layer = "signaling", nLR = nLR, nthreads = nthreads,
+    spill.backend = spill.backend,
+    spill.dir = if (is.null(spill.dir)) NULL else normalizePath(spill.dir),
+    run.time = as.numeric(Sys.time() - t0, units = "secs")))
+  .cli("computeCommunProb done: {.val {nC}} x {.val {nC}} x {.val {nLR}} layers; nnz = {.val {nnz.cum}}; {.val {round(as.numeric(Sys.time() - t0, units = 'secs'), 2)}}s",
+       .type = "success")
+  object
 }
 
 
@@ -771,7 +855,6 @@ computeAvgCommunProb_Visium <- function(
         return(Pval.i)
       },
       simplify = F, # return a list
-      hint.message = "do permutation..."
     )
 
     for (x in seq_len(length(LRsig.use.idx))) {
@@ -1184,7 +1267,6 @@ computeAvgCommunProb <- function(
         return(Pval.i)
       },
       simplify = F, # return a list
-      hint.message = "do permutation..."
     )
 
     for (x in seq_len(length(LRsig.use.idx))) {
@@ -1268,7 +1350,7 @@ computeAvgCommunProb_LR_Sum <- function (
   # min.percent
   dataLR_temp <- 1 * (dataLR > 0)
   dataLR_temp <- aggregate(dataLR_temp, list(group), FUN = mean)
-  dataLR_percent <- 1 * (format(dataLR_temp[, -1], digits = 1) >= min.percent)
+  dataLR_percent <- 1 * (signif(dataLR_temp[, -1], 1) >= min.percent)
   Prob_percent <- Matrix::crossprod(matrix(dataLR_percent[, 1], nrow = 1), matrix(dataLR_percent[, 2], nrow = 1))
 
   if(sum(Prob_percent)==0){
@@ -1339,7 +1421,7 @@ computeAvgCommunProb_LR_Avg <- function (
   # min.percent
   dataLR_temp <- 1 * (dataLR > 0)
   dataLR_temp <- aggregate(dataLR_temp, list(group), FUN = mean)
-  dataLR_percent <- 1 * (format(dataLR_temp[, -1], digits = 1) >= min.percent)
+  dataLR_percent <- 1 * (signif(dataLR_temp[, -1], 1) >= min.percent)
   Prob_percent <- Matrix::crossprod(matrix(dataLR_percent[, 1], nrow = 1), matrix(dataLR_percent[, 2], nrow = 1))
 
   if(sum(Prob_percent)==0){
@@ -1984,7 +2066,9 @@ filterProbability <- function (
     cat(cli.symbol(1),"Do not filter any CCC probability!")
     return(object)
   } else { # quantile.prob<1
-    if (is.null(object@net$tmp$prob.cell)) {
+    comm.param <- object@misc$.param$communication
+    spill.dir <- if (is.null(comm.param)) NULL else comm.param$spill.dir
+    if (is.null(object@net$cell$prob) && is.null(spill.dir)) {
       stop(
         cli.symbol(2),
         "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! "
@@ -1992,64 +2076,136 @@ filterProbability <- function (
     } else {
       cat(paste0(cli.symbol(), "Filter out non-significant communication with a probability quantile being ",
                  quantile.prob, " for each L-R pair... \n"))
-      prob.cell_ <- object@net$tmp$prob.cell
-      pair.LR.use <- names(prob.cell_)
-      cell.names <- spatstat.sparse::dimnames.sparse3Darray(object@net$prob.cell)[[1]]
-    }
-
-    d.spatial <- object@images$.distance$d.spatial
-    Matrix::diag(d.spatial) <- 1
-    adj.contact <- object@images$.distance$adj.contact
-
-    nLR <- object@options$parameter$nLR
-    nLR1 <- object@options$parameter$nLR1
-    nC <- NROW(d.spatial)
-
-    set.seed(seed.use)
-    if (object@options$parameter[["all.contact.dependent"]] == TRUE) {
-      d.spatial <- adj.contact
-    }
-
-    # dim(permutation) = nboot x nLR
-    permutation <- replicate(nLR, base::sample(x = 1:nC, size = nboot, replace = F))
-
-    prob.cell_ <- my_future_lapply(X = 1:nLR, FUN = function(i) {
-
-      if (i <= nLR1) {
-        d_spatial <- d.spatial
+      # 层来源：内存模式读 net$cell$prob（SparseChatArray 即命名 list）；spill 模式逐层读盘并消费
+      if (!is.null(spill.dir)) {
+        pair.LR.use <- comm.param$layer.names
+        if (is.null(pair.LR.use))
+          stop("Spill mode requires `layer.names` in `misc$.param$communication`", call. = FALSE)
+        missing.files <- pair.LR.use[!file.exists(file.path(spill.dir, paste0(pair.LR.use, ".rds")))]
+        if (length(missing.files))
+          stop("Spilled layer files missing for LR pairs: ",
+               paste(missing.files, collapse = ", "), call. = FALSE)
+        prob.cell_ <- NULL
       } else {
-        d_spatial <- adj.contact
+        prob.cell_ <- unclass(object@net$cell$prob)
+        pair.LR.use <- dimnames(object@net$cell$prob)[[3]]
       }
-      sample.cells <- permutation[ ,i,drop=T]
-      Prob.cell.i <- prob.cell_[[i]]
+      cell.names <- colnames(assay(object, "signaling"))
 
-      sample.prob.cell.i <- purrr::map(.x = sample.cells,
-                                       .f = function(cell.index) {
-                                         prob.index <- which(d_spatial[cell.index, ,drop = T] > 0)
-                                         nboot.prob.cell.i <- Prob.cell.i[cell.index,prob.index, drop = T] # get a dense vec
-                                         return(nboot.prob.cell.i)
-                                       }) %>% unlist()
-      nboot.quantile <- quantile(sample.prob.cell.i, probs = quantile.prob)
-      gc()
+      d.spatial <- object@images$.distance$d.spatial
+      Matrix::diag(d.spatial) <- 1
+      adj.contact <- object@images$.distance$adj.contact
 
-      if(nboot.quantile == 0){
-        # sparse enough, return directly
+      nLR <- length(pair.LR.use)
+      nLR1 <- comm.param$nLR1
+      nC <- NROW(d.spatial)
+
+      set.seed(seed.use)
+      if (comm.param$all.contact.dependent == TRUE) {
+        d.spatial <- adj.contact
+      }
+      # v2 优化①②：模式行计数与 d 侧模式索引每支只构建一次（原逐层 rowSums/单行提取）。
+      # tabulate(@i[x != 0]) 与 rowSums(x != 0) 计数逐位一致；radix 稳定 order 保证行内列升序
+      rows.branch1 <- tabulate(d.spatial@i[d.spatial@x != 0] + 1L, nbins = nC)
+      rows.branch2 <- tabulate(adj.contact@i[adj.contact@x != 0] + 1L, nbins = nC)
+      csr.branch1 <- .sc_csr_build(d.spatial)
+      csr.branch2 <- .sc_csr_build(adj.contact)
+      pat.cache.1 <- new.env(hash = TRUE)
+      pat.cache.2 <- new.env(hash = TRUE)
+
+      # dim(permutation) = nboot x nLR
+      permutation <- replicate(nLR, base::sample(x = 1:nC, size = nboot, replace = F))
+
+      prob.cell_ <- my_future_lapply(X = 1:nLR, FUN = function(i) {
+
+        if (i <= nLR1) {
+          d_spatial <- d.spatial
+        } else {
+          d_spatial <- adj.contact
+        }
+        sample.cells <- permutation[ ,i,drop=T]
+        Prob.cell.i <- if (!is.null(spill.dir)) {
+          readRDS(file.path(spill.dir, paste0(pair.LR.use[i], ".rds")))
+        } else {
+          prob.cell_[[i]]
+        }
+
+        # 高效分位捷径：基线把各采样源在 pattern 列上的稠密行拼接后取 type-7 分位。
+        # 该分位为 0 当且仅当全零前缀长度 n0 满足 n0 >= ceiling(1 + (|S|-1) * quantile.prob)。
+        # 零值数下界 = |S| - 层非零值数（O(1) 判定）；不满足时再行级精确判定，
+        # 两者均命中则直接返回原层（与基线 nboot.quantile == 0 分支逐位等价），
+        # 未命中才构造完整采样向量走基线 quantile 路径。
+        pattern.rows <- if (i <= nLR1) rows.branch1 else rows.branch2
+        total.sampled <- sum(pattern.rows[sample.cells])
+        cutoff.zero <- FALSE
+        if (total.sampled > 0) {
+          h.cut <- ceiling(1 + (total.sampled - 1) * quantile.prob)
+          if (total.sampled - sum(Prob.cell.i@x != 0) >= h.cut) {
+            cutoff.zero <- TRUE
+          } else {
+            sub.x <- Prob.cell.i[sample.cells, , drop = FALSE]@x
+            if (total.sampled - sum(sub.x != 0) >= h.cut) cutoff.zero <- TRUE
+          }
+        }
+        if (cutoff.zero) {
+          # nboot.quantile == 0：基线直接返回原层
+          return(Prob.cell.i)
+        }
+
+        # v2 优化③：P 侧手工 CSR + d 侧模式缓存。与基线 purrr::map 逐位同构：
+        # 同置换顺序 × prob.index 升序（which 语义）×（列,值）对放置，缺失列补 0
+        cP <- .sc_csr_build(Prob.cell.i)
+        cD <- if (i <= nLR1) csr.branch1 else csr.branch2
+        pats <- if (i <= nLR1) pat.cache.1 else pat.cache.2
+        sample.prob.cell.i <- unlist(lapply(seq_along(sample.cells), function(jj) {
+          cell.index <- sample.cells[jj]
+          prob.index <- .sc_pattern_row(cD, d_spatial, cell.index, pats)
+          vals <- numeric(length(prob.index))
+          s <- cP$rp[cell.index]; e <- cP$rp[cell.index + 1L]
+          if (e > s) {
+            seg <- cP$ord[(s + 1L):e]
+            hit <- match(cP$jc[seg], prob.index)
+            keep <- !is.na(hit)
+            vals[hit[keep]] <- Prob.cell.i@x[seg][keep]
+          }
+          vals
+        }), use.names = FALSE)
+        nboot.quantile <- quantile(sample.prob.cell.i, probs = quantile.prob)
+        gc()
+
+        if(nboot.quantile == 0){
+          # sparse enough, return directly
+          return(Prob.cell.i)
+        } else if (nboot.quantile > 0) {
+          # filter `Prob.cell.i` to make it sparse enough
+          Prob.cell.i <- scMatrixTruncation(Prob.cell.i,cutoff = nboot.quantile,remain.cutoff.v = T,repr = "C")
+        }
+
         return(Prob.cell.i)
-      } else if (nboot.quantile > 0) {
-        # filter `Prob.cell.i` to make it sparse enough
-        Prob.cell.i <- scMatrixTruncation(Prob.cell.i,cutoff = nboot.quantile,remain.cutoff.v = T,repr = "C")
-      }
-
-      return(Prob.cell.i)
-    }, simplify = F, hint.message = "filtering...")
-    prob.cell <- my_as_sparse3Darray(prob.cell_)
-    dimnames(prob.cell) <- list(cell.names, cell.names, pair.LR.use)
+      }, future.globals = future::nbrOfWorkers() != 1L, simplify = F)
     names(prob.cell_) <- pair.LR.use
-    object@net$prob.cell <- prob.cell
-    object@net$tmp$prob.cell <- prob.cell_
+    prob.cell <- SparseChatArray(prob.cell_)
+    dimnames(prob.cell) <- list(cell.names, cell.names, pair.LR.use)
+    object@net$cell$prob <- prob.cell
+
+    if (!is.null(spill.dir)) {
+      rds.files <- list.files(spill.dir, pattern = "\\.rds$", full.names = TRUE)
+      unlink(rds.files)
+      if (length(list.files(spill.dir, all.files = TRUE, no.. = TRUE)) == 0)
+        unlink(spill.dir, recursive = TRUE)
+      comm.param$spill.dir <- NULL
+      comm.param$spill.backend <- NULL
+      comm.param$spill.count <- NULL
+      comm.param$layer.names <- NULL
+      object@misc$.param$communication <- comm.param
+    }
+    object <- .log_operation(object, "filterProbability", params = list(
+      nLR = nLR, nboot = nboot, thresh = thresh,
+      spill.consumed = !is.null(spill.dir)))
 
     cat(cli.symbol(1), "Filtering is done.\n")
     return(object)
+    } # whether probability computed
   } # whether to filter out
 }
 
@@ -2229,8 +2385,6 @@ computeExpr_complex <- function(complex_input, data.use, complex) {
       RsubunitsV <- RsubunitsV[RsubunitsV != ""]
       return(geometricMean(data.use[RsubunitsV,,drop=F]))
     },
-    hint.message = "Computing complex...",
-    strategy.message = FALSE
   )
   data.complex <- t(data.complex)
   return(data.complex)
@@ -2339,8 +2493,6 @@ computeExpr_coreceptor <- function(cofactor_input, data.use, pairLRsig, type = c
           return(matrix(1, nrow = 1, ncol = ncol(data.use)))
         }
       },
-      hint.message = "Computing coreceptor...",
-      strategy.message = FALSE
     )
     data.coreceptor.ind <- t(data.coreceptor.ind)
     data.coreceptor <- matrix(1, nrow = length(coreceptor.all), ncol = ncol(data.use))

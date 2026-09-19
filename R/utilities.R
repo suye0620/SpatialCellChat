@@ -29,6 +29,7 @@
     success   = cli::cli_alert_success(text, .envir = .env, ...),
     danger    = cli::cli_alert_danger(text, .envir = .env, ...),
     warning   = cli::cli_alert_warning(text, .envir = .env, ...),
+    bullet    = cli::cli_bullets(c("*" = text), .envir = .env, ...),
     header    = cli::cli_h1(text, .envir = .env, ...),
     subheader = cli::cli_h2(text, .envir = .env, ...),
     text      = cli::cli_text(text, .envir = .env, ...),
@@ -795,46 +796,119 @@ CellChat2Seurat <- function(object,counts = NULL, group.by = NULL, assay = "Spat
 
 #' @title preProcessing
 #' @description
-#' Use this function to pre-process the data matrix input before running \link{createSpatialCellChat},
-#' or pre-process the SpatialCellChat object following \link{subsetData} function.
-#' @param object Matrix or SpatialCellChat object.
-#' @param slot.name Character. By default "data.signaling". Use "data.signaling" or "data" when `object` is a SpatialCellChat object.
-#'
-#' @return Matrix or SpatialCellChat object.
+#' Impute drop-out expression values with ALRA (Adaptively-thresholded Low Rank
+#' Approximation). Use this function on a log-normalized data matrix before
+#' running \link{createSpatialCellChat} with \code{input.assay = "norm"}, or on
+#' a SpatialCellChat object after \link{subsetData} to impute the
+#' \code{assay$signaling} layer in place.
+#' @param object A log-normalized expression matrix (genes x cells) or a
+#' SpatialCellChat object.
+#' @param slot.name Character. Target assay layer when \code{object} is a
+#' SpatialCellChat object: \code{"signaling"} (default) or \code{"norm"}.
+#' @param quantile.prob Numeric. Per-gene low-value quantile threshold passed
+#' to \code{ALRA::alra()}. ALRA's default is 0.001; this package keeps 1e-5,
+#' a more permissive threshold that retains more low-magnitude imputed values.
+#' @param seed.use Integer seed for the randomized SVD draws, making the rank
+#' estimation and the imputed matrix reproducible. NULL leaves the RNG state
+#' untouched.
+#' @return A \code{dgCMatrix} (genes x cells) for matrix input, or an updated
+#' SpatialCellChat object for object input. The estimated rank is recorded in
+#' \code{misc$.param$alra} for object input.
 #' @export
-preProcessing <- function(object,slot.name=c("data.signaling","data")){
-  if (inherits(x = object, what = c("matrix", "Matrix", "dgCMatrix"))) {
-    cat(cli.symbol("info"),"Pre-processing from a data matrix.\n")
-    data <- object %>% Matrix::t()
-  } else if (is(object,"SpatialCellChat")) {
-    cat(cli.symbol("info"),"Pre-processing from a SpatialCellChat object.\n")
+preProcessing <- function(object, slot.name = c("signaling", "norm"),
+                          quantile.prob = 1e-5, seed.use = 1L) {
+  .cli("preProcessing", .type = "subheader")
+  matrix.input <- inherits(object, c("matrix", "Matrix"))
+  if (matrix.input) {
+    .cli("Input: log-normalized matrix ({nrow(object)} genes x {ncol(object)} cells)",
+         .type = "info")
+    data.use <- object
+  } else if (methods::is(object, "SpatialCellChat")) {
     slot.name <- match.arg(slot.name)
-    data <- methods::slot(object,slot.name) %>% Matrix::t()
-    if(sum(dim(data))==0){
-      stop(cli.symbol("fail"),"Please check the object's ",slot.name," slot. No data is in it.")
+    data.use <- assay(object, slot.name)
+    if (is.null(data.use) || sum(dim(data.use)) == 0) {
+      hint <- if (identical(slot.name, "signaling")) "; run `subsetData()` first" else ""
+      stop("assay$", slot.name, " is empty", hint, ".", call. = FALSE)
     }
+    .cli("Input: assay${slot.name} ({nrow(data.use)} genes x {ncol(data.use)} cells)",
+         .type = "info")
+  } else {
+    stop("object must be a matrix, Matrix, or SpatialCellChat object", call. = FALSE)
   }
+  if (!is.numeric(quantile.prob) || length(quantile.prob) != 1L ||
+      !is.finite(quantile.prob) || quantile.prob <= 0 || quantile.prob >= 1)
+    stop("quantile.prob must be a finite number in (0, 1)", call. = FALSE)
+  if (!is.null(seed.use) && (length(seed.use) != 1L || is.na(seed.use) ||
+      !is.numeric(seed.use)))
+    stop("seed.use must be a single number or NULL", call. = FALSE)
 
-  K <- ifelse(min(dim(data)) < formals(ALRA::choose_k)$K, round(0.9*min(dim(data))), formals(ALRA::choose_k)$K)
-  noise_start <- min(round(0.8*K), formals(ALRA::choose_k)$noise_start)
-  k.boot <- sapply(X = 1:10,FUN = function(x){x*1;ALRA::choose_k(data,K = K,noise_start = noise_start)$k})
-  k <- median(k.boot,na.rm = T)
-
-  # a matrix where the cells are rows and genes are columns.
-  capture.output({data.alra <- ALRA::alra(as.array(data),k = k,quantile.prob = 1e-5)})
-  data.alra <- data.alra[[3]] %>% as(.,Class="CsparseMatrix")
-  colnames(data.alra) <- colnames(data)
-  rownames(data.alra) <- rownames(data)
-
-  if (inherits(x = object, what = c("matrix", "Matrix", "dgCMatrix"))) {
-    cat(cli.symbol("success"),"Pre-processing is done.\n")
-    return(Matrix::t(data.alra))
-  } else if (is(object,"SpatialCellChat")) {
-    methods::slot(object,slot.name) <- Matrix::t(data.alra)
-    object@options[["alra.k"]] <- k
-    cat(cli.symbol("success"),"Pre-processing is done.\n")
-    return(object)
+  # ALRA expects log-normalized expression with cells as rows and genes as columns.
+  data.cells <- Matrix::t(data.use)
+  if (inherits(data.cells, "Matrix")) {
+    nz.values <- data.cells@x
+  } else {
+    sample.idx <- seq_len(min(length(data.cells), 1e6L))
+    sample.values <- data.cells[sample.idx]
+    nz.values <- sample.values[sample.values != 0]
   }
+  if (length(nz.values) && all(nz.values == floor(nz.values)) &&
+      min(nz.values) >= 0 && max(nz.values) > 50) {
+    warning("input appears to be raw counts (non-negative integers); ",
+            "ALRA expects log-normalized data. Consider running `normalizeData()` first.",
+            call. = FALSE)
+  }
+  data.cells <- as.matrix(data.cells)
+  .cli("Running ALRA on a {nrow(data.cells)} x {ncol(data.cells)} dense matrix (cells x genes)",
+       .type = "text", .verbose = 2L)
+
+  min.dim <- min(dim(data.cells))
+  if (min.dim < 7L)
+    stop("ALRA rank estimation needs at least 7 cells and 7 genes; got ", min.dim, call. = FALSE)
+
+  if (!is.null(seed.use)) set.seed(as.integer(seed.use))
+  K <- if (min.dim < 100L) floor(0.9 * min.dim) else 100L
+  # ALRA::choose_k requires noise_start <= K - 5.
+  noise_start <- max(1L, min(round(0.8 * K), 80L, K - 5L))
+  k.boot <- vapply(seq_len(10L), function(i) {
+    ALRA::choose_k(data.cells, K = K, noise_start = noise_start)$k
+  }, numeric(1L))
+  k <- round(median(k.boot, na.rm = TRUE))
+  if (!is.finite(k) || k < 2L || k >= min.dim)
+    stop("ALRA rank estimation failed: k = ", k,
+         ". The input matrix may lack a signal/noise singular-value gap ",
+         "(k must be an integer between 2 and min(dim) - 1).", call. = FALSE)
+  .cli("Estimated ALRA rank k = {k} (median of 10 choose_k runs)", .type = "info")
+
+  capture.output({data.alra <- ALRA::alra(data.cells, k = k, quantile.prob = quantile.prob)})
+  imputed <- data.alra$A_norm_rank_k_cor_sc
+  dimnames(imputed) <- dimnames(data.cells)
+  imputed.sparse <- methods::as(Matrix::t(imputed), "dgCMatrix") # genes x cells
+
+  if (matrix.input) {
+    .cli("Pre-processing is done; returning {nrow(imputed.sparse)} genes x {ncol(imputed.sparse)} cells imputed matrix",
+         .type = "success")
+    return(imputed.sparse)
+  }
+  assay(object, slot.name) <- imputed.sparse
+  if (identical(slot.name, "norm")) {
+    # Imputed norm invalidates layers derived from the previous norm.
+    assay(object, "scale") <- NULL
+    assay(object, "signaling") <- NULL
+  }
+  params(object, "alra") <- list(
+    layer = slot.name,
+    k = as.integer(k),
+    quantile.prob = quantile.prob,
+    seed.use = if (is.null(seed.use)) NULL else as.integer(seed.use)
+  )
+  object <- .log_operation(object, "preProcessing", params = list(
+    layer = slot.name,
+    alra.k = as.integer(k),
+    seed.use = if (is.null(seed.use)) NULL else as.integer(seed.use)
+  ))
+  .cli("Pre-processing is done; assay${slot.name} now holds the imputed matrix (k = {k})",
+       .type = "success")
+  object
 }
 
 
@@ -1244,6 +1318,7 @@ updateClusterLabels <- function(object, old.cluster.name = NULL, new.cluster.nam
 
 subsetData <- function(object, features = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
+  .cli("subsetData", .type = "subheader")
   interaction_input <- object@DB$interaction
   if (!is.data.frame(interaction_input) ||
       !all(c("ligand", "receptor") %in% colnames(interaction_input)))
@@ -1278,6 +1353,7 @@ subsetData <- function(object, features = NULL) {
   norm <- assay(object, "norm")
   if (is.null(norm))
     stop("assay$norm is required before running subsetData", call. = FALSE)
+  .cli("Input: assay$norm ({nrow(norm)} genes x {ncol(norm)} cells)", .type = "info")
   gene.use_input <- if (is.null(features)) {
     .sc_db_signaling_genes(interaction_input, object@DB)
   } else {
@@ -1285,6 +1361,8 @@ subsetData <- function(object, features = NULL) {
   }
   gene.use <- intersect(gene.use_input, rownames(norm))
   assay(object, "signaling") <- norm[rownames(norm) %in% gene.use, , drop = FALSE]
+  .cli("assay$signaling written: {length(gene.use)} signaling genes x {ncol(norm)} cells",
+       .type = "success")
   object <- .log_operation(object, "subsetData", params = list(
     features = if (is.null(features)) NULL else gene.use_input,
     n.genes = length(gene.use)
@@ -1347,6 +1425,9 @@ identifyOverExpressedGenes <- function(
 ){
   object <- .sc_assert_spatial_cell_chat(object)
   selection.method <- match.arg(selection.method)
+  .cli("identifyOverExpressedGenes", .type = "subheader")
+  .cli("Selection method: {.val {selection.method}}; features.name = {.val {features.name}}",
+       .type = "info")
   if (length(features.name) != 1L || !is.character(features.name) ||
       is.na(features.name) || !nzchar(features.name))
     stop("features.name must be a single non-empty string", call. = FALSE)
@@ -1582,6 +1663,8 @@ identifyOverExpressedGenes <- function(
     features.name = features.name,
     n.features = length(features.sig)
   ))
+  .cli("Selected {.val {length(features.sig)}} features ({nrow(markers.all)} marker rows) into misc$.var.features${features.name}",
+       .type = "success")
   methods::validObject(object)
   object
 }
@@ -1687,6 +1770,7 @@ identifyOverExpressedInteractions <- function(object, features.name = "features"
                                               features = NULL,
                                               return.object = TRUE) {
   object <- .sc_assert_spatial_cell_chat(object)
+  .cli("identifyOverExpressedInteractions", .type = "subheader")
   if (length(features.name) != 1L || !is.character(features.name) ||
       is.na(features.name) || !nzchar(features.name))
     stop("features.name must be a single non-empty string", call. = FALSE)
@@ -1743,8 +1827,8 @@ identifyOverExpressedInteractions <- function(object, features.name = "features"
     n.interactions = nrow(pairLRsig)
   ))
   methods::validObject(object)
-  cat(cli.symbol(), "The number of highly variable ligand-receptor pairs used for signaling inference is ",
-      nrow(pairLRsig), "\n", sep = "")
+  .cli("Selected {nrow(pairLRsig)} ligand-receptor pairs for signaling inference",
+       .type = "success")
   object
 }
 

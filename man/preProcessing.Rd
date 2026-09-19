@@ -4,17 +4,33 @@
 \alias{preProcessing}
 \title{preProcessing}
 \usage{
-preProcessing(object, slot.name = c("data.signaling", "data"))
+preProcessing(object, slot.name = c("signaling", "norm"), quantile.prob = 1e-05,
+  seed.use = 1L)
 }
 \arguments{
-\item{object}{Matrix or SpatialCellChat object.}
+\item{object}{A log-normalized expression matrix (genes x cells) or a
+SpatialCellChat object.}
 
-\item{slot.name}{Character. By default "data.signaling". Use "data.signaling" or "data" when `object` is a SpatialCellChat object.}
+\item{slot.name}{Character. Target assay layer when \code{object} is a
+SpatialCellChat object: \code{"signaling"} (default) or \code{"norm"}.}
+
+\item{quantile.prob}{Numeric. Per-gene low-value quantile threshold passed
+to \code{ALRA::alra()}. ALRA's default is 0.001; this package keeps 1e-5,
+a more permissive threshold that retains more low-magnitude imputed values.}
+
+\item{seed.use}{Integer seed for the randomized SVD draws, making the rank
+estimation and the imputed matrix reproducible. NULL leaves the RNG state
+untouched.}
 }
 \value{
-Matrix or SpatialCellChat object.
+A \code{dgCMatrix} (genes x cells) for matrix input, or an updated
+SpatialCellChat object for object input. The estimated rank is recorded in
+\code{misc$.param$alra} for object input.
 }
 \description{
-Use this function to pre-process the data matrix input before running \link{createSpatialCellChat},
-or pre-process the SpatialCellChat object following \link{subsetData} function.
+Impute drop-out expression values with ALRA (Adaptively-thresholded Low Rank
+Approximation). Use this function on a log-normalized data matrix before
+running \link{createSpatialCellChat} with \code{input.assay = "norm"}, or on
+a SpatialCellChat object after \link{subsetData} to impute the
+\code{assay$signaling} layer in place.
 }

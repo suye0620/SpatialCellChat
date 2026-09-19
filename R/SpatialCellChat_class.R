@@ -361,9 +361,29 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   }
   expected <- c(length(gene_names), length(cell_names))
   expected_names <- list(gene_names, cell_names)
-  for (name in intersect(required, names(assay))) {
+  for (name in setdiff(intersect(required, names(assay)), "signaling")) {
     errors <- c(errors, .sc_validate_matrix(
       assay[[name]], expected, expected_names, paste0("assay$", name)))
+  }
+  # assay$signaling is a gene subset written by subsetData: cells must match
+  # the object exactly and its genes must keep the assay$norm row order.
+  if (!is.null(assay$signaling)) {
+    signaling <- assay$signaling
+    if (!.sc_matrix_like(signaling)) {
+      errors <- c(errors, "assay$signaling must be a matrix or Matrix object")
+    } else if (ncol(signaling) != length(cell_names) ||
+               !identical(colnames(signaling), cell_names)) {
+      errors <- c(errors, "assay$signaling must carry the object cells as columns")
+    } else {
+      signaling_genes <- rownames(signaling)
+      if (is.null(signaling_genes)) {
+        errors <- c(errors, "assay$signaling must have gene rownames")
+      } else if (!all(signaling_genes %in% gene_names)) {
+        errors <- c(errors, "assay$signaling genes must be a subset of assay$norm genes")
+      } else if (is.unsorted(match(signaling_genes, gene_names), strictly = TRUE)) {
+        errors <- c(errors, "assay$signaling rows must preserve the assay$norm gene order")
+      }
+    }
   }
   errors
 }
@@ -1018,6 +1038,9 @@ createSpatialCellChat <- function(object,
   group.by.explicit <- !is.null(group.by)
   is_seurat <- methods::is(object, "Seurat")
   image.was.auto <- FALSE
+  .cli("createSpatialCellChat", .type = "subheader")
+  .cli("Input: {.val {input.assay}} expression layer, {.val {datatype}} mode",
+       .type = "info")
 
   # ---- Extract expression matrix from input ----
   data <- NULL
@@ -1236,6 +1259,8 @@ createSpatialCellChat <- function(object,
   # construction boundary catches malformed dimensions before downstream
   # analysis allocates communication arrays.
   methods::validObject(chat)
+  .cli("Object created: {nrow(data)} genes x {ncol(data)} cells; {nlevels(joint)} groups",
+       .type = "success")
   .log_operation(chat, "createSpatialCellChat", params = list(
     datatype = datatype,
     group.by = group.by,
@@ -1547,31 +1572,5 @@ misc.SpatialCellChat <- function(object, key = NULL, ...) {
   .sc_validate_after_update(object)
 }
 
-
-# ====== Internal helpers ======
-
-.cli <- function(text, .type = "info", ..., .env = parent.frame()) {
-  switch(.type,
-    info      = cli::cli_alert_info(text, .envir = .env, ...),
-    success   = cli::cli_alert_success(text, .envir = .env, ...),
-    danger    = cli::cli_alert_danger(text, .envir = .env, ...),
-    warning   = cli::cli_alert_warning(text, .envir = .env, ...),
-    bullet    = cli::cli_bullets(c("*" = text), .envir = .env, ...),
-    header    = cli::cli_h1(text, .envir = .env, ...),
-    subheader = cli::cli_h2(text, .envir = .env, ...),
-    text      = cli::cli_text(text, .envir = .env, ...),
-    cli::cli_alert_info(text, .envir = .env, ...)
-  )
-}
-
-.log_operation <- function(object, funcname, params = list()) {
-  entry <- list(
-    "function" = funcname,
-    time = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-    params = params
-  )
-  object@misc$.log <- c(object@misc$.log, list(entry))
-  object
-}
 
 `%||%` <- function(a, b) if (is.null(a)) b else a

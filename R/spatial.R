@@ -663,6 +663,9 @@ computeCellDistance <- function (
   # the coordinate unit is already the working unit.
   threshold <- interaction.range + tol
   if (!is.null(ratio)) threshold <- threshold / ratio
+  .cli("computeCellDistance", .type = "subheader")
+  .cli("Input: {n_cells} cells; interaction.range = {interaction.range}, contact.range = {contact.range}, tol = {tol}, ratio = {if (is.null(ratio)) 'NULL (coordinates already in working unit)' else ratio}",
+       .type = "info")
 
   neighbors <- BiocNeighbors::queryNeighbors(
     X = coordinates,
@@ -703,6 +706,9 @@ computeCellDistance <- function (
     tol = tol,
     contact.threshold = contact.range
   )
+  .cli("d.spatial: {.val {length(x)}} distance entries; adj.contact: {.val {length(adj.contact@x)}} contact entries",
+       .type = "info")
+  .cli("Distance cache ready", .type = "success")
   list(
     d.spatial = d.spatial,
     adj.contact = adj.contact,

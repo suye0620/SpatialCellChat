@@ -119,3 +119,72 @@ S4 cpp_sum_layers(List matrices) {
 
   return res;
 }
+
+// Per-LR communication layer kernel (computeCommunProb v2).
+// Single fused pass over the CSC pattern of P.spatial:
+//   v[k] = x0[k] * hill(L[row0[k]] * R[col0[k]]) * contact_mask[k]
+//          [ * fAG[row]*fAG[col] * fAN[row]*fAN[col] ]   (agonist/antagonist factors)
+// Multiplication grouping follows the baseline order exactly:
+//   ((x0*h)*mask) * (AG_i*AG_j) * (AN_i*AN_j)  -> bitwise identical results.
+// contact_mask: 1.0 at every position for diffusible LRs; adj.contact values
+//   (1.0) at matched positions and 0.0 elsewhere for contact-dependent LRs
+//   (masks the layer down to the contact pattern, as baseline `P1_Pspatial * adj.contact`).
+// Returns list(i, p, x): compacted dgCMatrix slots (i 0-based; v != 0 kept; CSC order preserved).
+// [[Rcpp::plugins(openmp)]]
+#include <omp.h>
+// [[Rcpp::export]]
+Rcpp::List cpp_prob_layer(Rcpp::NumericVector x0, Rcpp::IntegerVector row0,
+                          Rcpp::IntegerVector col0,
+                          Rcpp::NumericVector L, Rcpp::NumericVector R,
+                          double Kh, double n,
+                          Rcpp::NumericVector contact_mask,
+                          Rcpp::Nullable<Rcpp::NumericVector> fAG,
+                          Rcpp::Nullable<Rcpp::NumericVector> fAN,
+                          int nC, int nthreads = 1) {
+  R_xlen_t nnz = x0.length();
+  if ((R_xlen_t)row0.length() != nnz || (R_xlen_t)col0.length() != nnz ||
+      (R_xlen_t)contact_mask.length() != nnz)
+    stop("x0, row0, col0, contact_mask must have the same length");
+  bool ag = fAG.isNotNull(), an = fAN.isNotNull();
+  Rcpp::NumericVector fag, fan;
+  if (ag) fag = Rcpp::NumericVector(fAG.get());
+  if (an) fan = Rcpp::NumericVector(fAN.get());
+
+  Rcpp::NumericVector v(nnz);
+  #pragma omp parallel for num_threads(nthreads) schedule(static)
+  for (R_xlen_t k = 0; k < nnz; k++) {
+    double lr = L[row0[k]] * R[col0[k]];
+    double h;
+    if (n == 1.0) h = lr / (Kh + lr);
+    else { double ln = std::pow(lr, n), kn = std::pow(Kh, n); h = ln / (kn + ln); }
+    v[k] = x0[k] * h * contact_mask[k];
+  }
+  if (ag || an) {
+    #pragma omp parallel for num_threads(nthreads) schedule(static)
+    for (R_xlen_t k = 0; k < nnz; k++) {
+      if (ag) v[k] = v[k] * (fag[row0[k]] * fag[col0[k]]);
+      if (an) v[k] = v[k] * (fan[row0[k]] * fan[col0[k]]);
+    }
+  }
+
+  // Compact (v != 0 kept); CSC order preserved, column counts -> p
+  std::vector<int> cnt(nC, 0);
+  for (R_xlen_t k = 0; k < nnz; k++)
+    if (v[k] != 0.0) cnt[col0[k]]++;
+  Rcpp::IntegerVector p(nC + 1);
+  p[0] = 0;
+  for (int j = 0; j < nC; j++) p[j + 1] = p[j] + cnt[j];
+  Rcpp::IntegerVector i_out(p[nC]);
+  Rcpp::NumericVector x_out(p[nC]);
+  std::vector<int> off(p.begin(), p.end());
+  for (R_xlen_t k = 0; k < nnz; k++) {
+    if (v[k] != 0.0) {
+      int pos = off[col0[k]]++;
+      i_out[pos] = row0[k];
+      x_out[pos] = v[k];
+    }
+  }
+  return Rcpp::List::create(Rcpp::Named("i") = i_out,
+                            Rcpp::Named("p") = p,
+                            Rcpp::Named("x") = x_out);
+}
