@@ -50,3 +50,4 @@ renv/*.tar.gz
 /install_deps.R
 /install_batch1.R
 /install_rfast2.R
+tests_dev/benchmarks/out/
