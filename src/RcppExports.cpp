@@ -34,10 +34,82 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_prob_layer
+Rcpp::List cpp_prob_layer(Rcpp::NumericVector x0, Rcpp::IntegerVector row0, Rcpp::IntegerVector col0, Rcpp::NumericVector L, Rcpp::NumericVector R, double Kh, double n, Rcpp::NumericVector contact_mask, Rcpp::Nullable<Rcpp::NumericVector> fAG, Rcpp::Nullable<Rcpp::NumericVector> fAN, int nC, int nthreads);
+RcppExport SEXP _SpatialCellChat_cpp_prob_layer(SEXP x0SEXP, SEXP row0SEXP, SEXP col0SEXP, SEXP LSEXP, SEXP RSEXP, SEXP KhSEXP, SEXP nSEXP, SEXP contact_maskSEXP, SEXP fAGSEXP, SEXP fANSEXP, SEXP nCSEXP, SEXP nthreadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x0(x0SEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type row0(row0SEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type col0(col0SEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type L(LSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type R(RSEXP);
+    Rcpp::traits::input_parameter< double >::type Kh(KhSEXP);
+    Rcpp::traits::input_parameter< double >::type n(nSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type contact_mask(contact_maskSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type fAG(fAGSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type fAN(fANSEXP);
+    Rcpp::traits::input_parameter< int >::type nC(nCSEXP);
+    Rcpp::traits::input_parameter< int >::type nthreads(nthreadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_prob_layer(x0, row0, col0, L, R, Kh, n, contact_mask, fAG, fAN, nC, nthreads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_group_avg_obs
+Rcpp::NumericVector cpp_group_avg_obs(Rcpp::NumericVector x, Rcpp::IntegerVector idx, Rcpp::IntegerVector p, Rcpp::NumericVector suppL, Rcpp::NumericVector suppR, Rcpp::NumericVector sr_out, Rcpp::NumericVector sr_in, Rcpp::IntegerVector group_int, int K, Rcpp::IntegerVector thr, double min_cells_sr, int avg_sum, int nC);
+RcppExport SEXP _SpatialCellChat_cpp_group_avg_obs(SEXP xSEXP, SEXP idxSEXP, SEXP pSEXP, SEXP suppLSEXP, SEXP suppRSEXP, SEXP sr_outSEXP, SEXP sr_inSEXP, SEXP group_intSEXP, SEXP KSEXP, SEXP thrSEXP, SEXP min_cells_srSEXP, SEXP avg_sumSEXP, SEXP nCSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type idx(idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type p(pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type suppL(suppLSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type suppR(suppRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type sr_out(sr_outSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type sr_in(sr_inSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type group_int(group_intSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type thr(thrSEXP);
+    Rcpp::traits::input_parameter< double >::type min_cells_sr(min_cells_srSEXP);
+    Rcpp::traits::input_parameter< int >::type avg_sum(avg_sumSEXP);
+    Rcpp::traits::input_parameter< int >::type nC(nCSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_group_avg_obs(x, idx, p, suppL, suppR, sr_out, sr_in, group_int, K, thr, min_cells_sr, avg_sum, nC));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_group_avg_perm
+Rcpp::NumericMatrix cpp_group_avg_perm(Rcpp::NumericVector x, Rcpp::IntegerVector idx, Rcpp::IntegerVector p, Rcpp::NumericVector suppL, Rcpp::NumericVector suppR, Rcpp::NumericVector sr_out, Rcpp::NumericVector sr_in, Rcpp::IntegerVector group_int, int K, Rcpp::IntegerVector thr, double min_cells_sr, int avg_sum, Rcpp::IntegerMatrix perm, int nthreads);
+RcppExport SEXP _SpatialCellChat_cpp_group_avg_perm(SEXP xSEXP, SEXP idxSEXP, SEXP pSEXP, SEXP suppLSEXP, SEXP suppRSEXP, SEXP sr_outSEXP, SEXP sr_inSEXP, SEXP group_intSEXP, SEXP KSEXP, SEXP thrSEXP, SEXP min_cells_srSEXP, SEXP avg_sumSEXP, SEXP permSEXP, SEXP nthreadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type idx(idxSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type p(pSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type suppL(suppLSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type suppR(suppRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type sr_out(sr_outSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type sr_in(sr_inSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type group_int(group_intSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type thr(thrSEXP);
+    Rcpp::traits::input_parameter< double >::type min_cells_sr(min_cells_srSEXP);
+    Rcpp::traits::input_parameter< int >::type avg_sum(avg_sumSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix >::type perm(permSEXP);
+    Rcpp::traits::input_parameter< int >::type nthreads(nthreadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_group_avg_perm(x, idx, p, suppL, suppR, sr_out, sr_in, group_int, K, thr, min_cells_sr, avg_sum, perm, nthreads));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_SpatialCellChat_ComputeSNN", (DL_FUNC) &_SpatialCellChat_ComputeSNN, 2},
     {"_SpatialCellChat_cpp_sum_layers", (DL_FUNC) &_SpatialCellChat_cpp_sum_layers, 1},
+    {"_SpatialCellChat_cpp_prob_layer", (DL_FUNC) &_SpatialCellChat_cpp_prob_layer, 12},
+    {"_SpatialCellChat_cpp_group_avg_obs", (DL_FUNC) &_SpatialCellChat_cpp_group_avg_obs, 13},
+    {"_SpatialCellChat_cpp_group_avg_perm", (DL_FUNC) &_SpatialCellChat_cpp_group_avg_perm, 14},
     {NULL, NULL, 0}
 };
 

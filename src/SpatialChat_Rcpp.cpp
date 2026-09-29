@@ -188,3 +188,176 @@ Rcpp::List cpp_prob_layer(Rcpp::NumericVector x0, Rcpp::IntegerVector row0,
                             Rcpp::Named("p") = p,
                             Rcpp::Named("x") = x_out);
 }
+
+// ============================================================================
+// computeAvgCommunProb v2 (Plan A): gated group-level aggregation kernels.
+//
+// Replicates baseline computeAvgCommunProb_LR_{Avg,Sum} (modeling.R) element-for-element:
+//   num[a,b] = sum_{i in a (sender row), j in b (receiver col)} v_ij
+//              accumulated in CSC traversal order (j outer ascending, i inner ascending)
+//   den[a,b] = count of STORED entries in the block (baseline binarized-crossprod;
+//              explicit zeros count too, matching prob@x <- 1 + crossprod)
+//   avg: val = num/den with 0/0 -> 0 (baseline NaN -> 0); sum: val = num
+//   val *= indL[a]*indR[b]*indS[a]*indI[b]   (0/1 gate product = Prob_percent * cells.sr)
+//
+// Gate decisions are INTEGER threshold comparisons:
+//   indL/indR: cnt >= thr[a] -- min.percent. thr[a] is precomputed in R against the
+//     baseline's own mean()+signif() chain (decision is monotone non-decreasing in the
+//     0/1 count cnt because group sizes are invariant under label permutation, so the
+//     mean denominator n_a is a per-group constant; monotonicity is verified
+//     exhaustively in tests_dev/test-computeAvgCommunProb.R).
+//   indS/indI: sum >= min_cells_sr -- min.cells.sr. Sums of integer-valued doubles are
+//     exact in double for any accumulation order.
+// All gate quantities are integer-valued doubles: order cannot change them.
+// The only order-sensitive quantity is num (~1 ulp vs the baseline's row-partial +
+// BLAS dgemm chain; empirically verified in tests).
+// Output layout: flat K*K with the SENDER group index fastest, f = a + b*K,
+// i.e. exactly as.vector() of the K x K baseline matrix (column-major, a fastest).
+
+#include <limits>
+#include <algorithm>
+#include <vector>
+
+namespace {
+
+void sc_check_group_args(const Rcpp::NumericVector& x, const Rcpp::IntegerVector& idx,
+                         const Rcpp::IntegerVector& p, int nC, int K,
+                         const Rcpp::NumericVector& suppL, const Rcpp::NumericVector& suppR,
+                         const Rcpp::NumericVector& sr_out, const Rcpp::NumericVector& sr_in,
+                         const Rcpp::IntegerVector& thr) {
+  if ((R_xlen_t)idx.length() != x.length()) stop("i and x must have the same length");
+  if (p.length() != (R_xlen_t)nC + 1) stop("p must have length nC + 1");
+  if (suppL.length() != (R_xlen_t)nC || suppR.length() != (R_xlen_t)nC ||
+      sr_out.length() != (R_xlen_t)nC || sr_in.length() != (R_xlen_t)nC)
+    stop("suppL, suppR, sr_out, sr_in must have length nC");
+  if (thr.length() != (R_xlen_t)K) stop("thr must have length k");
+}
+
+void sc_check_group_codes(const int* g, int nC, int K) {
+  for (int c = 0; c < nC; c++)
+    if (g[c] < 0 || g[c] >= K)
+      stop("group codes must be 0-based integers in [0, k-1]");
+}
+
+// One gated aggregation pass for a single label assignment g (0-based codes).
+void sc_boot_block_avg(const double* x, const int* idx, const int* p, int nC,
+                       const double* suppL, const double* suppR,
+                       const double* sr_out, const double* sr_in,
+                       const int* g, int K,
+                       const int* thr, double min_cells_sr, bool do_avg,
+                       double* out) {
+  std::vector<double> cntL(K, 0.0), cntR(K, 0.0), Sout(K, 0.0), Sin(K, 0.0);
+  for (int c = 0; c < nC; c++) {
+    const int a = g[c];
+    cntL[a] += suppL[c];
+    cntR[a] += suppR[c];
+    Sout[a] += sr_out[c];
+    Sin[a]  += sr_in[c];
+  }
+  std::vector<double> gL(K), gR(K), gS(K), gI(K);
+  for (int a = 0; a < K; a++) {
+    gL[a] = (cntL[a] >= (double)thr[a]) ? 1.0 : 0.0;
+    gR[a] = (cntR[a] >= (double)thr[a]) ? 1.0 : 0.0;
+    gS[a] = (Sout[a] >= min_cells_sr)   ? 1.0 : 0.0;
+    gI[a] = (Sin[a]  >= min_cells_sr)   ? 1.0 : 0.0;
+  }
+  // Baseline early return when no group pair passes the min.percent gate
+  // (sum(Prob_percent) == 0): result is all zeros regardless of the sr gate.
+  bool any = false;
+  for (int a = 0; a < K && !any; a++)
+    for (int b = 0; b < K; b++)
+      if (gL[a] * gR[b] * gS[a] * gI[b] != 0.0) { any = true; break; }
+  if (!any) {
+    std::fill(out, out + (std::size_t)K * K, 0.0);
+    return;
+  }
+  std::vector<double> num((std::size_t)K * K, 0.0), den((std::size_t)K * K, 0.0);
+  for (int j = 0; j < nC; j++) {
+    const std::size_t gj = (std::size_t)g[j] * K;
+    for (int t = p[j]; t < p[j + 1]; t++) {
+      const std::size_t f = (std::size_t)g[idx[t]] + gj;
+      num[f] += x[t];
+      den[f] += 1.0;
+    }
+  }
+  for (int b = 0; b < K; b++) {
+    for (int a = 0; a < K; a++) {
+      const std::size_t f = (std::size_t)a + (std::size_t)b * K;
+      double val;
+      if (do_avg) {
+        val = den[f] > 0.0 ? num[f] / den[f]
+                           : std::numeric_limits<double>::quiet_NaN();
+        if (std::isnan(val)) val = 0.0;  // baseline: Prob.avg[is.nan(Prob.avg)] <- 0
+      } else {
+        val = num[f];
+      }
+      out[f] = val * (gL[a] * gR[b] * gS[a] * gI[b]);
+    }
+  }
+}
+
+}  // namespace
+
+// Observed-labels aggregation for one LR layer (baseline averages section).
+// group_int: 0-based group codes, length nC. avg_sum: 0 = "avg", 1 = "sum".
+// [[Rcpp::export]]
+Rcpp::NumericVector cpp_group_avg_obs(Rcpp::NumericVector x, Rcpp::IntegerVector idx,
+                                      Rcpp::IntegerVector p,
+                                      Rcpp::NumericVector suppL, Rcpp::NumericVector suppR,
+                                      Rcpp::NumericVector sr_out, Rcpp::NumericVector sr_in,
+                                      Rcpp::IntegerVector group_int, int K,
+                                      Rcpp::IntegerVector thr, double min_cells_sr,
+                                      int avg_sum, int nC) {
+  sc_check_group_args(x, idx, p, nC, K, suppL, suppR, sr_out, sr_in, thr);
+  if (group_int.length() != (R_xlen_t)nC) stop("group_int must have length nC");
+  if (avg_sum != 0 && avg_sum != 1) stop("avg_sum must be 0 (avg) or 1 (sum)");
+  sc_check_group_codes(group_int.begin(), nC, K);
+  Rcpp::NumericVector out((R_xlen_t)K * K);
+  sc_boot_block_avg(x.begin(), idx.begin(), p.begin(), nC,
+                    suppL.begin(), suppR.begin(), sr_out.begin(), sr_in.begin(),
+                    group_int.begin(), K, thr.begin(), min_cells_sr, avg_sum == 0,
+                    out.begin());
+  return out;
+}
+
+// Permutation aggregation for one LR layer (baseline permutation section).
+// perm: nC x nboot integer matrix, column b = one sample.int(nC, nC) draw
+// (1-based cell indices), i.e. the baseline `permutation` matrix passed as-is.
+// Column b of the output is the k*k flat Pboot vector for boot b. Boots are
+// independent (disjoint output columns, thread-local scratch), so results are
+// bitwise identical for any nthreads.
+// [[Rcpp::plugins(openmp)]]
+#include <omp.h>
+// [[Rcpp::export]]
+Rcpp::NumericMatrix cpp_group_avg_perm(Rcpp::NumericVector x, Rcpp::IntegerVector idx,
+                                       Rcpp::IntegerVector p,
+                                       Rcpp::NumericVector suppL, Rcpp::NumericVector suppR,
+                                       Rcpp::NumericVector sr_out, Rcpp::NumericVector sr_in,
+                                       Rcpp::IntegerVector group_int, int K,
+                                       Rcpp::IntegerVector thr, double min_cells_sr,
+                                       int avg_sum, Rcpp::IntegerMatrix perm,
+                                       int nthreads = 1) {
+  const int nC = perm.nrow();
+  sc_check_group_args(x, idx, p, nC, K, suppL, suppR, sr_out, sr_in, thr);
+  if (group_int.length() != (R_xlen_t)nC) stop("group_int must have length nC");
+  if (avg_sum != 0 && avg_sum != 1) stop("avg_sum must be 0 (avg) or 1 (sum)");
+  const int nboot = perm.ncol();
+  Rcpp::NumericMatrix out((R_xlen_t)K * K, nboot);
+  // perm 范围校验（并行区外）：条目必须落在 1..nC（sample.int(nC) 的值域）
+  for (int c = 0; c < nC; c++)
+    for (int b = 0; b < nboot; b++)
+      if (perm(c, b) < 1 || perm(c, b) > nC)
+        stop("perm entries must be cell indices in [1, nC]");
+  const bool do_avg = avg_sum == 0;
+  #pragma omp parallel for num_threads(nthreads) schedule(static)
+  for (int b = 0; b < nboot; b++) {
+    // 基线语义 gather：boot 标签 g_b[c] = group_int[perm(c, b)]（不是把 perm 当组码！）
+    std::vector<int> g(nC);
+    for (int c = 0; c < nC; c++) g[c] = group_int[perm(c, b) - 1];
+    sc_boot_block_avg(x.begin(), idx.begin(), p.begin(), nC,
+                      suppL.begin(), suppR.begin(), sr_out.begin(), sr_in.begin(),
+                      g.data(), K, thr.begin(), min_cells_sr, do_avg,
+                      &out(0, b));
+  }
+  return out;
+}

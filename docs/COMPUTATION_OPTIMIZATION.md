@@ -285,6 +285,7 @@ n=2000 探针：`crossprod(1×n, 1×n)` 产出 4M nnz 的 dgCMatrix，45.8 MB。
 
 - **`identity (no perm): FALSE` 实测复现**：稀疏版的数值 `pct >= min.percent` 与当前 `format(digits=1)` 字符串比较在边界值（如 0.0999999 → "0.1"）语义不同——即文档 3.4 节隐藏行为，任何替换都必须显式拍板保持字符串语义还是修正为数值语义。
 - **结论：R 层稀疏重写收益仅 ~4%，置换段必须 Rcpp 化（~140×）才有实质改善。**
+- **2026-09-28 Plan A 落地（computeAvgCommunProb v2，见 `.agents/notes/implemented/2026-09-28-compute-avg-commun-prob-plan-a.md`）**：MBM05 实测（1563 层 × nboot=100，nC=29536，K=8）全量 **125.66 s**；冻结基线参考 1518 ms/层 → 外推 2372.6 s → **19×**。等价性：门控/计数/p 值逐位一致（30 层 Pval 零翻转），Prob 相对差 ≤1.43e-14（dgemm 归约序不可移植复现的 1 ulp 契约）。统计语义未动（空间混淆等见 PERMUTATION_TEST_AUDIT.md，后置 Plan B）。
 
 ### 9.5 其余内存与并行风险复核
 

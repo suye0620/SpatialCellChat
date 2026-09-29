@@ -84,6 +84,24 @@
   v
 }
 
+# Plan A 内部：min.percent 门控的整数阈值。
+# 基线决策 decision(cnt) = signif(mean(rep(c(1,0), c(cnt, n-cnt))), 1) >= min.percent
+# 关于 cnt 单调非降（舍入链逐级单调；组大小在标签置换下不变 -> 分母 n 固定），
+# 因此用 R 自身 mean()+signif() 二分求首个 TRUE 的 cnt（每数据集、每组一次），
+# kernel 内退化为整数比较，与基线逐位一致。单调性在
+# tests_dev/test-computeAvgCommunProb.R 中对 fixture 组大小穷举验证。
+.sc_gate_threshold <- function(n, min.percent) {
+  decision <- function(cnt)
+    isTRUE(signif(mean(rep(c(1, 0), c(cnt, n - cnt))), 1) >= min.percent)
+  if (!decision(n)) return(n + 1L)  # 即使整组全部表达也不通过门控
+  lo <- 0L; hi <- n
+  while (lo < hi) {
+    mid <- lo + (hi - lo) %/% 2L
+    if (decision(mid)) hi <- mid else lo <- mid + 1L
+  }
+  lo
+}
+
 #' computeCommunProb
 #'
 #' @description
@@ -1041,32 +1059,42 @@ computeAvgCommunProb_LR_Visium_Avg  <- function (
 
 #' Compute group-level cell-cell communication
 #'
-#' @param object SpatialCellChat object with communication probabilities for pairwise individual cells
-#' @param group.by cell group information used for computing average communication probabilities
-#' @param avg.type methods for integrating communication probabilities per cell group
-# @param type methods for computing the average gene expression per cell group.
-#
-# By default = "triMean", defined as a weighted average of the distribution's median and its two quartiles (https://en.wikipedia.org/wiki/Trimean);
-#
-# When setting `type = "truncatedMean"`, a value should be assigned to 'trim'. See the function `base::mean`.
-#
-# @param trim the fraction (0 to 0.25) of observations to be trimmed from each end of x before the mean is computed.
+#' @description
+#' Aggregate cell-level communication probabilities (`net$cell$prob`, from
+#' \link{computeCommunProb}, optionally \link{filterProbability}) into
+#' group-level communication with a permutation test, on the final 11-slot
+#' object schema.
+#'
+#' Plan A (2026-09-28): numerically faithful acceleration of the baseline
+#' permutation test. The per-boot gated group aggregation runs in the
+#' `cpp_group_avg_obs` / `cpp_group_avg_perm` kernels; group2group CCC values
+#' and p-values match the pre-migration baseline (see agent note 2026-09-28 for
+#' the equivalence contract and `docs/PERMUTATION_TEST_AUDIT.md` for the
+#' statistical audit of the test itself, which is intentionally out of scope).
+#'
+#' @param object SpatialCellChat object with `net$cell$prob`.
+#' @param group.by cell group information used for computing average communication probabilities.
+#' @param avg.type methods for integrating communication probabilities per cell group.
+#' @param min.percent Numeric from 0 to 1. Minimum percentage of expressed ligands or receptors per cell group to require for computing the group-level signaling
+#' Default is 0.1.
+#' @param min.cells.sr Integer greater than 0. Minimum number of cells required as senders or receivers per cell group for computing the group-level signaling
+#' Default is 5.
 #' @param do.permutation whether performing permutation test
 #' @param nboot the number of permutations
 #' @param seed.use set a random seed. By default, set the seed to 1.
 #' @param colocalization.use whether filtering out spatially distant cell groups based on colocalization analysis between any cell groups
 #' @param thresh.colo removal of cell-cell communication with no significant colocalizations (fdr < 0.05)
-#' @inheritParams computeAvgCommunProb_LR_Avg
-#' @inheritParams computeAvgCommunProb_LR_Sum
+#' @param nthreads OpenMP threads for the permutation kernel (default 1; results are bitwise identical for any thread count).
+#' @param verbose Whether to emit progress and CLI messages.
 #'
-#' @return A CellChat object with updated slot 'net':
+#' @return A SpatialCellChat object with updated slots:
 #'
-#' object@net$prob is the inferred group-level communication probability (strength) array, where the first, second and third dimensions represent a source group, target group and ligand-receptor pair, respectively.
+#' `net$group$prob` is the inferred group-level communication probability
+#' (SparseChatArray, K x K x nLR; first/second dimensions = source/target group),
+#' and `net$group$pval` the corresponding permutation p-values (NULL when
+#' `do.permutation = FALSE`). Parameters are stored in `misc$.param$averaging`.
 #'
 #' USER can access all the inferred cell-cell communications using the function 'subsetCommunication(object)', which returns a data frame.
-#'
-#' object@net$pval is the corresponding p-values of each interaction
-
 #' @export
 #'
 computeAvgCommunProb <- function(
@@ -1075,235 +1103,224 @@ computeAvgCommunProb <- function(
     avg.type = c("avg","sum"),
     min.percent = 0.1,
     min.cells.sr = 5,
-    do.permutation = T,
+    do.permutation = TRUE,
     nboot = 100,
     seed.use = 1L,
-    colocalization.use = F,
-    thresh.colo = 0.05
+    colocalization.use = FALSE,
+    thresh.colo = 0.05,
+    nthreads = 1L,
+    verbose = TRUE
 ){
+  t0 <- Sys.time()
+  object <- .sc_assert_spatial_cell_chat(object)
+  .cli("computeAvgCommunProb", .type = "subheader")
+  avg.type <- match.arg(avg.type)
+  do_avg <- avg.type == "avg"
+
+  # ---- group (baseline semantics preserved) ----
   if (is.null(group.by)) {
     group <- object@idents
   } else {
     if (!(group.by %in% colnames(object@meta))) {
-      stop("The 'group.by' is not a column name in the `object@meta`, which will be used for cell grouping.")
-    } else {
-      group <- object@meta[[group.by]]
+      stop("The 'group.by' is not a column name in the `object@meta`, which will be used for cell grouping.",
+           call. = FALSE)
     }
-    if (!is.factor(group)) {
-      group <- factor(group)
-    }
+    group <- object@meta[[group.by]]
+    if (!is.factor(group)) group <- factor(group)
   }
-  cat(cli.symbol(),"The cell groups used for averaging cell-cell communication are ", cli::col_red(levels(group)), '\n')
   numCluster <- nlevels(group)
   if (numCluster != length(unique(group))) {
     stop("Please check `unique(object@idents)` and ensure that the factor levels are correct!
          You may need to drop unused levels using 'droplevels' function. e.g.,
-         `meta$labels = droplevels(meta$labels, exclude = setdiff(levels(meta$labels),unique(meta$labels)))`")
+         `meta$labels = droplevels(meta$labels, exclude = setdiff(levels(meta$labels),unique(meta$labels)))`",
+         call. = FALSE)
   }
+  if (verbose) .cli("The cell groups used for averaging cell-cell communication are {.val {levels(group)}}",
+                    .type = "info")
 
-  if (object@options$parameter$raw.use) {
-    data <- object@data.signaling
-    # scale the elements
-    data@x <- data@x/max(data@x)
-    data.use <- as.matrix(data)
-
-  } else {
-    data <- object@data.project
-    # scale
-    data.use <- data/max(data)
+  # ---- cell-level layers (11-slot input) ----
+  if (is.null(object@net$cell$prob)) {
+    stop(cli.symbol(2),
+         "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! ",
+         call. = FALSE)
   }
+  prob.array <- object@net$cell$prob
+  prob.cell_ <- unclass(prob.array)
+  nC <- dim(prob.array)[1]
+  nLR <- dim(prob.array)[3]
+  LRsig <- dimnames(prob.array)[[3]]
+  if (length(group) != nC)
+    stop("Group label count (", length(group), ") != cell count (", nC, "); ",
+         "`group.by` must cover exactly the cells of `net$cell$prob`.", call. = FALSE)
 
-  nC <- ncol(data.use)
+  # ---- LR table & per-LR support rows ----
+  # Baseline gate inputs are net$tmp$Lavg/Ravg (cached by the pre-migration
+  # computeCommunProb), consumed only via `1 * (dataLR > 0)`. The cached Ravg is
+  # cofactor-adjusted (Rexpr * coA / coI), but coA/coI factors equal 1 + expr >= 1
+  # on non-negative scaled data, so the > 0 pattern is cofactor-invariant and is
+  # taken directly from assay$signaling rows (geometricMean > 0 <=> all complex
+  # subunits > 0). Gate inputs are therefore bitwise-equal to the baseline.
+  LRtab <- object@LR$LRsig
+  LRidx <- match(LRsig, rownames(LRtab))
+  if (anyNA(LRidx))
+    stop("LR pairs missing from `LR$LRsig`: ",
+         paste(LRsig[is.na(LRidx)], collapse = ", "), call. = FALSE)
+  geneL <- as.character(LRtab$ligand[LRidx])
+  geneR <- as.character(LRtab$receptor[LRidx])
+  sig <- assay(object, "signaling")
+  complex_subunits <- .sc_complex_subunits(object@DB$complex)
+  expr.cache <- new.env(parent = emptyenv())
+  group_int <- as.integer(group) - 1L
 
-  if ( is.null(object@net$prob.cell) ) {
-    stop(cli.symbol(2),"Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! ")
-  } else {
-    prob.cell <- object@net$prob.cell
-    prob.cell_ <- object@net$tmp$prob.cell # a list
-  }
+  # min.percent thresholds: one integer threshold per group. The baseline decision
+  # signif(mean, 1) >= min.percent is monotone non-decreasing in the 0/1 count, and
+  # group sizes (the mean denominators) are invariant under label permutation, so a
+  # single per-group threshold, probed against R's own mean()+signif(), reproduces
+  # the baseline gate bitwise for every boot and LR (see .sc_gate_threshold).
+  grp.size <- tabulate(as.integer(group), nbins = numCluster)
+  thr <- vapply(grp.size, .sc_gate_threshold, integer(1), min.percent = min.percent)
 
-  LRsig <- dimnames(prob.cell)[[3]]
-  nLR <- length(LRsig)
-
-  interaction_input <- object@DB$interaction
-  complex_input <- object@DB$complex
-  cofactor_input <- object@DB$cofactor
-
-  pairLRsig <- interaction_input[LRsig, , drop = FALSE]
-  # geneL <- as.character(pairLRsig$ligand)
-  # geneR <- as.character(pairLRsig$receptor)
-
-  # compute the expression of ligand or receptor
-  # cat(cli.symbol(),"compute the expression of ligand or receptor...\n")
-  # dataLavg <- computeExpr_LR(geneL, data.use, complex_input)
-  # dataRavg <- computeExpr_LR(geneR, data.use, complex_input)
-  #
-  # cat(cli.symbol(),"take account into the effect of co-activation and co-inhibition receptors...\n")
-  # dataRavg.co.A.receptor <- computeExpr_coreceptor(cofactor_input, data.use, pairLRsig, type = "A")
-  # dataRavg.co.I.receptor <- computeExpr_coreceptor(cofactor_input, data.use, pairLRsig, type = "I")
-  # dataRavg <- dataRavg * dataRavg.co.A.receptor/dataRavg.co.I.receptor
-  dataLavg <- object@net$tmp$Lavg
-  dataRavg <- object@net$tmp$Ravg
-
-  avg.type <- match.arg(avg.type)
-  if(avg.type=="avg"){
-    computeAvgCommunProb_LR <- computeAvgCommunProb_LR_Avg
-  } else if (avg.type=="sum"){
-    computeAvgCommunProb_LR <- computeAvgCommunProb_LR_Sum
-  }
-
-  gc()
-
+  # ---- colocalization (baseline semantics, unchanged) ----
   if (colocalization.use) {
     data.spatial <- object@images$coordinates
-    pval.colo = computeColocalization(coordinates = data.spatial, group = group, nboot = nboot, seed.use = seed.use)
+    pval.colo <- computeColocalization(coordinates = data.spatial, group = group,
+                                       nboot = nboot, seed.use = seed.use)
   } else {
     pval.colo <- matrix(0, nrow = numCluster, ncol = numCluster)
   }
 
-  cat(paste0(cli.symbol(),'Compute group-level cell-cell communication... <<< [', Sys.time(),']'),'\n')
+  if (verbose) .cli("Compute group-level cell-cell communication... ({.val {avg.type}}; {.val {nLR}} LR pairs x {.val {numCluster}} groups, nC = {.val {nC}})",
+                    .type = "info")
 
-  Prob <- array(0, dim = c(numCluster,numCluster,nLR))
-  Pval <- array(1, dim = c(numCluster,numCluster,nLR))
-  dimnames(Prob) <- list(levels(group), levels(group), rownames(pairLRsig))
-  dimnames(Pval) <- dimnames(Prob)
+  Prob <- array(0, dim = c(numCluster, numCluster, nLR),
+                dimnames = list(levels(group), levels(group), LRsig))
+  Pval <- array(1, dim = c(numCluster, numCluster, nLR), dimnames = dimnames(Prob))
 
-  set.seed(seed.use)
+  set.seed(seed.use)  # baseline position: identical RNG stream for the permutation draws
 
-  # retain dim-3, sum up dim-1 && dim-2, `prob.sum` stores each LR's number of cell-level links/interactions
-  prob.sum <- purrr::map_dbl(
-    .x = prob.cell_,
-    .f = function(Mat){
-      return(length(Mat@x))
-    }
-  )
-  names(prob.sum) <- LRsig
-  object@net$tmp$LRsig.CCC.counts <- prob.sum
-
-  # Previous code:
-  # prob.sum <- c()
-  # for (i in 1:dim(prob.cell)[[3]]) {
-  #   prob.sum[i] <- sum(prob.cell[,,i] > 0)
-  # }
-
-  LRsig.use.idx <- which(prob.sum > 0)
-
-  object@net$tmp$LRsig.use.idx <- LRsig.use.idx
-  gc()
-
-  if(length(LRsig.use.idx) < 1){
-    stop("Each LR pair does not have any cell-level links/interactions.")
+  # ---- observed averages (baseline my_future_sapply section) ----
+  ccc.counts <- vapply(prob.cell_, function(Mat) length(Mat@x), numeric(1))
+  names(ccc.counts) <- LRsig
+  LRsig.use.idx <- which(ccc.counts > 0)
+  if (length(LRsig.use.idx) < 1) {
+    stop("Each LR pair does not have any cell-level links/interactions.", call. = FALSE)
   }
 
-  cat(cli.symbol(),"compute the average signaling per cell group...\n")
-  Prob.avg_ <- my_future_sapply(
-    X = seq_len(length(LRsig.use.idx)),
-    FUN = function(x) {
-      i <- LRsig.use.idx[[x]] # one LR pair index
-      # compute the average signaling per cell group
-      prob.cell.i <- prob.cell_[[i]]
-      dataLR_temp <- cbind(dataLavg[i, ], dataRavg[i, ])
-      Prob.avg <-
-        computeAvgCommunProb_LR(
-          prob.cell.i,
-          group = group,
-          dataLR = dataLR_temp,
-          min.percent = min.percent,
-          min.cells.sr = min.cells.sr
-        )
-      # Pnull <- as.vector(Prob.avg)
-      Prob.avg[pval.colo > thresh.colo] <- 0
-      # Prob: array(0, dim = c(numCluster,numCluster,nLR))
-      gc()
-      return(Prob.avg)
-    },
-    simplify = F # return a list
-  )
-
-  for (x in seq_len( length(LRsig.use.idx) ) ) {
-    i <- LRsig.use.idx[[x]]
-    Prob[ , , i] <- Prob.avg_[[x]]
+  supp_srin <- function(i) {
+    m <- prob.cell_[[i]]
+    suppL <- as.numeric(.sc_expr_row(geneL[i], sig, complex_subunits, expr.cache) > 0)
+    suppR <- as.numeric(.sc_expr_row(geneR[i], sig, complex_subunits, expr.cache) > 0)
+    sr_out <- tabulate(m@i + 1L, nbins = nC)                         # per-sender stored counts
+    sr_in  <- tabulate(rep.int(seq_len(nC), diff(m@p)), nbins = nC)  # per-receiver stored counts
+    list(suppL = suppL, suppR = suppR, sr_out = sr_out, sr_in = sr_in)
   }
 
-  # update `prob.sum` & `LRsig.use.idx` to do permutation
-  # retain dim-3, sum up dim-1 && dim-2, `prob.sum` stores each LR's number of group-level links/interactions before permutation
-  prob.sum <- apply(Prob > 0, 3, sum) # return a named vector
-  # each LR's number of group-level links/interactions
-  object@net$tmp$LRsig.GGC.counts <- prob.sum
+  run_avg <- function(i) {
+    s <- supp_srin(i)
+    m <- prob.cell_[[i]]
+    v <- cpp_group_avg_obs(m@x, m@i, m@p, s$suppL, s$suppR, s$sr_out, s$sr_in,
+                           group_int, numCluster, thr, min.cells.sr,
+                           if (do_avg) 0L else 1L, nC)
+    Prob.avg <- matrix(v, nrow = numCluster, ncol = numCluster)
+    Prob.avg[pval.colo > thresh.colo] <- 0
+    Prob.avg
+  }
 
-  LRsig.use.idx <- which(prob.sum > 0)
-  if (do.permutation) {
-    cat(paste0(cli.symbol(),'Perform permutation test for group-level communication... <<< [', Sys.time(),']'),'\n')
-    permutation <- replicate(nboot, sample.int(nC, size = nC))
-    Pval_ <- my_future_lapply(
-      # LRsig.use.idx is a numeric vector
-      X = seq_len(length(LRsig.use.idx)),
-      FUN = function(x){
+  if (verbose) {
+    progressr::with_progress({
+      pr <- progressr::progressor(along = seq_along(LRsig.use.idx))
+      for (x in seq_along(LRsig.use.idx)) {
         i <- LRsig.use.idx[[x]]
-        # compute the average signaling per cell group after permutation
-        prob.cell.i <- prob.cell_[[i]]
-        dataLR_temp <- cbind(dataLavg[i,], dataRavg[i,])
-        Pnull <- as.vector(Prob[ , , i])
-
-        Pboot <- sapply(
-          X = 1:nboot,
-          FUN = function(nE) {
-            groupboot <- group[permutation[, nE]]
-            Pboot.avg <- computeAvgCommunProb_LR(
-              prob.cell.i,
-              group = groupboot,
-              dataLR = dataLR_temp,
-              min.percent = min.percent,
-              min.cells.sr = min.cells.sr
-            )
-            return(as.vector(Pboot.avg))
-          }
-        )
-        gc()
-        Pboot <- matrix(unlist(Pboot), nrow=length(Pnull), ncol = nboot, byrow = FALSE)
-        nReject <- rowSums(Pboot - Pnull > 0)
-        p = nReject/nboot
-        Pval.i <- matrix(p, nrow = numCluster, ncol = numCluster, byrow = FALSE)
-        return(Pval.i)
-      },
-      simplify = F, # return a list
-    )
-
-    for (x in seq_len(length(LRsig.use.idx))) {
-      # get correct index
+        Prob[, , i] <- run_avg(i)
+        pr(sprintf("avg LR %d/%d", x, length(LRsig.use.idx)))
+      }
+    })
+  } else {
+    for (x in seq_along(LRsig.use.idx)) {
       i <- LRsig.use.idx[[x]]
-      # update the values
-      Pval[ , , i] <- Pval_[[x]]
+      Prob[, , i] <- run_avg(i)
+    }
+  }
+
+  # ---- permutation (baseline my_future_lapply section) ----
+  ggc.counts <- apply(Prob > 0, 3, sum)
+  LRsig.use.idx.perm <- which(ggc.counts > 0)
+  if (do.permutation) {
+    if (nboot < 1) stop("nboot must be >= 1 when do.permutation = TRUE", call. = FALSE)
+    if (verbose) .cli("Perform permutation test for group-level communication... ({.val {nboot}} boots x {.val {length(LRsig.use.idx.perm)}} active LRs, nthreads = {.val {nthreads}})",
+                      .type = "info")
+    # Baseline RNG: this single replicate() call after set.seed(seed.use) above.
+    permutation <- replicate(nboot, sample.int(nC, size = nC))
+
+    run_perm <- function(i) {
+      s <- supp_srin(i)
+      m <- prob.cell_[[i]]
+      # k*k x nboot; column = one boot, sender-group fastest (== baseline
+      # matrix(unlist(Pboot), nrow = k*k, ncol = nboot) layout)
+      Pboot <- cpp_group_avg_perm(m@x, m@i, m@p, s$suppL, s$suppR, s$sr_out, s$sr_in,
+                                  group_int, numCluster, thr, min.cells.sr,
+                                  if (do_avg) 0L else 1L, permutation, nthreads)
+      Pnull <- as.vector(Prob[, , i])
+      nReject <- rowSums(Pboot - Pnull > 0)
+      p <- nReject / nboot
+      matrix(p, nrow = numCluster, ncol = numCluster, byrow = FALSE)
     }
 
+    if (verbose) {
+      progressr::with_progress({
+        pr <- progressr::progressor(along = seq_along(LRsig.use.idx.perm))
+        for (x in seq_along(LRsig.use.idx.perm)) {
+          i <- LRsig.use.idx.perm[[x]]
+          Pval[, , i] <- run_perm(i)
+          pr(sprintf("perm LR %d/%d", x, length(LRsig.use.idx.perm)))
+        }
+      })
+    } else {
+      for (x in seq_along(LRsig.use.idx.perm)) {
+        i <- LRsig.use.idx.perm[[x]]
+        Pval[, , i] <- run_perm(i)
+      }
+    }
     Pval[Prob == 0] <- 1
-
   } else {
     Pval <- NULL
   }
 
-  # Pval[Prob == 0] <- 1
-  # dimnames(Prob) <- list(levels(group), levels(group), rownames(pairLRsig))
-  # dimnames(Pval) <- dimnames(Prob)
-  object@net$prob <- Prob
-  object@net$pval <- Pval
-  object@options$parameter$min.percent <- min.percent
-  object@options$parameter$min.cells.sr <- min.cells.sr
-  object@options$parameter$do.permutation <- do.permutation
+  # ---- write (11-slot: net$group$prob / net$group$pval, params in misc$.param) ----
+  group.layers <- lapply(seq_len(nLR), function(i)
+    as(matrix(Prob[, , i], nrow = numCluster, ncol = numCluster), "dgCMatrix"))
+  names(group.layers) <- LRsig
+  prob.group <- SparseChatArray(group.layers)
+  dimnames(prob.group) <- list(levels(group), levels(group), LRsig)
+  object@net$group$prob <- prob.group
 
-  object@options$parameter$nboot <- nboot
-  object@options$parameter$avg.type <- avg.type
-  object@options$parameter$seed.use <- seed.use
-  object@options$parameter$colocalization.use <- colocalization.use
-
-  object@options$parameter$thresh.colo <- thresh.colo
-  # object@net$tmp$Lavg <- NULL;object@net$tmp$Ravg <- NULL; # clean the cache
-
-  if (colocalization.use) {
-    object@images$colocalization <- pval.colo
+  if (do.permutation) {
+    pval.layers <- lapply(seq_len(nLR), function(i)
+      as(matrix(Pval[, , i], nrow = numCluster, ncol = numCluster), "dgCMatrix"))
+    names(pval.layers) <- LRsig
+    pval.group <- SparseChatArray(pval.layers)
+    dimnames(pval.group) <- list(levels(group), levels(group), LRsig)
+    object@net$group$pval <- pval.group
+  } else {
+    object@net$group$pval <- NULL
   }
-  cat(paste0(cli.symbol(symbol = "success"),'Inference of group-level cell-cell communication is done. Parameter values are stored in `object@options$parameter` <<< [', Sys.time(),']'))
-  return(object)
+
+  object@misc$.param$averaging <- list(
+    avg.type = avg.type, min.percent = min.percent, min.cells.sr = min.cells.sr,
+    do.permutation = do.permutation, nboot = nboot, seed.use = seed.use,
+    colocalization.use = colocalization.use, thresh.colo = thresh.colo,
+    group.by = group.by, nLR = nLR, numCluster = numCluster, nthreads = nthreads,
+    LRsig.CCC.counts = ccc.counts, LRsig.use.idx = LRsig.use.idx,
+    LRsig.GGC.counts = ggc.counts, LRsig.use.idx.perm = LRsig.use.idx.perm,
+    run.time = as.numeric(Sys.time() - t0, units = "secs")
+  )
+  object <- .log_operation(object, "computeAvgCommunProb", params = list(
+    nLR = nLR, numCluster = numCluster, nboot = nboot, avg.type = avg.type,
+    do.permutation = do.permutation, nthreads = nthreads,
+    run.time = as.numeric(Sys.time() - t0, units = "secs")))
+  if (verbose) .cli("computeAvgCommunProb done: {.val {numCluster}} x {.val {numCluster}} x {.val {nLR}} group-level layers; {.val {length(LRsig.use.idx.perm)}} active LRs; {.val {round(as.numeric(Sys.time() - t0, units = 'secs'), 2)}}s",
+                    .type = "success")
+  object
 }
 
 
