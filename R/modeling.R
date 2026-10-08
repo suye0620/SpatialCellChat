@@ -613,8 +613,9 @@ relabelSpatialCellChat <- function(
   # spatialDimPlot(object,group.by = "new.ident")
   # spatialDimPlot(object,group.by = "ident")
 
-  if(!is.null(object@net[["tmp"]]$cell.type.decomposition)){
-    cell.type.decomposition <- as.matrix(object@net[["tmp"]]$cell.type.decomposition)
+  decomp <- object@misc$.param$averaging$cell.type.decomposition
+  if(!is.null(decomp)){
+    cell.type.decomposition <- as.matrix(decomp)
     cell.type.decomposition.left <- cell.type.decomposition[,base::setdiff(group.level,group.drop),drop=F]
 
     cell.type.decomposition.new <- lapply(
@@ -631,6 +632,7 @@ relabelSpatialCellChat <- function(
     cell.type.decomposition.new <- cbind(cell.type.decomposition.left,as.matrix(cell.type.decomposition.new))
     object@meta[["new.ident"]] <- factor(object@meta[["new.ident"]],levels = colnames(cell.type.decomposition.new))
     object@idents <- object@meta[["new.ident"]]
+    names(object@idents) <- colnames(object@assay$norm)
 
 
     object <- computeAvgCommunProb_Visium(
@@ -644,6 +646,7 @@ relabelSpatialCellChat <- function(
   } else {
     object@meta[["new.ident"]] <- factor(object@meta[["new.ident"]],levels = unique(object@meta[["new.ident"]]))
     object@idents <- object@meta[["new.ident"]]
+    names(object@idents) <- colnames(object@assay$norm)
     object <- computeAvgCommunProb(
       object,
       nboot = nboot,
@@ -1593,6 +1596,17 @@ computeAvgCommunProb_LR_Avg <- function (
 # }
 
 
+# Sum SparseChatArray layers (list of K x K / nC x nC dgCMatrix) into a single
+# dgCMatrix.  Mirrors the delayed cpp lookup of marginSums.SparseChatArray.
+.sc_sum_layers <- function(layers) {
+  if (length(layers) == 1L) return(layers[[1L]])
+  cpp_sum_layers <- get("cpp_sum_layers", inherits = TRUE)
+  if (!is.function(cpp_sum_layers)) {
+    stop("cpp_sum_layers is required to sum SparseChatArray layers", call. = FALSE)
+  }
+  cpp_sum_layers(layers)
+}
+
 #' Compute the communication probability on signaling pathway level by summarizing all related ligands/receptors
 #'
 #' @param object CellChat object
@@ -1603,11 +1617,11 @@ computeAvgCommunProb_LR_Avg <- function (
 #' @param do.cell whether to compute the individual-cell signaling at signaling pathway level. This works when "prob.cell" exists in `object@net`.
 #' @return A CellChat object with updated slot 'netP':
 #'
-#' object@netP$prob is the communication probability array on signaling pathway level; USER can convert this array to a data frame using the function 'reshape2::melt()',
+#' object@netP$group$prob is the group-level communication probability array (SparseChatArray) on signaling pathway level; layers are pathways with significant communications, ordered by the descending total communication probability. USER can access all significant interactions using the function \code{\link{subsetCommunication}}
 #'
-#' e.g., `df.netP <- reshape2::melt(object@netP$prob, value.name = "prob"); colnames(df.netP)[1:3] <- c("source","target","pathway_name")` or access all significant interactions using the function \code{\link{subsetCommunication}}
+#' object@netP$cell$prob is the individual-cell-level communication probability array (SparseChatArray) on signaling pathway level.
 #'
-#' object@netP$pathways list all the signaling pathways with significant communications.
+#' object@netP$pathways (group level) and object@netP$pathways.cell (cell level) list all the signaling pathways with significant communications.
 #'
 #' From version >= 1.1.0, pathways are ordered based on the total communication probabilities. NB: pathways with small total communication probabilities might be also very important since they might be specifically activated between only few cell types.
 #'
@@ -1627,120 +1641,119 @@ computeCommunProbPathway <- function(
   if (is.null(pairLR.use)) {
     pairLR.use <- object@LR$LRsig
   }
+  pathways <- unique(pairLR.use$pathway_name)
+
   if (do.group) {
-    if ( is.null(net$prob) ) {
+    if ( !inherits(net$group$prob, "SparseChatArray") ) {
       stop("Please run `computeAvgCommunProb` to compute the group-level signaling! ")
     }
     cat(cli.symbol(),"Compute the communication probability between cell groups at signaling pathway level by summarizing all related ligands/receptors...\n")
-    prob <- net$prob
-    prob[net$pval >= thresh] <- 0
-    pathways <- unique(pairLR.use$pathway_name)
+    prob.layers <- unclass(net$group$prob)
+    # layer names = dimnames[[3]] = rownames(LRsig) (Plan A invariant); layers
+    # without a matching pairLR.use row belong to no pathway and are excluded
+    layer.pathway <- pairLR.use$pathway_name[match(dimnames(net$group$prob)[[3]], rownames(pairLR.use))]
 
-    group <- factor(pairLR.use$pathway_name, levels = pathways)
+    # significance gating per layer; net$group$pval NULL = no significance filter
+    if (!is.null(net$group$pval)) {
+      pval.layers <- unclass(net$group$pval)
+      prob.layers <- mapply(function(pm, pv) {
+        pm <- as.matrix(pm)
+        pm[as.matrix(pv) >= thresh] <- 0
+        as(pm, "dgCMatrix")
+      }, prob.layers, pval.layers, SIMPLIFY = FALSE)
+    }
 
-    prob.pathways <- aperm(apply(prob, c(1, 2), by, group, sum), c(2, 3, 1))
-    # `apply(prob.pathways, 3, sum) != 0` means group-group signaling exists in the specific pathway
-    # so `pathways.sig` stores the pathways whose group-group signaling number is no zero
-    pathways.sig <- pathways[apply(prob.pathways, 3, sum) != 0]
+    # one summed matrix per pathway (keeps pairLR.use order; includes all-zero candidates)
+    prob.pathways <- lapply(pathways, function(one_pathway) {
+      idx <- which(layer.pathway == one_pathway)
+      if (length(idx) == 0L) {
+        return(as(matrix(0, nrow(prob.layers[[1]]), ncol(prob.layers[[1]])), "dgCMatrix"))
+      }
+      .sc_sum_layers(prob.layers[idx])
+    })
+    names(prob.pathways) <- pathways
 
-    # subset the `prob.pathways`
-    prob.pathways.sig <- prob.pathways[,,pathways.sig, drop = FALSE]
-    # sort `prob.pathways.sig` according to group-group communication probability sum of `prob.pathways.sig`
-    idx <- sort(apply(prob.pathways.sig, 3, sum), decreasing=TRUE, index.return = TRUE)$ix
+    # `prob.sum != 0` means group-group signaling exists in the specific pathway
+    prob.sum <- vapply(prob.pathways, function(m) sum(as.matrix(m)), numeric(1))
+    pathways.sig <- pathways[prob.sum != 0]
+
+    # sort `prob.pathways` according to group-group communication probability sum
+    idx <- sort(prob.sum[pathways.sig], decreasing = TRUE, index.return = TRUE)$ix
     pathways.sig <- pathways.sig[idx]
-    prob.pathways.sig <- prob.pathways.sig[, , idx, drop = FALSE]
+    prob.pathways.sig <- prob.pathways[pathways.sig]
+    group.prob <- SparseChatArray(
+      unname(prob.pathways.sig),
+      dimnames = list(dimnames(net$group$prob)[[1]],
+                      dimnames(net$group$prob)[[2]],
+                      pathways.sig)
+    )
   } else {
     pathways.sig <- NULL
-    prob.pathways.sig <- NULL
+    group.prob <- NULL
   }
-  netP = list(pathways = pathways.sig, prob = prob.pathways.sig)
 
 
   if (do.cell) {
-    if ("prob.cell" %in% names(net)) {
-      prob.cell <- net$prob.cell
-      prob.cell_ <- net$tmp$prob.cell # a list
-
-      # unique
-      pathways <- unique(pairLR.use$pathway_name)
-
-      nC <- dim(prob.cell)[[1]]
-      dns <- dimnames(prob.cell)
-      # nrun <- length(pathways)
+    if (!is.null(net$cell$prob)) {
+      if ( !inherits(net$cell$prob, "SparseChatArray") ) {
+        stop("Please run `computeCommunProb` to compute the individual cell-level signaling! ")
+      }
+      cell.layers <- unclass(net$cell$prob)
+      layer.pathway.cell <- pairLR.use$pathway_name[match(dimnames(net$cell$prob)[[3]], rownames(pairLR.use))]
 
       cat(cli.symbol(),"Compute the communication probability between individual cells at signaling pathway level by summarizing all related ligands/receptors...\n")
-      gc()
-      prob.all <- pbapply::pbsapply(
-        X = pathways,
-        FUN = function(one_pathway) {
-          # not unique, so the `prob.cell.i` may be 3 dims
-          # Older Code: prob.cell.i <- prob.cell[,,pairLR.use$pathway_name == one_pathway, drop = FALSE]
-          prob.cell.i <-
-            prob.cell_[pairLR.use$pathway_name == one_pathway] # a named list, can receive logical vector as indexes
-          prob.cell.i <-
-            my_as_sparse3Darray(prob.cell.i)
-          # retain dim1 & dim2, sum up dim3
-          res <-
-            spatstat.sparse::marginSumsSparse(prob.cell.i, MARGIN = c(1, 2))
+      cell.pathways <- lapply(pathways, function(one_pathway) {
+        idx <- which(layer.pathway.cell == one_pathway)
+        if (length(idx) == 0L) {
+          return(as(matrix(0, nrow(cell.layers[[1]]), ncol(cell.layers[[1]])), "dgCMatrix"))
+        }
+        .sc_sum_layers(cell.layers[idx])
+      })
+      names(cell.pathways) <- pathways
 
-          return(res)
-        },
-        simplify = F # return a list
-      )
-      names(prob.all) <- pathways
-
-      # so the shape of prob.cell.pathways will be [nC,nC,length(pathways)]
-      prob.cell.pathways <- my_as_sparse3Darray(prob.all)
-      # cat(cli.symbol(),"Dim(prob.cell.pathways):",dim(prob.cell.pathways),"\n")
-
-
-      # retain dim-3, sum up dim-1 & dim-2, `prob.sum` stores each pathway's number of cell-level links/interactions
-      prob.sum <- as.vector(spatstat.sparse::marginSumsSparse(prob.cell.pathways,MARGIN = c(3)))
-
-      # non zero index
-      # After `filterCommunication`, there will be many allZeroMat, prob.sum = 0 is possible
       # `prob.sum != 0` means cell-cell signaling exists in the specific pathway
+      prob.sum <- vapply(cell.pathways, function(m) sum(m@x), numeric(1))
       PathwaySig.use.idx <- which(prob.sum > 0)
 
 
-      # sort the `PathwaySig.use.idx` according to its corresponding prob.sum value
-      idx <- sort(as.array(prob.sum[PathwaySig.use.idx]),
-                  decreasing=TRUE,
-                  index.return = TRUE)$ix
-      PathwaySig.sort.idx <- PathwaySig.use.idx[idx]
+      # sort according to the corresponding prob.sum value
+      idx <- sort(prob.sum[PathwaySig.use.idx], decreasing = TRUE, index.return = TRUE)$ix
+      pathways.sig.cell <- pathways[PathwaySig.use.idx][idx]
 
-      # Notice: len(pathways) = len(prob.sum) = dim3(prob.all)
-      pathways.sig.cell <- pathways[PathwaySig.sort.idx]
-
-      # sort `prob.cell.pathways`
+      # sort `cell.pathways`
       cat(cli.symbol(),"Subset the pathways with non-zero communication probability and arrange them in a decreasing order based on the total communication probabilities ...\n")
-      prob.cell.pathways.sig_ <- prob.all[PathwaySig.sort.idx] # a list
-      prob.cell.pathways.sig <- my_as_sparse3Darray(prob.cell.pathways.sig_)
-      gc();cat(cli.symbol(),"The number of cells and pathways in Dim(prob.cell.pathways) are :",dim(prob.cell.pathways.sig),"\n")
-      # Older Code:
-      # pathways.sig.cell <- pathways[idx]
-      # prob.cell.pathways.sig <- prob.cell.pathways[, , idx, drop = FALSE]
-      # prob.cell.pathways.sig <- spatstat.sparse::as.sparse3Darray(prob.cell.pathways.sig)
-
-      dimnames(prob.cell.pathways.sig) <- list(dns[[1]], dns[[2]], pathways.sig.cell)
-      names(prob.cell.pathways.sig_) <- pathways.sig.cell
-      Tmp <- list(prob.cell = prob.cell.pathways.sig_) # !important, for parallel iteration
-      netP$pathways.cell = pathways.sig.cell; netP$prob.cell = prob.cell.pathways.sig
-      netP$tmp <- Tmp
-
+      cell.prob <- SparseChatArray(
+        unname(cell.pathways[pathways.sig.cell]),
+        dimnames = list(dimnames(net$cell$prob)[[1]],
+                        dimnames(net$cell$prob)[[2]],
+                        pathways.sig.cell)
+      )
+    } else {
+      pathways.sig.cell <- NULL
+      cell.prob <- NULL
     }
-  }
-  # group-level: pathways;prob
-  # individual cell-level: pathways.cell;prob.cell
-  if (is.null(object)) {
-    # netP = list(pathways = pathways.sig, prob = prob.pathways.sig, pathways.cell = pathways.sig.cell, prob.cell = prob.cell.pathways.sig)
-    cat(cli.symbol(1),"Computing the communication probability on signaling pathway level is done. \n")
-    return(netP)
   } else {
-    object@netP <- netP
-    cat(cli.symbol(1),"Computing the communication probability on signaling pathway level is done. \n")
-    return(object)
+    pathways.sig.cell <- NULL
+    cell.prob <- NULL
   }
+  # group-level: pathways; group$prob
+  # individual cell-level: pathways.cell; cell$prob
+  cat(cli.symbol(1),"Computing the communication probability on signaling pathway level is done. \n")
+  if (is.null(object)) {
+    return(list(pathways = pathways.sig,
+                group = list(prob = group.prob),
+                cell = list(prob = cell.prob),
+                pathways.cell = pathways.sig.cell))
+  }
+  # merge-update: the validator requires netP$cell / netP$group to remain non-NULL lists
+  object@netP$pathways <- pathways.sig
+  if (is.null(object@netP$group)) object@netP$group <- list()
+  object@netP$group$prob <- group.prob
+  if (is.null(object@netP$cell)) object@netP$cell <- list()
+  object@netP$cell$prob <- cell.prob
+  object@netP$pathways.cell <- pathways.sig.cell
+  object@netP$tmp <- NULL
+  return(object)
 }
 
 # computeAvgCommunProb_LR <- function (prob, group, dataLR = NULL, min.percent = 0.1, min.cells.sr = 5)
@@ -1808,165 +1821,162 @@ computeCommunProbPathway <- function(
 filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells.sr = 5) {
 
   if (!is.null(min.cells)) {
-    message("Filter cell-group level communication...",'\n')
-    net <- object@net
-    cell.excludes <- which(as.numeric(table(object@idents)) < min.cells)
-    if (length(cell.excludes) > 0) {
-      cat(cli.symbol(),"The cell-cell communication related with the following cell groups are excluded due to the few number of cells: ", levels(object@idents)[cell.excludes],'\n')
-      # dim(net$prob) = nCellGroup x nCellGroup x nPairLRsig
-      net$prob[cell.excludes,,] <- 0
-      net$prob[,cell.excludes,] <- 0
-      if (!is.null(net$pval)) {
-        net$pval[net$prob == 0] <- 1
-      }
-      object@net <- net
+    message("Filter cell-group level communication...", "\n")
+    group.prob <- object@net$group$prob
+    if (!inherits(group.prob, "SparseChatArray")) {
+      stop(
+        cli.symbol(2),
+        "Please run `computeAvgCommunProb` to compute the group-level communication!",
+        call. = FALSE
+      )
     }
-    rm(net)
+    group.pval <- object@net$group$pval
+    if (!is.null(group.pval) && !inherits(group.pval, "SparseChatArray")) {
+      stop("net$group$pval must be a SparseChatArray when present", call. = FALSE)
+    }
+    if (!is.null(group.pval) &&
+        !identical(as.integer(dim(group.pval)), as.integer(dim(group.prob)))) {
+      stop("net$group$pval dimensions must match net$group$prob", call. = FALSE)
+    }
+
+    cell.excludes <- which(as.numeric(table(object@idents)) < min.cells)
+    if (length(cell.excludes) > 0L) {
+      group.levels <- levels(object@idents)
+      group.names <- dimnames(group.prob)[[1L]]
+      excluded.names <- group.levels[cell.excludes]
+      group.excludes <- match(excluded.names, group.names)
+      if (anyNA(group.excludes)) {
+        stop(
+          "net$group$prob group names do not match levels(object@idents)",
+          call. = FALSE
+        )
+      }
+
+      cat(
+        cli.symbol(),
+        "The cell-cell communication related with the following cell groups are excluded due to the few number of cells: ",
+        paste(excluded.names, collapse = ", "),
+        "\n"
+      )
+
+      group.prob <- .sc_map_sparse_layers(group.prob, function(layer) {
+        layer[group.excludes, ] <- 0
+        layer[, group.excludes] <- 0
+        Matrix::drop0(layer)
+      })
+      object@net$group$prob <- group.prob
+
+      if (!is.null(group.pval)) {
+        pval.layers <- Map(
+          f = function(pval.layer, prob.layer) {
+            pval.layer[prob.layer == 0] <- 1
+            Matrix::drop0(pval.layer)
+          },
+          unclass(group.pval),
+          unclass(group.prob)
+        )
+        object@net$group$pval <- .new_SparseChatArray(
+          pval.layers,
+          dimnames(group.pval)
+        )
+      }
+    }
+    rm(group.prob, group.pval)
     gc()
   }
 
-  if ("prob.cell" %in% names(object@net)) {
-    net <- object@net
-    prob.cell <- net$prob.cell
-    prob.cell_ <- net$tmp$prob.cell # a list
-
-    if (!is.null(min.links) | !is.null(min.cells.sr)) {
-      message("Filter individual cell-level communication...",'\n')
-
-      # binary.prob.cell <- modifySparse3Darray(prob.cell,cutoff = 0,remain.cutoff.v = F,do.binary = T)
-      # retain dim-3, sum up dim-1 && dim-2, `prob.sum` stores each LR's number of cell-level links/interactions
-      # as.vector(spatstat.sparse::marginSumsSparse(binary.prob.cell, MARGIN = 3))
-
-      prob.sum <- purrr::map_dbl(
-        .x = prob.cell_,
-        .f = function(Mat){
-          return(length(Mat@x))
-        }
+  if (!is.null(min.links) || !is.null(min.cells.sr)) {
+    message("Filter individual cell-level communication...", "\n")
+    prob.cell <- object@net$cell$prob
+    if (!inherits(prob.cell, "SparseChatArray")) {
+      stop(
+        cli.symbol(2),
+        "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! ",
+        call. = FALSE
       )
+    }
+    prob.cell_ <- unclass(prob.cell)
 
-      dimArr <- dim(prob.cell)
-
-      # define a allzero matrix (CsparseMatrix)
-      AllzeroMat <- Matrix::sparseMatrix(
-        i = integer(0),
-        j = integer(0),
-        x = numeric(0),
-        repr = "C", # default repr in CellChat
-        dims = dimArr[c(1, 2)],
-        # dimnames = dns[c(1,2)] # too large, not use!
-        dimnames = list(NULL,NULL),
-        index1 = T # i and j are interpreted as 1-based indices, following the R convention
-      )
-
-      # filter communication according to min.links
-      gc()
-      if (!is.null(min.links)) {
-        cat(cli.symbol(),"Filter communication according to min.links...\n")
-        idx.signaling.excludes <- which((prob.sum < min.links) & (prob.sum > 0))
-        if (length(idx.signaling.excludes) > 0) {
-          cat("The cell-cell communication related with #", length(idx.signaling.excludes),'L-R pairs are excluded due to the few number of interactions.','\n')
-
-          # prob.cell[,,idx.signaling.excludes] <- 0
-          pb <- utils::txtProgressBar(min = 0, max = length(idx.signaling.excludes), style = 3, file = stderr(), width = 80);i=0
-          for (x in idx.signaling.excludes) {
-            prob.cell_[[x]] <- AllzeroMat
-            utils::setTxtProgressBar(pb = pb, value = (i=i+1))
-          } # forloop
-          close(con = pb)
-
-        }
-      }
-
-      # filter communication according to min.cell.sr
-      gc()
-      if (!is.null(min.cells.sr)) {
-        cat(cli.symbol(),"Filter communication according to min.cell.sr... \n")
-        pathways0 <- dimnames(prob.cell)[[3]] # L-R pairs' names
-        if (is.null(min.links)) {
-          pathways <- pathways0[prob.sum > 0]
-        } else {
-          pathways <- pathways0[prob.sum >= max(1, min.links)] # Prevent `min.links` from being smaller than 1
-        }
-
-        if (length(pathways)<1){
-          NULL # not filter
-        } else {
-          # Check:
-          # > SparseLogMat <- matrix(c(T,F,F,F,F,T),2,3)
-          # > SparseLogMat
-          # [,1]  [,2]  [,3]
-          # [1,]  TRUE FALSE FALSE
-          # [2,] FALSE FALSE  TRUE
-          # > SparseLogMat <- as(SparseLogMat,"CsparseMatrix")
-          # > SparseLogMat
-          # 2 x 3 sparse Matrix of class "lgCMatrix"
-          #
-          # [1,] | . .
-          # [2,] . . |
-          #   > rowSums(SparseLogMat)
-          # [1] 1 1
-          # > colSums(SparseLogMat)
-          # [1] 1 0 1
-
-          pathways.remove <- pbapply::pblapply(
-            X = seq_len(length(pathways)),
-            FUN = function(x) {
-              prob.cell.i <- prob.cell_[[ pathways[[x]] ]] > 0 # `prob.cell.i` is a logical sparse matrix
-              if ((sum(Matrix::rowSums(prob.cell.i) > 0) < min.cells.sr) | (sum(Matrix::colSums(prob.cell.i) > 0) < min.cells.sr)) {
-                gc()
-                return(pathways[[x]])
-              }
-            }
-            # simplify = T,
-            # # pathways.remove is a vec
-            # hint.message = "Filtering...",
-            # future.label = "pathways.remove_my_future_sapply-%d"
-          )
-          pathways.remove <- unlist(pathways.remove) # vec2vec
-          pathways.remove.idx <- which(pathways0 %in% pathways.remove)
-
-          if (length(pathways.remove) > 0) {
-            cat(
-              "The cell-cell communication related with #",
-              length(pathways.remove),
-              'L-R pairs are excluded due to the few number of sending/receiving cells.',
-              '\n'
-            )
-
-            # prob.cell[, , pathways.remove.idx] <- 0
-            pb <- utils::txtProgressBar(min = 0, max = length(pathways.remove.idx), style = 3, file = stderr(),width = 80);i=0
-            for (x in pathways.remove.idx) {
-              prob.cell_[[x]] <- AllzeroMat
-              utils::setTxtProgressBar(pb = pb, value = (i=i+1))
-            } # forloop
-            close(con = pb)
-
-            # pbapply::pblapply(
-            #   X = pathways.remove.idx,
-            #   FUN = function(x) {
-            #     prob.cell_[[x]] <- AllzeroMat
-            #   }
-            # )
-          }
-        }
-      }
-
-      # update the obj
-      net$tmp$prob.cell <- prob.cell_ # a list
-      dns <- dimnames(prob.cell) # dimnames
-      net$prob.cell <- my_as_sparse3Darray(prob.cell_)
-      dimnames(net$prob.cell) <- dns
-      object@net <- net
-      cat(paste0(cli.symbol(1),'Filtering cell-cell communication is done.<<< [', Sys.time(),']', '\n'))
-
-    } # !is.null(min.links) | !is.null(min.cells.sr)
-  } else {
-    stop(
-      cli.symbol(2),
-      "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! "
+    prob.sum <- vapply(
+      prob.cell_,
+      function(mat) length(mat@x),
+      numeric(1)
     )
+    dimArr <- dim(prob.cell)
+
+    AllzeroMat <- Matrix::sparseMatrix(
+      i = integer(0),
+      j = integer(0),
+      x = numeric(0),
+      repr = "C",
+      dims = dimArr[c(1L, 2L)],
+      index1 = TRUE
+    )
+
+    if (!is.null(min.links)) {
+      cat(cli.symbol(), "Filter communication according to min.links...\n")
+      idx.signaling.excludes <- which((prob.sum < min.links) & (prob.sum > 0))
+      if (length(idx.signaling.excludes) > 0L) {
+        cat(
+          "The cell-cell communication related with #",
+          length(idx.signaling.excludes),
+          "L-R pairs are excluded due to the few number of interactions.",
+          "\n"
+        )
+        prob.cell_[idx.signaling.excludes] <- rep(
+          list(AllzeroMat),
+          length(idx.signaling.excludes)
+        )
+      }
+    }
+
+    if (!is.null(min.cells.sr)) {
+      cat(cli.symbol(), "Filter communication according to min.cells.sr... \n")
+      if (is.null(min.links)) {
+        pathway.idx <- which(prob.sum > 0)
+      } else {
+        pathway.idx <- which(prob.sum >= max(1, min.links))
+      }
+
+      if (length(pathway.idx) > 0L) {
+        pathways.remove.idx <- pbapply::pblapply(
+          X = pathway.idx,
+          FUN = function(x) {
+            prob.cell.i <- prob.cell_[[x]] > 0
+            if (
+              (sum(Matrix::rowSums(prob.cell.i) > 0) < min.cells.sr) |
+              (sum(Matrix::colSums(prob.cell.i) > 0) < min.cells.sr)
+            ) {
+              return(x)
+            }
+            NULL
+          }
+        )
+        pathways.remove.idx <- unlist(pathways.remove.idx, use.names = FALSE)
+
+        if (length(pathways.remove.idx) > 0L) {
+          cat(
+            "The cell-cell communication related with #",
+            length(pathways.remove.idx),
+            "L-R pairs are excluded due to the few number of sending/receiving cells.",
+            "\n"
+          )
+          prob.cell_[pathways.remove.idx] <- rep(
+            list(AllzeroMat),
+            length(pathways.remove.idx)
+          )
+        }
+      }
+    }
+
+    object@net$cell$prob <- .new_SparseChatArray(
+      prob.cell_,
+      dimnames(prob.cell)
+    )
+    cat(paste0(cli.symbol(1), "Filtering cell-cell communication is done.<<< [", Sys.time(), "]", "\n"))
   }
-  return(object)
+
+  object
 }
 
 #' @title modifySparse3Darray
@@ -2239,32 +2249,101 @@ filterProbability <- function (
 #'
 #' @return Return an updated CellChat object:
 #'
-#' `object@net$count` is a matrix: rows and columns are sources and targets respectively, and elements are the number of interactions between any two cell groups. USER can convert a matrix to a data frame using the function `reshape2::melt()`
+#' `object@net$group$count` is a matrix: rows and columns are sources and targets respectively, and elements are the number of significant ligand-receptor interactions between any two cell groups. USER can convert a matrix to a data frame using the function `reshape2::melt()`
 #'
-#' `object@net$weight` is also a matrix containing the interaction weights between any two cell groups
+#' `object@net$group$weight` is also a matrix containing the interaction weights between any two cell groups
 #'
-#' `object@net$sum` is deprecated. Use `object@net$weight`
+#' `object@net$group$LR.sig` lists the ligand-receptor pairs with significant communications
+#'
+#' `object@net$cell$count` / `object@net$cell$weight` are the individual-cell-level count and weight matrices; `object@net$cell$LR.sig` lists the significant ligand-receptor pairs
 #'
 #' @export
 #'
 aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signaling = NULL, pairLR.use = NULL, remove.isolate = TRUE, thresh = 0.05, return.object = TRUE) {
   net <- object@net
-  if (is.null(sources.use) & is.null(targets.use) & is.null(signaling) & is.null(pairLR.use)) {
-    prob <- net$prob
-    pval <- net$pval
-    pval[prob == 0] <- 1
-    prob[pval >= thresh] <- 0
-    net$count <- apply(prob > 0, c(1,2), sum)
-    net$weight <- apply(prob, c(1,2), sum)
-    net$weight[is.na(net$weight)] <- 0
-    net$count[is.na(net$count)] <- 0
-    net$LR.sig <- dimnames(prob)[[3]][apply(prob, 3, sum) > 0]
+  if (is.null(sources.use) && is.null(targets.use) && is.null(signaling) && is.null(pairLR.use)) {
+    if ( !inherits(net$group$prob, "SparseChatArray") ) {
+      stop("Please run `computeAvgCommunProb` to compute the group-level signaling! ")
+    }
+    prob.layers <- unclass(net$group$prob)
+    pval.layers <- if (!is.null(net$group$pval)) unclass(net$group$pval) else NULL
+    K <- nrow(prob.layers[[1]])
+    weight.acc <- matrix(0, nrow = K, ncol = K)
+    count.acc <- matrix(0, nrow = K, ncol = K)
+    layer.sum <- numeric(length(prob.layers))
+    for (k in seq_along(prob.layers)) {
+      pm <- as.matrix(prob.layers[[k]])
+      if (!is.null(pval.layers)) {
+        vm <- as.matrix(pval.layers[[k]])
+        vm[pm == 0] <- 1
+        pm[vm >= thresh] <- 0
+      }
+      weight.acc <- weight.acc + pm
+      count.acc <- count.acc + (pm != 0)
+      layer.sum[k] <- sum(pm)
+    }
+    dn.group <- dimnames(net$group$prob)[1:2]
+    dimnames(weight.acc) <- dn.group
+    dimnames(count.acc) <- dn.group
+    net$group$count <- as(count.acc, "dgCMatrix")
+    net$group$weight <- as(weight.acc, "dgCMatrix")
+    net$group$LR.sig <- dimnames(net$group$prob)[[3]][layer.sum > 0]
   } else {
-    df.net <- subsetCommunication(object, slot.name = "net",
-                                  sources.use = sources.use, targets.use = targets.use,
-                                  signaling = signaling,
-                                  pairLR.use = pairLR.use,
-                                  thresh = thresh)
+    if ( !inherits(net$group$prob, "SparseChatArray") ) {
+      stop("Please run `computeAvgCommunProb` to compute the group-level signaling! ")
+    }
+    prob.layers <- unclass(net$group$prob)
+    pval.layers <- if (!is.null(net$group$pval)) unclass(net$group$pval) else NULL
+    LR <- object@LR$LRsig
+    dn.group <- dimnames(net$group$prob)[1:2]
+    layer.names <- dimnames(net$group$prob)[[3]]
+    # natively replicate subsetCommunication(slot.name = "net") on the SparseChatArray
+    rows <- lapply(seq_along(prob.layers), function(k) {
+      lname <- layer.names[k]
+      pm <- as.matrix(prob.layers[[k]])
+      if (!is.null(pval.layers)) {
+        pm[as.matrix(pval.layers[[k]]) >= thresh] <- 0
+      }
+      idx <- which(pm > 0, arr.ind = TRUE)
+      if (nrow(idx) == 0L) return(NULL)
+      data.frame(
+        source = dn.group[[1]][idx[, 1]],
+        target = dn.group[[2]][idx[, 2]],
+        interaction_name = lname,
+        pathway_name = LR$pathway_name[match(lname, rownames(LR))],
+        prob = pm[idx],
+        pval = if (!is.null(pval.layers)) as.matrix(pval.layers[[k]])[idx] else NA_real_,
+        stringsAsFactors = FALSE
+      )
+    })
+    df.net <- do.call(rbind, rows)
+    if (is.null(df.net)) {
+      df.net <- data.frame(source = character(), target = character(),
+                           interaction_name = character(), pathway_name = character(),
+                           prob = numeric(), pval = numeric(),
+                           stringsAsFactors = FALSE)
+    }
+    if (!is.null(signaling)) {
+      df.net <- subset(df.net, pathway_name %in% signaling)
+    }
+    if (!is.null(pairLR.use)) {
+      if ("interaction_name" %in% colnames(pairLR.use)) {
+        df.net <- subset(df.net, interaction_name %in% pairLR.use$interaction_name)
+      } else if ("pathway_name" %in% colnames(pairLR.use)) {
+        df.net <- subset(df.net, pathway_name %in% pairLR.use$pathway_name)
+      }
+    }
+    if (!is.null(sources.use)) {
+      if (is.numeric(sources.use)) sources.use <- levels(object@idents)[sources.use]
+      df.net <- subset(df.net, source %in% sources.use)
+    }
+    if (!is.null(targets.use)) {
+      if (is.numeric(targets.use)) targets.use <- levels(object@idents)[targets.use]
+      df.net <- subset(df.net, target %in% targets.use)
+    }
+    if (nrow(df.net) == 0) {
+      stop("No significant signaling interactions are inferred based on the input!")
+    }
     df.net$source_target <- paste(df.net$source, df.net$target, sep = "_")
     df.net2 <- df.net %>% group_by(source_target) %>% summarize(count = n(), .groups = 'drop')
     df.net3 <- df.net %>% group_by(source_target) %>% summarize(prob = sum(prob), .groups = 'drop')
@@ -2284,25 +2363,24 @@ aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signali
 
     count <- tapply(df.net2[["count"]], list(df.net2[["source"]], df.net2[["target"]]), sum)
     prob <- tapply(df.net2[["prob"]], list(df.net2[["source"]], df.net2[["target"]]), sum)
-    net$count <- count
-    net$weight <- prob
-    net$weight[is.na(net$weight)] <- 0
-    net$count[is.na(net$count)] <- 0
+    net$group$count <- count
+    net$group$weight <- prob
+    net$group$weight[is.na(net$group$weight)] <- 0
+    net$group$count[is.na(net$group$count)] <- 0
   }
 
-  if ("prob.cell" %in% names(object@net)) {
-    prob.cell <- net$prob.cell
-
-    # net$count.cell <-  as(apply(prob.cell > 0, c(1,2), sum), "dgCMatrix")
-    # prob.cell > 0 generate a sparse logical array, but cannot sum directly
-    prob.cell.positive <- prob.cell > 0
-    prob.cell.positive$x <- rep.int(1,length(prob.cell.positive$x))
-    net$count.cell <-  spatstat.sparse::marginSumsSparse(prob.cell.positive,MARGIN = c(1,2))
-
-    # net$weight.cell <- as(apply(prob.cell, c(1,2), sum), "dgCMatrix")
-    net$weight.cell <- spatstat.sparse::marginSumsSparse(prob.cell,MARGIN = c(1,2))
-    prob.cell.sum <- spatstat.sparse::marginSumsSparse(prob.cell,MARGIN = c(3))
-    net$LR.sig.cell <- dimnames(prob.cell)[[3]][prob.cell.sum@i]
+  if (!is.null(net$cell$prob)) {
+    if ( !inherits(net$cell$prob, "SparseChatArray") ) {
+      stop("Please run `computeCommunProb` to compute the individual cell-level signaling! ")
+    }
+    cell.layers <- unclass(net$cell$prob)
+    # binarize the stored entries: explicit zeros still count as links (baseline quirk)
+    net$cell$count <- .sc_sum_layers(lapply(cell.layers, function(m) { m@x <- rep.int(1, length(m@x)); m }))
+    net$cell$weight <- .sc_sum_layers(cell.layers)
+    dn.cell <- dimnames(net$cell$prob)[1:2]
+    dimnames(net$cell$count) <- dn.cell
+    dimnames(net$cell$weight) <- dn.cell
+    net$cell$LR.sig <- dimnames(net$cell$prob)[[3]][vapply(cell.layers, function(m) sum(m@x), numeric(1)) > 0]
     if (!is.null(sources.use) | !is.null(targets.use) | !is.null(signaling) | !is.null(pairLR.use)) {
       message("Subsetting cells or signaling is not applicable to individual cell-based `prob.cell`!", '\n')
     }

@@ -207,6 +207,17 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   structure(x, class = "SparseChatArray", Dimnames = dimnames)
 }
 
+#' Apply a transformation independently to every SparseChatArray layer.
+#'
+#' The outer object stores only the class marker and the object-level
+#' `Dimnames` attribute; individual matrix dimnames are normalized by
+#' `.new_SparseChatArray()`.
+.sc_map_sparse_layers <- function(x, FUN) {
+  dn <- dimnames(x)
+  layers <- lapply(unclass(x), FUN)
+  .new_SparseChatArray(layers, dn)
+}
+
 .SparseChatArray_dimnames <- function(x, dims, dimnames = NULL) {
   if (length(dims) == 2L) dims <- c(dims, length(x))
 

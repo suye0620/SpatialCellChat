@@ -286,6 +286,7 @@ n=2000 探针：`crossprod(1×n, 1×n)` 产出 4M nnz 的 dgCMatrix，45.8 MB。
 - **`identity (no perm): FALSE` 实测复现**：稀疏版的数值 `pct >= min.percent` 与当前 `format(digits=1)` 字符串比较在边界值（如 0.0999999 → "0.1"）语义不同——即文档 3.4 节隐藏行为，任何替换都必须显式拍板保持字符串语义还是修正为数值语义。
 - **结论：R 层稀疏重写收益仅 ~4%，置换段必须 Rcpp 化（~140×）才有实质改善。**
 - **2026-09-28 Plan A 落地（computeAvgCommunProb v2，见 `.agents/notes/implemented/2026-09-28-compute-avg-commun-prob-plan-a.md`）**：MBM05 实测（1563 层 × nboot=100，nC=29536，K=8）全量 **125.66 s**；冻结基线参考 1518 ms/层 → 外推 2372.6 s → **19×**。等价性：门控/计数/p 值逐位一致（30 层 Pval 零翻转），Prob 相对差 ≤1.43e-14（dgemm 归约序不可移植复现的 1 ulp 契约）。统计语义未动（空间混淆等见 PERMUTATION_TEST_AUDIT.md，后置 Plan B）。
+- **2026-10-08 Wave 2b 落地（computeCommunProbPathway / aggregateNet / relabelSpatialCellChat → 11-slot，见 `.agents/notes/proposed/2026-10-08-netpathway-aggregate-migration.md`）**：`tests_dev/test-netpathway-aggregate.R` 38 项 fixture 级对拍全绿——pathway 聚合（门控单步 `>=`、全零 pathway 剔除、降序排列）、两步门控 count/weight、细胞级二值化 count（显式零计为 link）均与手工参考**逐位一致**（无浮点求和跨层顺序变化：逐 pathway `.sc_sum_layers` 与基线同层序）；subset 分支原生复刻 `subsetCommunication_internal(slot.name="net")`（count=显著 LR 行数、weight=prob 和）；relabel e2e + 同 seed 确定性逐位复现。`pbsapply`/`my_as_sparse3Darray`/`spatstat.sparse` 依赖自该链路移除。
 
 ### 9.5 其余内存与并行风险复核
 
@@ -296,7 +297,7 @@ n=2000 探针：`crossprod(1×n, 1×n)` 产出 4M nnz 的 dgCMatrix，45.8 MB。
 | `permutation` nboot×nC | modeling.R:1154 | 100×100k int = 38.1 MB（实测 0.75 s） | 可接受 |
 | `my_as_sparse3Darray` 串行长表合并 | modeling.R:279, 1582-1619；analysis.R:4071, 4144；visualization.R:5516, 5810, 6086 | 1000 LR × 1.19M nnz ≈ 22+ GiB 长表 | 主进程串行 + 内存峰值 |
 | `makeGridSpatialCellChat` / `computeGridSize` 的点-网格关系 | spatial.R:271, 371 | 100k 点与网格的稠密逻辑阵会随 `n × G` 爆炸 | **已稀疏化（2026-09-02）**：`sgbp` + `lengths`/`tabulate`/`split` 派生，O(nnz)，不分配稠密点-网格矩阵 |
-| `computeCommunProbPathway` do.cell 用 `pbsapply` | modeling.R:1574 | — | 与 future 体系不一致，串行执行 |
+| `computeCommunProbPathway` do.cell 用 `pbsapply` | modeling.R:1574 | — | **已移除（2026-10-08 Wave 2b）**：逐 pathway `.sc_sum_layers`（cpp_sum_layers），串行且 O(nnz) |
 
 ### 9.6 优化优先级
 
