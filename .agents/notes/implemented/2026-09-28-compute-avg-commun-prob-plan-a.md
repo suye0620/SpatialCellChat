@@ -15,7 +15,9 @@ Superseded by: none
 1. `computeAvgCommunProb` 仍读写旧 14-slot 结构（`net$tmp$prob.cell`/`Lavg`/`Ravg`、`@options$parameter`），在已迁移的 11-slot 对象上入口即断（Wave 1 后 `net$tmp` 已删除）。
 2. 置换段为推断管线剩余最大瓶颈：每 LR 每 boot 全套组平均（model.matrix + 2×aggregate + 4 次稀疏矩阵乘/dgemm）≈14.5 ms；500 有信号 LR × nboot=100 外推 ~25 min（COMPUTATION_OPTIMIZATION.md §9.4）。
 
-## Proposal（Plan A，维护者 2026-09-27/28 裁定）
+## Decision
+
+Plan A，维护者 2026-09-27/28 裁定：
 
 - **统计语义完全保持基线**：同 seed 同 permutation 生成调用（`set.seed` 位置逐字对齐 + 单次 `replicate(nboot, sample.int(nC, nC))`）、单侧计数 p = nReject/nboot、门控每个 boot 在置换标签上重算、`Pval[Prob==0] <- 1`。用户已确认：缺陷修复（(b+1)/(N+1)、空间约束 null、FDR 等）后置至 Plan B，与合作者确认后另行裁定（见 docs/PERMUTATION_TEST_AUDIT.md）。
 - **kernel 化**：`cpp_group_avg_obs`（观测标签）/`cpp_group_avg_perm`（nboot 个置换一次调用），单遍 O(nnz·nboot) 分桶聚合取代 4 次矩阵乘 + dgemm；boots 维 OpenMP 并行（`nthreads`，输出列互斥，逐位与单线程一致）。
