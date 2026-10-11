@@ -64,18 +64,19 @@ computeCentralityLocal <- function (
 #'
 #' NB: This function was previously named as `netAnalysis_signalingRole`.  The previous function `netVisual_signalingRole` is now named as `netAnalysis_signalingRole_network`.
 #'
-#' @param object CellChat object; If object = NULL, USER must provide `net`
-#' @param net compute the centrality measures on a specific signaling network given by a 2 or 3 dimemsional array net
-#' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks
-#' @param signaling.name provide signalings name (LR pairs or pathways) to subset the communication net
-#' @param do.group set `do.group = TRUE` when computing centrality of each cell group; set `do.group = FALSE` when computing centrality of each individual cell
-#' @param thresh threshold of the p-value for determining significant interaction
-#' @param degree.only To speed up computation, run `netAnalysis_computeCentrality` with `degree.only = T` when user only needs
-#' "outdeg_unweighted", "indeg_unweighted","outdeg","indeg","page_rank" to do analysis
+#' @param object SpatialCellChat object; If object = NULL, USER must provide `net`
+#' @param net compute the centrality measures on a specific signaling network given by a 2 or 3 dimensional array `net`
+#' @param slot.name the slot name of object used to compute centrality; `"net"` applies the group-level p-value gate, while `"netP"` uses the already-thresholded pathway layers without an additional gate
+#' @param signaling.name provide signaling names (LR pairs or pathways) to subset the communication net
+#' @param do.group set `do.group = TRUE` when computing centrality of each cell group; set `do.group = FALSE` when computing centrality of each individual cell; cell-level probabilities are read from `slot$cell$prob`
+#' @param thresh threshold of the p-value for determining significant interaction in the `"net"` group-level path
+#' @param degree.only To speed up computation, run `netAnalysis_computeCentrality` with `degree.only = TRUE` when user only needs
+#' "outdeg_unweighted", "indeg_unweighted", "outdeg", "indeg", "page_rank" to do analysis
 #' @importFrom methods slot
 #' @importFrom future.apply future_lapply
 #'
-#' @return
+#' @return If `object` is NULL, a centrality array with dimensions measure × node × signaling layer; otherwise the updated SpatialCellChat object with `centr` or `centr.cell` written to the selected slot.
+#'
 #' @export
 #'
 
@@ -89,22 +90,50 @@ netAnalysis_computeCentrality <- function (
     # centr.name = NULL,
     degree.only=T
 ){
+  if (!is.null(object)) {
+    object <- .sc_assert_spatial_cell_chat(object)
+  }
+  slot.name <- match.arg(slot.name, c("net", "netP"))
+  degree.all <- isTRUE(degree.only)
   if (is.null(net)) {
-    if (do.group) {
-      prob <- methods::slot(object, slot.name)$prob
-      pval <- methods::slot(object, slot.name)$pval
-      pval[prob == 0] <- 1
-      prob[pval >= thresh] <- 0
-      net = BiocGenerics::lapply(
-        X = seq_len(dim(prob)[[3]]),
-        FUN = function(i){
-          prob[ , ,i,drop=T ]
+    if (isTRUE(do.group)) {
+      slot.content <- methods::slot(object, slot.name)
+      prob.array <- slot.content$group$prob
+      if (!inherits(prob.array, "SparseChatArray")) {
+        if (slot.name == "net") {
+          stop(
+            cli.symbol(2),
+            "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! "
+          )
+        } else {
+          stop(
+            cli.symbol(2),
+            "Please run `computeCommunProbPathway` to compute the communication probability/strength at the signaling pathway level! "
+          )
         }
-      )
-      names(net) <- dimnames(prob)[[3]]
-      node.names <- dimnames(prob)[[1]]
+      }
+      # 11-slot: group-level layers (SparseChatArray). The legacy two-step gating
+      # (`pval[prob == 0] <- 1; prob[pval >= thresh] <- 0`) is kept verbatim for
+      # `slot.name = "net"`. netP layers are NOT gated here: legacy netP objects
+      # carry no pval (the NULL no-op), and `netP$group$prob` is already
+      # thresholded by `computeCommunProbPathway`.
+      prob.layers <- unclass(prob.array)
+      pval.array <- if (slot.name == "net") slot.content$group$pval else NULL
+      pval.layers <- if (is.null(pval.array)) NULL else unclass(pval.array)
+      net <- lapply(seq_along(prob.layers), function(i){
+        pm <- as.matrix(prob.layers[[i]])
+        if (!is.null(pval.layers)) {
+          vm <- as.matrix(pval.layers[[i]])
+          vm[pm == 0] <- 1
+          pm[vm >= thresh] <- 0
+        }
+        pm
+      })
+      names(net) <- dimnames(prob.array)[[3]]
+      node.names <- dimnames(prob.array)[[1]]
     } else {
-      if (is.null(methods::slot(object, slot.name)$tmp$prob.cell)) {
+      prob.cell <- methods::slot(object, slot.name)$cell$prob
+      if (is.null(prob.cell)) {
         if (slot.name == "net") {
           stop(
             cli.symbol(2),
@@ -118,8 +147,9 @@ netAnalysis_computeCentrality <- function (
         }
       } else {
         # prob.cell <- object@net$prob.cell
-        net <- methods::slot(object, slot.name)$tmp$prob.cell # a list
-        node.names <- spatstat.sparse::dimnames.sparse3Darray(methods::slot(object, slot.name)$prob.cell)[[1]]
+        net <- unclass(prob.cell) # a list
+        names(net) <- dimnames(prob.cell)[[3]]
+        node.names <- dimnames(prob.cell)[[1]]
       }
     } # whether do.group?
   } else {
@@ -129,7 +159,7 @@ netAnalysis_computeCentrality <- function (
     } else if(length(dim(net)) == 3) {
       net.names <- dimnames(net)[[3]]
       node.names <- dimnames(net)[[1]]
-      net = BiocGenerics::lapply(
+      net = lapply(
         X = seq_len(dim(net)[[3]]),
         FUN = function(i){
           net[ , ,i,drop=T ]
@@ -150,40 +180,27 @@ netAnalysis_computeCentrality <- function (
   N <- dim( net[[1]] )[1]
   nrun <- length(signaling.name)
 
-  if(degree.only == T){
-    centr.name <- c("outdeg_unweighted", "indeg_unweighted","outdeg","indeg","page_rank")
-    centr.all <-  my_future_sapply(
-      X = 1:nrun,
-      FUN = function(x) {
-        net0 <- net[[x]]
-        centr.x <- computeCentralityLocal(net0,degree.only = degree.only)
-        gc()
-        # centr.x <- centr.x[centr.name, , drop = FALSE]
-        return(centr.x)
-      },
-      simplify = TRUE
-    )
+  centr.name <- if (degree.all) {
+    c("outdeg_unweighted", "indeg_unweighted", "outdeg", "indeg", "page_rank")
   } else {
-    centr.name <- c("outdeg_unweighted", "indeg_unweighted",
-                    "outdeg", "indeg", "hub", "authority", "eigen",
-                    "page_rank", "betweenness", "flowbet", "info")
-    centr.all <-  my_future_sapply(
-      X = 1:nrun,
-      FUN = function(x) {
-        net0 <- net[[x]]
-        centr.x <- computeCentralityLocal(net0,degree.only = degree.only)
-        gc()
-        # centr.x <- centr.x[centr.name, , drop = FALSE]
-        return(centr.x)
-      },
-      simplify = TRUE
-    )
+    c("outdeg_unweighted", "indeg_unweighted",
+      "outdeg", "indeg", "hub", "authority", "eigen",
+      "page_rank", "betweenness", "flowbet", "info")
   }
-  # cat("nrow(centr.all):",nrow(centr.all),"\n") 7974
-  # cat("dim(centr.all):",dim(centr.all),"\n") 7974 1860
-  centr.all <- reticulate::array_reshape(centr.all, c(nrow(centr.all)/N,N, nrun), order = "F")
-  # cat("dim(centr.all):",dim(centr.all),"\n") 2 3987 1860
-  # View(centr.all)
+  centr.all <-  my_future_sapply(
+    X = 1:nrun,
+    FUN = function(x) {
+      net0 <- net[[x]]
+      centr.x <- computeCentralityLocal(net0, degree.only = degree.all)
+      gc()
+      return(centr.x)
+    },
+    simplify = TRUE
+  )
+  # reticulate::array_reshape(..., order = "F") is R column-major order, so the
+  # reshape is exactly `array(as.vector(x), dim)`; the native call removes the
+  # only Python/reticulate dependency in analysis.R.
+  centr.all <- array(as.vector(centr.all), c(nrow(centr.all)/N, N, nrun))
   dimnames(centr.all) <- list(centr.name, node.names,signaling.name)
   cat(cli.symbol(1), "Computing Net Centrality is done.\n")
 
@@ -191,12 +208,21 @@ netAnalysis_computeCentrality <- function (
     return(centr.all)
   } else {
 
-    if (do.group) {
-      methods::slot(object, slot.name)[["centr"]] <- centr.all
+    # copy out -> whole-slot write back (no nested slot replacement)
+    netobj <- methods::slot(object, slot.name)
+    if (isTRUE(do.group)) {
+      netobj[["centr"]] <- centr.all
     }
     else {
-      methods::slot(object, slot.name)[["centr.cell"]] <- centr.all
+      netobj[["centr.cell"]] <- centr.all
     }
+    methods::slot(object, slot.name) <- netobj
+
+    object <- .log_operation(object, "netAnalysis_computeCentrality",
+                             params = list(slot.name = slot.name,
+                                           do.group = isTRUE(do.group),
+                                           degree.only = degree.all,
+                                           nrun = nrun))
 
     return(object)
   }
@@ -2216,9 +2242,9 @@ mergeInteractions <- function(object, group.merged) {
 #'
 #' NB: If all arguments are NULL, it returns a data frame consisting of all the inferred cell-cell communications
 #'
-#' @param object CellChat object
-#' @param net Alternative input is a data frame with at least with three columns defining the cell-cell communication network ("source","target","interaction_name")
-#' @param slot.name the slot name of object: slot.name = "net" when extracting the inferred communications at the level of ligands/receptors; slot.name = "netP" when extracting the inferred communications at the level of signaling pathways
+#' @param object SpatialCellChat object
+#' @param net Alternative input is a data frame with at least three columns defining the cell-cell communication network ("source", "target", "interaction_name")
+#' @param slot.name the slot name of object: `slot.name = "net"` extracts ligand/receptor-level communication; `slot.name = "netP"` extracts pathway-level communication from `netP$group$prob`. In the `"netP"` path, pathway layers join `LR$pathway_name` (the first matching LR row supplies annotation metadata), and the p-value column is explicitly `NA` because pathway layers have no p-value slot.
 #' @param sources.use a vector giving the index or the name of source cell groups
 #' @param targets.use a vector giving the index or the name of target cell groups.
 #' @param signaling a character vector giving the name of signaling pathways of interest
@@ -2242,7 +2268,7 @@ mergeInteractions <- function(object, group.merged) {
 #' @importFrom reshape2 melt
 #' @importFrom magrittr %>%
 #'
-#' @return If input object is created from a single dataset, a data frame of the inferred cell-cell communications of interest, consisting of source, target, interaction_name, pathway_name, prob and other information
+#' @return If input object is created from a single dataset, a data frame of the inferred cell-cell communications of interest, consisting of source, target, interaction_name, pathway_name, prob and other information. For `slot.name = "netP"`, the output is pathway-level and includes an explicit `pval` column of `NA` values.
 #'
 #' If input object is a merged object from multiple datasets, it will return a list and each element is a data frame for one dataset
 #'
@@ -2270,6 +2296,9 @@ subsetCommunication <- function(object = NULL, net = NULL, slot.name = "net",
                                 thresh = 0.05,
                                 datasets = NULL, ligand.pvalues = NULL, ligand.logFC = NULL, ligand.pct.1 = NULL, ligand.pct.2 = NULL,
                                 receptor.pvalues = NULL, receptor.logFC = NULL, receptor.pct.1 = NULL, receptor.pct.2 = NULL) {
+  if (!is.null(object)) {
+    object <- .sc_assert_spatial_cell_chat(object)
+  }
   if (!is.null(pairLR.use)) {
     if (!is.data.frame(pairLR.use)) {
       stop("pairLR.use should be a data frame with a signle column named either 'interaction_name' or 'pathway_name' ")
@@ -2279,13 +2308,15 @@ subsetCommunication <- function(object = NULL, net = NULL, slot.name = "net",
     }
   }
 
-  if (!is.null(pairLR.use) & !is.null(signaling)) {
+  if (!is.null(pairLR.use) && !is.null(signaling)) {
     stop("Please do not assign values to 'signaling' when using 'pairLR.use'")
   }
 
-  if (object@options$mode == "single") {
+  # 11-slot objects store the mode in `misc$.mode`; missing mode is single.
+  mode <- object@misc$.mode %||% "single"
+  if (identical(mode, "single")) {
     if (is.null(net)) {
-      net <- slot(object, "net")
+      net <- methods::slot(object, slot.name)
     }
     LR <- object@LR$LRsig
     cells.level <- levels(object@idents)
@@ -2296,7 +2327,7 @@ subsetCommunication <- function(object = NULL, net = NULL, slot.name = "net",
                                            thresh = thresh,
                                            datasets = datasets, ligand.pvalues = ligand.pvalues, ligand.logFC = ligand.logFC, ligand.pct.1 = ligand.pct.1, ligand.pct.2 = ligand.pct.2,
                                            receptor.pvalues = receptor.pvalues, receptor.logFC = receptor.logFC, receptor.pct.1 = receptor.pct.1, receptor.pct.2 =receptor.pct.2)
-  } else if (object@options$mode == "merged") {
+  } else if (identical(mode, "merged")) {
     if (is.null(net)) {
       net0 <- slot(object, "net")
       df.net <- vector("list", length(net0))
@@ -2375,19 +2406,52 @@ subsetCommunication_internal <- function(net, LR, cells.level, slot.name = "net"
                                          datasets = NULL, ligand.pvalues = NULL, ligand.logFC = NULL, ligand.pct.1 = NULL, ligand.pct.2 = NULL,
                                          receptor.pvalues = NULL, receptor.logFC = NULL, receptor.pct.1 = NULL, receptor.pct.2 = NULL) {
   if (!is.data.frame(net)) {
-    prob <- net$prob
-    pval <- net$pval
-    prob[pval >= thresh] <- 0
-    net <- reshape2::melt(prob, value.name = "prob")
-    colnames(net)[1:3] <- c("source","target","interaction_name")
-    net.pval <- reshape2::melt(pval, value.name = "pval")
-    net$pval <- net.pval$pval
+    # 11-slot: `net$group$prob` (+ optional `net$group$pval`) when slot.name == "net"
+    # (net = object@net), or the pathway-level layers of object@netP when
+    # slot.name == "netP". Per-layer dense row construction replaces reshape2::melt;
+    # row order (dim1 fastest, then dim2, then layers) matches the legacy melt order.
+    prob.array <- net$group$prob
+    if (!inherits(prob.array, "SparseChatArray")) {
+      if (slot.name == "net") {
+        stop("Please run `computeAvgCommunProb` to compute the group-level signaling! ")
+      } else {
+        stop("Please run `computeCommunProbPathway` to compute the communication probability/strength at the signaling pathway level! ")
+      }
+    }
+    prob.layers <- unclass(prob.array)
+    pval.array <- if (slot.name == "net") net$group$pval else NULL
+    pval.layers <- if (is.null(pval.array)) NULL else unclass(pval.array)
+    lr.names <- dimnames(prob.array)[[3]]
+    dn1 <- dimnames(prob.array)[[1]]
+    dn2 <- dimnames(prob.array)[[2]]
+    net <- do.call(rbind, lapply(seq_along(prob.layers), function(i) {
+      pm <- as.matrix(prob.layers[[i]])
+      if (!is.null(pval.layers)) {
+        # single-step `>=` gating, verbatim from the legacy dense-array path
+        pm[as.matrix(pval.layers[[i]]) >= thresh] <- 0
+      }
+      idx <- which(pm > 0, arr.ind = TRUE)
+      if (nrow(idx) == 0L) return(NULL)
+      # slot.name == "netP": layers carry no pval (computeCommunProbPathway already
+      # gated by `thresh`); legacy melted a NULL pval here and crashed.
+      data.frame(source = dn1[idx[, 1]], target = dn2[idx[, 2]],
+                 interaction_name = lr.names[i],
+                 prob = pm[idx],
+                 pval = if (!is.null(pval.layers)) as.matrix(pval.layers[[i]])[idx] else rep(NA_real_, nrow(idx)),
+                 stringsAsFactors = FALSE)
+    }))
     # remove the interactions with zero values
     net <- subset(net, prob > 0)
   }
+  # join columns may be missing from LR (e.g. `evidence`); back-fill with NA so the
+  # select below cannot crash on schema drift, keeping the output column schema
+  # identical to upstream.
+  for (col in c("interaction_name_2", "pathway_name", "ligand", "receptor", "annotation", "evidence")) {
+    if (!col %in% colnames(LR)) LR[[col]] <- NA_character_
+  }
   if (!("ligand" %in% colnames(net))) {
     pairLR <- dplyr::select(LR, c("interaction_name_2", "pathway_name", "ligand",  "receptor" ,"annotation","evidence"))
-    idx <- match(net$interaction_name, rownames(pairLR))
+    idx <- if (slot.name == "netP") match(net$interaction_name, pairLR$pathway_name) else match(net$interaction_name, rownames(pairLR))
     net <- cbind(net, pairLR[idx,])
   }
 
@@ -2400,11 +2464,11 @@ subsetCommunication_internal <- function(net, LR, cells.level, slot.name = "net"
   }
 
   if (!is.null(pairLR.use)){
-    net <- tryCatch({
-      subset(net,interaction_name %in% pairLR.use$interaction_name)
-    }, error = function(e) {
-      subset(net, pathway_name %in% pairLR.use$pathway_name)
-    })
+    if ("interaction_name" %in% colnames(pairLR.use)) {
+      net <- subset(net, interaction_name %in% pairLR.use$interaction_name)
+    } else {
+      net <- subset(net, pathway_name %in% pairLR.use$pathway_name)
+    }
   }
 
   if (!is.null(datasets)) {
@@ -2495,12 +2559,18 @@ subsetCommunication_internal <- function(net, LR, cells.level, slot.name = "net"
   if (!is.null(sources.use)){
     if (is.numeric(sources.use)) {
       sources.use <- cells.level[sources.use]
+      if (anyNA(sources.use)) {
+        stop("`sources.use` contains indices beyond the number of cell groups!", call. = FALSE)
+      }
     }
     net <- subset(net, source %in% sources.use)
   }
   if (!is.null(targets.use)){
     if (is.numeric(targets.use)) {
       targets.use <- cells.level[targets.use]
+      if (anyNA(targets.use)) {
+        stop("`targets.use` contains indices beyond the number of cell groups!", call. = FALSE)
+      }
     }
     net <- subset(net, target %in% targets.use)
   }
