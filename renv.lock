@@ -597,7 +597,7 @@
       "BugReports": "https://github.com/Bioconductor/IRanges/issues",
       "License": "Artistic-2.0",
       "Encoding": "UTF-8",
-      "Authors@R": "c( person(\"Hervé\", \"Pagès\", role=c(\"aut\", \"cre\"), email=\"hpages.on.github@gmail.com\"), person(\"Patrick\", \"Aboyoun\", role=\"aut\"), person(\"Michael\", \"Lawrence\", role=\"aut\"))",
+      "Authors@R": "c( person(\"Herv\303\251\", \"Pag\303\250s\", role=c(\"aut\", \"cre\"), email=\"hpages.on.github@gmail.com\"), person(\"Patrick\", \"Aboyoun\", role=\"aut\"), person(\"Michael\", \"Lawrence\", role=\"aut\"))",
       "Depends": [
         "R (>= 4.0.0)",
         "methods",
@@ -630,8 +630,8 @@
       "git_last_commit_date": "2025-10-29",
       "Repository": "Bioconductor 3.22",
       "NeedsCompilation": "yes",
-      "Author": "Hervé Pagès [aut, cre], Patrick Aboyoun [aut], Michael Lawrence [aut]",
-      "Maintainer": "Hervé Pagès <hpages.on.github@gmail.com>"
+      "Author": "Herv\303\251 Pag\303\250s [aut, cre], Patrick Aboyoun [aut], Michael Lawrence [aut]",
+      "Maintainer": "Herv\303\251 Pag\303\250s <hpages.on.github@gmail.com>"
     },
     "KernSmooth": {
       "Package": "KernSmooth",
@@ -1626,6 +1626,17 @@
       "NeedsCompilation": "yes",
       "Author": "Roger Koenker [cre, aut], Pin Tian Ng [ctb] (Contributions to Sparse QR code), Yousef Saad [ctb] (author of sparskit2), Ben Shaby [ctb] (author of chol2csr), Martin Maechler [ctb] (chol() tweaks; S4, <https://orcid.org/0000-0002-8685-9910>)",
       "Repository": "CRAN"
+    },
+    "SpatialCellChat": {
+      "Package": "SpatialCellChat",
+      "Version": "0.1.0",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "jinworks",
+      "RemoteRepo": "SpatialCellChat",
+      "RemoteRef": "be88f300464cf970b36a6165ea7d2e41a47a7511",
+      "RemoteSha": "be88f300464cf970b36a6165ea7d2e41a47a7511"
     },
     "abind": {
       "Package": "abind",
@@ -6154,6 +6165,39 @@
       "Maintainer": "Hans W. Borchers <hwborchers@googlemail.com>",
       "Repository": "CRAN"
     },
+    "progress": {
+      "Package": "progress",
+      "Version": "1.2.3",
+      "Source": "Repository",
+      "Priority": null,
+      "Depends": [
+        "R (>= 3.6)"
+      ],
+      "Imports": [
+        "crayon",
+        "hms",
+        "prettyunits",
+        "R6"
+      ],
+      "LinkingTo": [
+        null
+      ],
+      "Suggests": [
+        "Rcpp",
+        "testthat (>= 3.0.0)",
+        "withr"
+      ],
+      "Enhances": [
+        null
+      ],
+      "License": "MIT + file LICENSE",
+      "License_is_FOSS": null,
+      "License_restricts_use": null,
+      "OS_type": null,
+      "NeedsCompilation": "no",
+      "Repository": "CRAN",
+      "Type": "source"
+    },
     "progressr": {
       "Package": "progressr",
       "Version": "0.19.0",
@@ -7500,16 +7544,13 @@
     },
     "spatstat.geom": {
       "Package": "spatstat.geom",
-      "Version": "3.8-1",
-      "Source": "URL",
-      "Date": "2026-05-23",
-      "Title": "Geometrical Functionality of the 'spatstat' Family",
-      "Authors@R": "c(person(\"Adrian\", \"Baddeley\",  role = c(\"aut\", \"cre\", \"cph\"), email = \"Adrian.Baddeley@curtin.edu.au\", comment = c(ORCID=\"0000-0001-9499-8382\")), person(\"Rolf\", \"Turner\",  role = c(\"aut\", \"cph\"), email=\"rolfturner@posteo.net\", comment=c(ORCID=\"0000-0001-5521-5218\")), person(\"Ege\",   \"Rubak\",  role = c(\"aut\", \"cph\"), email = \"rubak@math.aau.dk\", comment=c(ORCID=\"0000-0002-6675-533X\")), person(\"Warick\",    \"Brown\" ,        role = \"ctb\"), person(\"Tilman\",    \"Davies\",        role = \"ctb\"), person(\"Ute\",       \"Hahn\",          role = \"ctb\"), person(\"Martin\",    \"Hazelton\",      role = \"ctb\"), person(\"Abdollah\",  \"Jalilian\",      role = \"ctb\"), person(\"Greg\",      \"McSwiggan\",     role = c(\"ctb\", \"cph\")), person(\"Sebastian\", \"Meyer\",         role = c(\"ctb\", \"cph\")), person(\"Jens\",      \"Oehlschlaegel\", role = c(\"ctb\", \"cph\")), person(\"Suman\",     \"Rakshit\",       role = \"ctb\"), person(\"Dominic\",   \"Schuhmacher\",   role = \"ctb\"), person(\"Rasmus\",    \"Waagepetersen\", role = \"ctb\"))",
-      "Maintainer": "Adrian Baddeley <Adrian.Baddeley@curtin.edu.au>",
+      "Version": "3.8-3",
+      "Source": "Repository",
+      "Priority": null,
       "Depends": [
         "R (>= 3.5.0)",
         "spatstat.data (>= 3.1-9)",
-        "spatstat.univar (>= 3.2-0)",
+        "spatstat.univar (>=\n3.2-0)",
         "stats",
         "graphics",
         "grDevices",
@@ -7517,12 +7558,15 @@
         "methods"
       ],
       "Imports": [
-        "spatstat.utils (>= 3.2-3)",
-        "deldir (>= 1.0-2)",
-        "polyclip (>= 1.10)"
+        "spatstat.utils (>= 3.2-5)",
+        "deldir (>= 2.0-2)",
+        "polyclip (>=\n1.10)"
+      ],
+      "LinkingTo": [
+        null
       ],
       "Suggests": [
-        "spatstat.random (>= 3.4-5)",
+        "spatstat.random (>= 3.5)",
         "spatstat.explore (>= 3.8)",
         "spatstat.model (>= 3.7)",
         "spatstat.linnet (>= 3.5)",
@@ -7530,30 +7574,27 @@
         "fftwtools (>= 0.9-8)",
         "spatstat (>= 3.6)"
       ],
-      "Description": "Defines spatial data types and supports geometrical operations on them. Data types include point patterns, windows (domains), pixel images, line segment patterns, tessellations and hyperframes. Capabilities include creation and manipulation of data (using command line or graphical interaction), plotting, geometrical operations (rotation, shift, rescale, affine transformation), convex hull, discretisation and pixellation, Dirichlet tessellation, Delaunay triangulation, pairwise distances, nearest-neighbour distances, distance transform, morphological operations (erosion, dilation, closing, opening), quadrat counting, geometrical measurement, geometrical covariance, colour maps, calculus on spatial domains, Gaussian blur, level sets of images, transects of images, intersections between objects, minimum distance matching. (Excludes spatial data on a network, which are supported by the package 'spatstat.linnet'.)",
+      "Enhances": [
+        null
+      ],
       "License": "GPL (>= 2)",
-      "URL": "http://spatstat.org/",
+      "License_is_FOSS": null,
+      "License_restricts_use": null,
+      "OS_type": null,
       "NeedsCompilation": "yes",
-      "ByteCompile": "true",
-      "BugReports": "https://github.com/spatstat/spatstat.geom/issues",
-      "Author": "Adrian Baddeley [aut, cre, cph] (ORCID: <https://orcid.org/0000-0001-9499-8382>), Rolf Turner [aut, cph] (ORCID: <https://orcid.org/0000-0001-5521-5218>), Ege Rubak [aut, cph] (ORCID: <https://orcid.org/0000-0002-6675-533X>), Warick Brown [ctb], Tilman Davies [ctb], Ute Hahn [ctb], Martin Hazelton [ctb], Abdollah Jalilian [ctb], Greg McSwiggan [ctb, cph], Sebastian Meyer [ctb, cph], Jens Oehlschlaegel [ctb, cph], Suman Rakshit [ctb], Dominic Schuhmacher [ctb], Rasmus Waagepetersen [ctb]",
       "Repository": "CRAN",
-      "RemoteType": "url",
-      "RemoteUrl": "https://mirrors.westlake.edu.cn/CRAN/src/contrib/Archive/spatstat.geom/spatstat.geom_3.8-1.tar.gz"
+      "Type": "source"
     },
     "spatstat.random": {
       "Package": "spatstat.random",
-      "Version": "3.5-0",
-      "Source": "URL",
-      "Date": "2026-05-24",
-      "Title": "Random Generation Functionality for the 'spatstat' Family",
-      "Authors@R": "c(person(\"Adrian\", \"Baddeley\",  role = c(\"aut\", \"cre\", \"cph\"), email = \"Adrian.Baddeley@curtin.edu.au\", comment = c(ORCID=\"0000-0001-9499-8382\")), person(\"Rolf\", \"Turner\",  role = c(\"aut\", \"cph\"), email=\"rolfturner@posteo.net\", comment=c(ORCID=\"0000-0001-5521-5218\")), person(\"Ege\",   \"Rubak\",  role = c(\"aut\", \"cph\"), email = \"rubak@math.aau.dk\", comment=c(ORCID=\"0000-0002-6675-533X\")), person(\"Tilman\", \"Davies\", role = c(\"aut\", \"cph\"), comment=c(ORCID=\"0000-0003-0565-1825\")), person(\"Kasper\", \"Klitgaard Berthelsen\", role = c(\"ctb\", \"cph\")), person(\"David\", \"Bryant\", role = c(\"ctb\", \"cph\")), person(\"Ya-Mei\", \"Chang\", role = c(\"ctb\", \"cph\"), email = \"yamei628@gmail.com\"), person(\"Ute\", \"Hahn\", role = \"ctb\"), person(\"Abdollah\", \"Jalilian\",  role = \"ctb\"), person(\"Dominic\", \"Schuhmacher\", role = c(\"ctb\", \"cph\")), person(\"Rasmus\", \"Plenge Waagepetersen\", role = c(\"ctb\", \"cph\")))",
-      "Maintainer": "Adrian Baddeley <Adrian.Baddeley@curtin.edu.au>",
+      "Version": "3.5-2",
+      "Source": "Repository",
+      "Priority": null,
       "Depends": [
         "R (>= 3.5.0)",
         "spatstat.data (>= 3.1-9)",
-        "spatstat.univar (>= 3.2-0)",
-        "spatstat.geom (>= 3.8-1)",
+        "spatstat.univar (>=\n3.2-0)",
+        "spatstat.geom (>= 3.8-2)",
         "stats",
         "utils",
         "methods",
@@ -7561,8 +7602,11 @@
       ],
       "Imports": [
         "Matrix",
-        "spatstat.utils (>= 3.2-3)",
+        "spatstat.utils (>= 3.2-5)",
         "spatstat.sparse (>= 3.2-0)"
+      ],
+      "LinkingTo": [
+        null
       ],
       "Suggests": [
         "spatial",
@@ -7572,16 +7616,16 @@
         "spatstat (>= 3.6)",
         "gsl"
       ],
-      "Description": "Functionality for random generation of spatial data in the 'spatstat' family of packages. Generates random spatial patterns of points according to many simple rules (complete spatial randomness, Poisson, binomial, random grid, systematic, cell), randomised alteration of patterns (thinning, random shift, jittering),  simulated realisations of random point processes including simple sequential inhibition, Matern inhibition models, Neyman-Scott cluster processes (using direct, Brix-Kendall, or hybrid algorithms), log-Gaussian Cox processes, product shot noise cluster processes and Gibbs point processes (using Metropolis-Hastings birth-death-shift algorithm, alternating Gibbs sampler, or coupling-from-the-past perfect simulation). Also generates random spatial patterns of line segments, random tessellations, and random images (random noise, random mosaics). Excludes random generation on a linear network, which is covered by the separate package 'spatstat.linnet'.",
+      "Enhances": [
+        null
+      ],
       "License": "GPL (>= 2)",
-      "URL": "http://spatstat.org/",
+      "License_is_FOSS": null,
+      "License_restricts_use": null,
+      "OS_type": null,
       "NeedsCompilation": "yes",
-      "ByteCompile": "true",
-      "BugReports": "https://github.com/spatstat/spatstat.random/issues",
-      "Author": "Adrian Baddeley [aut, cre, cph] (ORCID: <https://orcid.org/0000-0001-9499-8382>), Rolf Turner [aut, cph] (ORCID: <https://orcid.org/0000-0001-5521-5218>), Ege Rubak [aut, cph] (ORCID: <https://orcid.org/0000-0002-6675-533X>), Tilman Davies [aut, cph] (ORCID: <https://orcid.org/0000-0003-0565-1825>), Kasper Klitgaard Berthelsen [ctb, cph], David Bryant [ctb, cph], Ya-Mei Chang [ctb, cph], Ute Hahn [ctb], Abdollah Jalilian [ctb], Dominic Schuhmacher [ctb, cph], Rasmus Plenge Waagepetersen [ctb, cph]",
       "Repository": "CRAN",
-      "RemoteType": "url",
-      "RemoteUrl": "https://mirrors.westlake.edu.cn/CRAN/src/contrib/Archive/spatstat.random/spatstat.random_3.5-0.tar.gz"
+      "Type": "source"
     },
     "spatstat.sparse": {
       "Package": "spatstat.sparse",
