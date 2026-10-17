@@ -8,7 +8,7 @@
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md)：当前实施顺序、SparseChatArray 落点和迁移边界。
 - [UPDATE_PLAN.md](UPDATE_PLAN.md)：早期 v3 讨论稿，仅供历史参考，不作为当前实现依据。
 - [PERMUTATION_TEST_AUDIT.md](PERMUTATION_TEST_AUDIT.md)：组级汇聚置换检验的原理、空间自相关混淆问题与改进方案分层（2026-09-22）。
-- [refactoring-plan.html](refactoring-plan.html)：更早的可视化讨论稿，仅供历史参考。
+- [COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md](COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md)：`computeAvgCommunProb` 全量数值差异归因、门控兼容性边界与新函数设计审查。
 
 ## Important update!!
 

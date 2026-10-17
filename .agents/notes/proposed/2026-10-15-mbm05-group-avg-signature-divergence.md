@@ -16,14 +16,14 @@ Superseded by: none
 
 **串行复测（2026-10-16，约束"新旧代码两次串行运算"）将结论升级为逐连边证据**：cell 级 prob 张量在 `computeCommunProb` 与 `filterProbability` 两个断点均为**支持集与数值逐位一致**（407,065,015 与 285,801,026 条 max |Δx| = 0）；group 层 8×8×1,563 = 100,032 坐标全空间对比得到支撑差 148（仅旧）/37（仅新）、共同支撑 10,204 中 7,901 条 ≤3.6e-18（相对 ≤6.1e-14）、pval 差 1,033（**0↔1 完全翻转 80 + 1→0 37**，全部集中在 17 个 LR 层）、显著性(<0.05)集合 5,971→5,921（净 −50）。sum 差 0.003509 恰等于 only-old sum 0.007525 − only-new sum 0.004016，精确闭合。详见 `docs/SERIAL_COMPARISON_GROUP_AVG.md`。
 
-Plan A（implemented Note 2026-09-28）的等价契约声明离散结果逐位一致、Prob ≤1 ulp，其证据为 30 层 fixture（max rel 1.43e-14、Pval 零翻转）。1,563 层量级下出现 111 个支撑条目差异、0.13% 数值和差异、以及 117 个 p 值完全翻转，超出现有契约的已验证边界：要幺门控/分母推理存在规模相关缺陷，要幺分歧机制（如显式零保留、 CSC 求和序进入门控边界）尚未被识别。Rscript 兼容 shim 已被排除：两 worker 的 filter 阶段与 pathway 阶段 nnz/sum 完全一致，分歧严格始于 `computeAvgCommunProb`；且新串行 vs 旧串行的 cell 级逐位一致证明差异不可能来自 filter/compute 端。
+Plan A（implemented Note 2026-09-28）的等价契约声明离散结果逐位一致、Prob ≤1 ulp，其证据为 30 层 fixture（max rel 1.43e-14、Pval 零翻转）。1,563 层量级下出现 111 个支撑条目差异、0.13% 数值和差异、以及 117 个 p 值完全翻转，超出现有契约的已验证边界。串行组件级复核已将 148/37 条支撑差异逐条匹配到 pinned upstream 的 `format(dataLR_temp[, -1], digits = 1) >= min.percent` 字符门控与新实现 `signif(mean, 1)` 数值门控之间的语义差异；共同支撑的约 1 ulp 尾差仍来自 CSC 单遍累加与 Matrix/BLAS 两段归约顺序不同。Rscript 兼容 shim 已被排除：两 worker 的 filter 阶段与 pathway 阶段 nnz/sum 完全一致，分歧严格始于 `computeAvgCommunProb`；且新串行 vs 旧串行的 cell 级逐位一致证明差异不可能来自 filter/compute 端。
 
 ## Proposal
 
 1. ✅ 冻结全量发现为新的等价性数据点：全套串行 artifacts 已落盘于 `tests_dev/benchmarks/out/mbm05_serial_tensor_comparison/`（含各阶段 tensor dump），不再重跑 3.4–7 小时全管线。
 2. ✅ mid-stage dump 能力已加入 benchmark worker（`--dump-dir`，post-filter 对象亦落盘供单阶段重放）；并旁证既有 14 个历史条目 checksum 全部匹配。
-3. ✅ 串行单阶段对拍完成并分类：支撑差集中在弱边（仅旧侧 x ∈ [2.2e-14, 5.45e-4]，仅新侧最大 7.64e-4），共同支撑差 ≤3.6e-18；pval 完全翻转与支撑差异在相同的 17 个 LR 层出现（HLA-E_KLRC2、IL18_IL18R1_IL18RAP、VTN_ITGA8_ITGB1 等），指向这些层存在大量**置换平局（T_perm ≡ T_obs 完全相等）**，平局的 `>=`/`>` 语义 + 1 ulp 偏差使 reject 计数 100↔0 全跳。
-4. ⏳ 待维护者裁定（本 Note 保持 proposed）：是把 Plan A 契约修订为"全量规模下的量化界 + tie 平局语义显式化"，还是先在 Plan B 中做 per-layer 的 T 矩阵级归因与语义统一。若裁定为缺陷需修复，另建修复 Note 并交叉链接。
+3. ✅ 串行单阶段对拍完成并分类：支撑差集中在弱边（仅旧侧 x ∈ [2.2e-14, 5.45e-4]，仅新侧最大 7.64e-4），共同支撑差 ≤3.6e-18；使用组件级表达支持逐条重算后，36 个支撑差异 LR 层中的 148/148 条 only-old 均为旧 gate 通过、新 gate 拒绝，37/37 条 only-new 均为旧 gate 拒绝、新 gate 通过。其根因是 pinned upstream 的 `format()` 字符门控与新实现的数值 `signif()` 门控不一致；pval 完全翻转还通过 `Pval[Prob == 0] <- 1` 传播。共同支撑上的部分 pval 位移另受 1 ulp 归约顺序影响，详见 `docs/COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md`。
+4. ⏳ 待维护者裁定（本 Note 保持 proposed）：`min.percent` 是否必须严格兼容 pinned upstream 的 `format()` 历史行为，还是正式采用数值 `signif()` 语义并更新 oracle/契约。该裁定不改变既有置换检验方法；门控统一后再单独量化剩余的浮点归约边界。若裁定为兼容性缺陷需修复，另建修复 Note 并交叉链接。
 
 ## Constraints and invariants
 
@@ -67,6 +67,6 @@ Plan A（implemented Note 2026-09-28）的等价契约声明离散结果逐位�
 ## Acceptance criteria
 
 - [x] mid-stage dump（post-filter tensor/object、post-avg prob/pval）加入 worker，`--dump-dir` 可指定且不进 stage 计时；`historical_checksums.json` 既有 14 条全部匹配（2026-10-16 `verify_checksums.py` 复核）。
-- [x] 串行全管线对拍完成（同 checkpoint、旧原样代码/新重构代码、无 shim），逐连边 diff 覆盖 filter 前后 cell prob 与 group prob/pval；111+148/37 分歧条目按幅值分类完毕（弱边 + tie 层重叠），见 docs/SERIAL_COMPARISON_GROUP_AVG.md。
+- [x] 串行全管线对拍完成（同 checkpoint、旧原样代码/新重构代码、无 shim），逐连边 diff 覆盖 filter 前后 cell prob 与 group prob/pval；111+148/37 分歧条目按门控语义和幅值分类完毕（`format()`/`signif()` gate 差异 + 共同支撑 1 ulp 尾差），见 `docs/SERIAL_COMPARISON_GROUP_AVG.md` 与 `docs/COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md`。
 - [x] 分类结论写回本 Note 的 Problem/Proposal/Evidence；**Plan A 契约修订与否尚未裁定**（裁定前保持 proposed）。
-- [ ] Agent Notes validator 报告 0 errors（每次本 Note 变更后复核）。
+- [x] Agent Notes validator 报告 0 errors（默认模式；13 条 warning 均为既有 legacy Note 缺少 `Governance: v1`，不属于本 Note），校验日期 2026-10-18。

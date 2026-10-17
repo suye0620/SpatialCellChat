@@ -133,17 +133,18 @@ Serial 端执行脚本(含 dump 逻辑):`tests_dev/test_data/benchmark_mbm05_ups
 
 **完整 0↔1 翻转集中于 17 个 LR 层**(多处同一层多组多边同时全翻转):IL18_IL18R1_IL18RAP、INHABA_ACVR2A、WNT2B_FZD9_LRP5、WNT6_FZD9_LRP5、IL21_IL21R_IL2RG、VTN_ITGA8_ITGB1、VTN_ITGAV_ITGB3、TNFSF13_TNFRSF17、TNFSF13_TNFRSF13B、VTN_ITGA2B_ITGB3、MIF_CD74_CXCR2、GDNF_GFRA1、TSLP_IL7R_CRLF2、**HLA-E_KLRC2**、PCDHGB6_PCDHGB6、IL24_IL20RA_IL20RB、IL12B_IL12RB1_IL12RB2。
 
-注意支撑差异层与完整翻转层高度重叠(HLA-E_KLRC2、IL18_...、VTN_...、INHABA_... 均同时出现)——提示这些层的置换统计存在大量**完全平局(T_perm ≡ T_obs)**,平局的">=" vs ">" 语义差异被 kernel/R 两套实现放大成 0↔1 完全翻转;pval 其它 ±k×0.01 位移(848 条,最大 ≤0.5)是同机制的部分翻转。
+**机制复核（基于组件级门控重算）**：支撑差异层与完整翻转层高度重叠，但不能据此直接归因为 `>=`/`>` 的置换平局。pinned upstream 的平均函数使用 `format(dataLR_temp[, -1], digits = 1) >= min.percent`；`format()` 返回字符型，当前 R 环境下会产生字符比较。新 kernel 使用数值 `signif(mean, 1) >= min.percent` 并预计算固定整数阈值。
+以 MBM05 组件的表达支持和 group_edge_diff 逐条回算：36 个支撑差异 LR 层中，148/148 条 only-old 都是 `old gate=1,new gate=0`，37/37 条 only-new 都是 `old gate=0,new gate=1`。因此支撑差异的主因是门控语义不一致，而不是下溢。
+门控差异还会传播到 `Pval[Prob == 0] <- 1`，解释 80 条 `0→1` 与 37 条 `1→0` 完全翻转。两侧 p 值比较符均为 `Pboot - Pnull > 0`；不存在已证实的“一侧 `>=`、另一侧 `>`”差异。
+共同支撑上的另一类 p 值位移仍由求和顺序解释：Matrix/BLAS 两段归约与 C++ CSC 单遍累加可产生约 1 ulp 尾差，严格 `> 0` 比较在平局边界上可改变一个 boot 的 `0.01` 计数。完整复核见 [COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md](COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md)。
 
 ## 4. 机制判定与差异归因
 
-1. 差异源头:重构后的 `computeAvgCommunProb`(Plan A Rcpp kernel 的 CSC 分块求和 + OpenMP 整数门控),而非任何其它阶段或 shim。
-2. 数值面:共同支撑 ~1e-18 的尾数差属于已文档化契约(基准两侧实现并 OK)。**支撑条目的离散差异(148/37)与 p 值完全翻转(80/37)在 Plan A 契约“离散结果逐位一致、Pval 数值零翻转”的语言下是契约违反**——但其验证仅覆盖 30 层 fixture 与 MBM05 30 层探针,未覆盖到 1,563 层 × 29,536 cell 的全规模。
-3. 猜测的机制链(标注 INFERENCE,待 Plan B 逐层验证):
-   - 同一连边的贡献集合在两套实现下产生**完全平局**(replicate 得到与观测完全一致的数值);
-   - 平局的 `>=` vs `>` 语义 + ±1 ulp 偏差导致 reject 计数 100↔0;
-   - 置换 p 值的量子化翻转与支撑差(148/37)在同一 17 层集合出现,提示这些层的门控输入或求和序在两侧边缘行为不同。
-4. 生物影响评估:所有差异条目都在网络**弱边**端(max 5.45e-4 vs 网络最大边 ~1e-3;仅新侧 max 7.64e-4),显著连边集合数量级不变(5.9k),属可接受;但地图上 edge ranking 靠近阈值的边缘层会轻微漂移。
+1. 差异源头仍是重构后的 `computeAvgCommunProb`，而非 `computeCommunProb`、`filterProbability`、pathway 或 shim；cell-level pre/post-filter tensor 已逐位一致。
+2. 共同支撑约 `1e-18` 的尾数差属于已文档化的求和顺序边界；148/37 条离散支撑差异则是新的兼容性发现，不能归入 ulp 契约。
+3. p 值差异是两条链路叠加：门控变化导致观察边增删和 `Prob==0` 强制 p=1；共同边上的数值归约差异可在严格比较边界改变部分置换计数。
+4. 在维护者裁定 `format()` 历史行为是否属于必须兼容的 oracle 前，Plan A 的“离散结果逐位一致、Pval 零翻转”不能宣称已覆盖全量 1,563 层。
+5. 生物量级评估保持不变：差异集中在弱边，group sum 相对差约 0.13%；但函数契约层面需要显式记录门控语义边界。
 
 ## 5. 复现命令
 
