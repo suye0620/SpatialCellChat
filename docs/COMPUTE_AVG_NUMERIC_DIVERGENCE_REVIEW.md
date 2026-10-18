@@ -1,18 +1,18 @@
 # `computeAvgCommunProb` 全量差异归因与新函数设计审视
 
-> 状态：证据审查（不改变置换检验方法，也不改变 Plan A 的加速决策）
+> 状态：numeric gate 决策已实施；保留证据审查与浮点风险边界（不改变置换检验方法，也不改变 Plan A 的 kernel 加速策略）
 > 范围：MBM05 全量串行对拍中 `computeAvgCommunProb` 的 group-level `prob`/`pval` 差异，以及重构函数的实现假设、兼容性边界和潜在缺陷。
-> 关联：[SERIAL_COMPARISON_GROUP_AVG.md](SERIAL_COMPARISON_GROUP_AVG.md)、[PERMUTATION_TEST_AUDIT.md](PERMUTATION_TEST_AUDIT.md)、[COMPUTATION_OPTIMIZATION.md](COMPUTATION_OPTIMIZATION.md)、`.agents/notes/implemented/2026-09-28-compute-avg-commun-prob-plan-a.md`
+> 关联：[SERIAL_COMPARISON_GROUP_AVG.md](SERIAL_COMPARISON_GROUP_AVG.md)、[PERMUTATION_TEST_AUDIT.md](PERMUTATION_TEST_AUDIT.md)、[COMPUTATION_OPTIMIZATION.md](COMPUTATION_OPTIMIZATION.md)、`.agents/notes/implemented/2026-10-15-mbm05-group-avg-signature-divergence.md`
 
 ## 0. 结论摘要
 
 这次差异不是单一原因，而是两个层次叠加：
 
-1. **离散支撑差异的主因已经定位为 `min.percent` 门控语义不一致。** pinned upstream 在 `computeAvgCommunProb_LR_Avg` 中使用 `format(..., digits = 1) >= min.percent`；在当前 R 环境中，`format()` 返回字符型，比较会按字符语义进行。新实现则使用数值型 `signif(mean, 1) >= min.percent`，并把它预计算为固定整数阈值。两者不是等价变换。
+1. **正式契约采用 numeric `signif()` 门控。** group-level `min.percent` 使用 `signif(mean, 1) >= min.percent`，并由每组固定整数阈值实现。pinned upstream 的 `format(..., digits = 1)` 字符比较被认定为历史缺陷，不再作为新实现的输出 oracle。
 2. **共同支撑内的约 `1 ulp` 尾差来自聚合求和顺序不同。** upstream 通过两段 `Matrix::crossprod`/BLAS 归约；新 kernel 按 CSC 顺序直接向 group bucket 累加。数学结果相同，但 IEEE-754 加法不满足结合律。
-3. **p 值完全翻转主要由门控差异传播而来；部分 `0.01` 量化位移还受到浮点平局边界影响。** 两边的 p 值比较符都是 `Pboot - Pnull > 0`，没有证据表明一边使用 `>=`、另一边使用 `>`。此前把主要原因表述为“`>=`/`>` tie 语义差异”不够准确，现以本文件的归因为准。
+3. **p 值完全翻转主要由门控差异传播而来；部分 `0.01` 量化位移还受到浮点平局边界影响。** 两边的 p 值比较符都是 `Pboot - Pnull > 0`，没有证据表明一边使用 `>=`、另一边使用 `>`。
 4. **没有证据显示 cell-level 输入、`filterProbability`、随机置换流、worker 调度或 OpenMP race 是差异源。** prefilter/postfilter cell-level `prob` 在旧串行与新串行之间均支持集和数值逐位一致。
-5. **新函数的 CSC kernel、显式零计数、置换 gather 和线程隔离设计本身没有被这次证据推翻。** 需要修正的是兼容性边界和测试 oracle，而不是推翻 Plan A 或重写假设检验方法。
+5. **新函数的 CSC kernel、显式零计数、置换 gather 和线程隔离设计保持有效。** 本次决策只修订 group gate 的兼容性边界和测试 oracle，不改变置换检验方法。
 
 ---
 
@@ -239,12 +239,12 @@ new prob = 0
 
 ### 3.5 对函数设计的判断
 
-这不是“C++ 把一个正数算成了零”的下溢问题，也不是分母或 `min.cells.sr` 的计数误差。它是：
+这不是“C++ 把一个正数算成了零”的下溢问题，也不是分母或 `min.cells.sr` 的计数误差。它是正式选择的 numeric gate 与 pinned upstream 历史字符 gate 之间的行为差异。
 
-- **如果 pinned upstream 行为是兼容 oracle：** 新函数存在已确认的兼容性缺陷；
-- **如果 `signif()` 是有意选择的数值语义：** 新函数内部设计是自洽的，但这是一次未显式记录的行为变化，不能继续宣称“与 pinned upstream 离散结果逐位一致”。
+- **当前正式契约：** 新函数的 `signif()` 数值门控是预期行为；148/37 条支撑差异和相应 p 值传播是已记录的行为变更，不再标记为当前实现的兼容性 BUG。
+- **历史对拍边界：** pinned upstream 的 `format()` 字符比较仍可用于解释旧结果，但不再用于阻断 numeric-contract 实现的验收。
 
-在维护者明确选择前，不应默默把该差异降级为浮点噪声，也不应直接改动假设检验方法。
+该决策不改变置换检验的 RNG、null 构造、`Pboot - Pnull > 0` 比较或 `Pval[Prob == 0] <- 1` 规则。
 
 ---
 
@@ -361,37 +361,26 @@ SparseChatArray 的零省略 = 存储约定
 
 ## 6. 新函数设计审视：已确认问题、条件风险和未发现问题
 
-### 6.1 `BUG-COMPAT-01`：min.percent 兼容性缺陷（已确认）
+### 6.1 NUMERIC-GATE-01：numeric `min.percent` 契约（已采用）
 
 **位置：** `R/modeling.R:87-102`、`R/modeling.R:1178-1184`、`src/SpatialChat_Rcpp.cpp:257-263`。
-**现象：** 新函数以 `signif()` 数值语义预计算固定阈值，不能复现 pinned upstream 的 `format()` 字符语义。
-**影响：** 全量 1,563 层出现 148/37 条 group 支撑差异，并传播到 p 值。
-**性质：** 这是兼容性 BUG；是否也是科学语义 BUG，取决于维护者是否把 upstream 的 `format()` 行为视为应保留的 oracle。`format()` 的字符比较本身明显可疑，但不能在本文件中擅自把它改成新的统计决策。
+**契约：** 新函数使用 `signif(mean, 1) >= min.percent`，R 侧按组预计算整数阈值，C++ kernel 执行整数比较。
+**边界：** pinned upstream 的 `format()` 字符比较是历史行为，不属于当前 numeric-contract 输出要求。
+**影响：** MBM05 全量的 148/37 条支撑差异及 p 值传播已记录为有意行为变更。
 
-### 6.2 `TEST-GAP-01`：冻结基线 oracle 没有覆盖 pinned upstream 实际门控（已确认）
+### 6.2 TEST-GAP-01：numeric oracle 覆盖（已关闭）
 
-`tests_dev/reference-computeAvgCommunProb-baseline.R` 选择当前项目的 `computeAvgCommunProb_LR_Avg`；当前 helper 使用 `signif()`，而 pinned upstream package 使用 `format()`。
+原 `tests_dev/reference-computeAvgCommunProb-baseline.R` 名称暗示 pinned-upstream 等价，但实际调用的是项目的 numeric `computeAvgCommunProb_LR_Avg`。为避免错误的 oracle 表述，文件已重命名为 `tests_dev/reference-computeAvgCommunProb-numeric.R`，调用方同步迁移。
 
-因此现有端到端测试证明的是：
-
-```text
-新 kernel signif 语义 ≈ 当前本地 reference signif 语义
-```
-
-不是：
+当前测试分层为：
 
 ```text
-新 kernel ≈ pinned upstream format 语义
+kernel ↔ .spec_boot：独立 R 标量规范，验证 CSC 聚合、门控、den、置换和线程语义
+kernel ↔ numeric reference：验证 group support、Prob 和 Pval 的 numeric gate 端到端结果
+format ↔ signif fixture：仅记录 pinned upstream 历史行为与正式 numeric 行为的有意差异
 ```
 
-建议增加一个小型兼容性 fixture，至少覆盖：
-
-- 整列进入科学计数法的低比例输入；
-- `0.096~0.099` 与 `0.1` 的边界输入；
-- observed 和 permutation 两种标签状态；
-- group support、group prob 和 pval 三层结果。
-
-这属于测试边界修正，不是改变假设检验方法。
+因此测试不再把新实现错误地标记为 pinned upstream 的逐位 oracle；pinned upstream 仍由串行 artifact 和差异分析文档作为历史比较对象。
 
 ### 6.3 `NUM-RISK-01`：严格 p 值比较对归约顺序敏感（已观察，暂不判定为 BUG）
 
@@ -453,35 +442,30 @@ cofactor factor = 1 + non-negative expression >= 1
 
 ## 7. 保守的后续处理建议
 
-### 7.1 先明确兼容性边界，不改假设检验
+### 7.1 已采用的兼容性边界
 
-当前有两个逻辑上不同的选择：
+项目正式采用 numeric `signif()` semantics：`signif(mean, 1) >= min.percent` 是当前输出契约；pinned upstream 的 `format()` 字符比较仅作为历史比较对象。该选择不改变假设检验的 RNG、null 构造、严格 `>` 比较或 `Prob == 0` 后的 p 值规则。
 
-1. **严格 pinned-upstream compatibility：** 新实现需要复现 upstream 的实际门控行为，包括其 `format()` 字符比较语义；这会保留一个可疑但可观测的旧行为，且要考虑 R 版本/locale 的可移植性。
-2. **明确采用 numeric `signif()` semantics：** 认为 upstream 的 `format()` 比较是旧代码 bug，保留新实现的数值门控；这需要把行为变化写入契约，并把 reference/oracle 改为明确的数值语义，而不能继续声称离散结果与旧代码逐位一致。
+不应为了消除历史对拍差异而把 numeric gate 改回字符比较，也不应修改 p 值比较符或加入未经统计裁定的 tolerance。
 
-在维护者裁定前，不建议静默修改一侧，也不建议仅修改 p 值比较符来掩盖门控差异。
+### 7.2 后续验证顺序
 
-### 7.2 最小验证顺序
+numeric gate 已统一到代码、R 参考实现和 fixture。剩余验证不需要重新跑 7 小时全流程：
 
-不需要重新跑 7 小时全流程。已有 post-filter object dump 足够支持以下阶段化验证：
+1. 运行 `tests_dev/test-computeAvgCommunProb.R`，验证 kernel ↔ numeric reference 的 observed/permutation support、Prob 和 Pval；
+2. 运行 MBM05 层子样本 numeric reference 对拍，保留全量 pinned-upstream artifact 作为历史行为证据；
+3. 如需量化纯浮点影响，用同一 post-filter checkpoint 在两侧使用 numeric gate 重放 observed/permutation average；
+4. 再决定是否需要新的 p 值数值复现契约。
 
-1. 用统一的 gate policy 对同一 post-filter checkpoint 重放 observed average；
-2. 用同一 gate policy 重放 permutation average；
-3. 重新比较 group support、group prob 和 pval；
-4. 再把剩余 p 值差异归类为 gate 传播或浮点归约边界。
+### 7.3 当前回归护栏
 
-只有在 gate 语义统一后，才有意义讨论剩余 p 值是否需要新的数值契约。
+不改变假设检验方法，回归测试应保留以下行为护栏：
 
-### 7.3 建议新增的回归断言
-
-不改变假设检验方法，只增加以下行为护栏：
-
-- `format()` 科学计数法与 numeric `signif()` 的差异 fixture；
+- `format()` 科学计数法与 numeric `signif()` 的差异 fixture，明确记录历史行为而非把它当作当前 oracle；
 - `0.09687` 这类 `signif(..., 1) == 0.1` 的边界 fixture；
-- observed/permutation gate 的支持集比较；
+- observed/permutation gate 的 numeric 支持集比较；
 - `Prob == 0` 后 pval 强制为 1 的存储与全空间读取比较；
-- group support 差异必须能定位到具体 gate，而不能只比较总和。
+- group support 差异必须能定位到具体 numeric gate，而不能只比较总和。
 
 ---
 
@@ -521,10 +505,14 @@ cofactor factor = 1 + non-negative expression >= 1
 - p 值完全翻转与 gate 删除/新增以及 `Prob == 0` 规则直接相关；
 - permutation 检验原理、null 构造和旧决策不需要在本次审查中修改。
 
-**尚未裁定：**
+**已裁定：**
 
-- pinned upstream 的 `format()` 行为是必须兼容的历史 oracle，还是应被正式归类为旧代码 bug 并以 numeric semantics 取代；
-- gate policy 统一后，剩余 1,033 个 p 值差异中有多少属于浮点归约平局；
-- 是否需要把 `nthreads`、`min.percent`、`nboot` 等入口参数校验作为单独的低优先级 hardening 任务。
+- numeric `signif()` gate 是正式契约；pinned upstream `format()` 结果只作为历史比较，不要求新实现复现；
+- 置换检验原理、null 构造、严格 `Pboot - Pnull > 0` 比较和 `Pval[Prob == 0] <- 1` 规则保持不变。
 
-在上述裁定完成前，Plan A Note 应保持 `proposed`/审查状态，不应把当前全量结果直接标记为“严格离散等价”。
+**开放风险：**
+
+- 尚未在同一 numeric gate 下重新生成两侧全量 p 值，因此历史 1,033 个差异中纯浮点归约造成的剩余比例尚未单独量化；
+- `nthreads`、`min.percent`、`nboot` 等入口参数校验是否作为低优先级 hardening 任务，仍未单独裁定。
+
+当前 numeric 契约已写入代码注释、R reference、回归测试和本审查文档；Plan A 的旧 pinned-upstream 离散等价声明由 successor Note 取代。

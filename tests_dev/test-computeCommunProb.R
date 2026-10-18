@@ -215,14 +215,14 @@ check("filterProbability logged",
       any(vapply(chat.sp.filt@misc$.log,
                  function(e) identical(e[["function"]], "filterProbability"), logical(1L))))
 
-## ---- (D) ⑤ 门控：signif 数值语义 vs format 字符串语义 ----
+## ---- (D) ⑤ numeric 门控契约：与 pinned upstream 字符行为的有意差异 ----
 dtemp <- data.frame(group = c("A", "A"), r1 = 1e-4, r2 = 0.5, r3 = 0.05)
-gate.old <- 1 * (format(dtemp[, -1], digits = 1) >= 0.1)
-gate.new <- 1 * (signif(dtemp[, -1], 1) >= 0.1)
-check("⑤ format gate lets ghost tiny rate pass", gate.old[1, "r1"] == 1)
-check("⑤ signif gate zeros ghost tiny rate", gate.new[1, "r1"] == 0)
-check("⑤ normal rates unchanged by signif fix",
-      gate.new[1, "r2"] == 1 && gate.new[1, "r3"] == 0 && gate.old[1, "r2"] == 1)
+gate.upstream <- 1 * (format(dtemp[, -1], digits = 1) >= 0.1)
+gate.numeric <- 1 * (signif(dtemp[, -1], 1) >= 0.1)
+check("⑤ historical format gate admits ghost tiny rate", gate.upstream[1, "r1"] == 1)
+check("⑤ formal numeric gate rejects ghost tiny rate", gate.numeric[1, "r1"] == 0)
+check("⑤ normal rates follow numeric contract",
+      gate.numeric[1, "r2"] == 1 && gate.numeric[1, "r3"] == 0)
 
 ## ---- (E) 高效分位捷径：近零层 cutoff 必为 0 -> 与基线“quantile==0 返回原层”等价 ----
 cells20 <- colnames(assay(chat.cc, "signaling"))

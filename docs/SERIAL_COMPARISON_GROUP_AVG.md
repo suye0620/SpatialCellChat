@@ -141,10 +141,10 @@ Serial 端执行脚本(含 dump 逻辑):`tests_dev/test_data/benchmark_mbm05_ups
 ## 4. 机制判定与差异归因
 
 1. 差异源头仍是重构后的 `computeAvgCommunProb`，而非 `computeCommunProb`、`filterProbability`、pathway 或 shim；cell-level pre/post-filter tensor 已逐位一致。
-2. 共同支撑约 `1e-18` 的尾数差属于已文档化的求和顺序边界；148/37 条离散支撑差异则是新的兼容性发现，不能归入 ulp 契约。
+2. 共同支撑约 `1e-18` 的尾数差属于已文档化的求和顺序边界；148/37 条离散支撑差异对应正式采用的 numeric gate 与 pinned upstream 历史字符 gate 的有意行为边界。
 3. p 值差异是两条链路叠加：门控变化导致观察边增删和 `Prob==0` 强制 p=1；共同边上的数值归约差异可在严格比较边界改变部分置换计数。
-4. 在维护者裁定 `format()` 历史行为是否属于必须兼容的 oracle 前，Plan A 的“离散结果逐位一致、Pval 零翻转”不能宣称已覆盖全量 1,563 层。
-5. 生物量级评估保持不变：差异集中在弱边，group sum 相对差约 0.13%；但函数契约层面需要显式记录门控语义边界。
+4. 维护者已裁定采用 `signif(mean, 1) >= min.percent` numeric semantics；Plan A 不再要求新实现复现 pinned upstream 的 `format()` 字符比较结果。
+5. 生物量级评估保持不变：差异集中在弱边，group sum 相对差约 0.13%；后续验收以 numeric reference 和 `Prob ≤1e-12` 数值界为准。
 
 ## 5. 复现命令
 
@@ -166,4 +166,4 @@ Serial 端执行脚本(含 dump 逻辑):`tests_dev/test_data/benchmark_mbm05_ups
 | `tests_dev/benchmarks/out/mbm05_serial_tensor_comparison/{old,new}_*.rds` | 串行各阶段张量与对象 dump |
 | `.../{prefilter,postfilter}_cell_comparison.csv` | cell 级支持+数值差异统计 |
 | `.../group_summary.csv` / `.../group_edge_diff.csv` | group 级聚合 + 8,086 行差异连边详表 |
-| `.agents/notes/proposed/2026-10-15-mbm05-group-avg-signature-divergence.md` | 该发现的治理 Note(proposed,将随本报告更新) |
+| `.agents/notes/implemented/2026-10-15-mbm05-group-avg-signature-divergence.md` | 该发现的治理 Note（implemented；numeric gate 已裁定） |

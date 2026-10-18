@@ -1,5 +1,5 @@
 # MBM05 端到端验证：computeCommunProb(v2) -> filterProbability(v2) -> computeAvgCommunProb(v2 Plan A)
-# 1) 全量跑通 + 计时；2) 冻结基线参考在层子样本上对拍（Prob ≤1 ulp、Pval 零差异）；3) 加速比
+# 1) 全量跑通 + 计时；2) numeric gate reference 在层子样本上对拍（Prob ≤1 ulp、Pval 零差异）；3) 加速比
 setwd(local({ a <- commandArgs(FALSE); f <- sub("^--file=", "", grep("^--file=", a, value = TRUE)); if (length(f)) dirname(dirname(normalizePath(f))) else getwd() }))
 Sys.setenv(RENV_PATHS_LIBRARY = "renv/library")
 if (!nzchar(Sys.getenv("RENV_PROJECT"))) {
@@ -8,7 +8,7 @@ if (!nzchar(Sys.getenv("RENV_PROJECT"))) {
 suppressPackageStartupMessages({ library(methods); library(Matrix); library(cli) })
 source("R/SpatialCellChat_class.R"); source("R/utilities.R"); source("R/modeling.R")
 Rcpp::sourceCpp("src/SpatialChat_Rcpp.cpp", rebuild = FALSE, showOutput = FALSE)
-source("tests_dev/reference-computeAvgCommunProb-baseline.R")
+source("tests_dev/reference-computeAvgCommunProb-numeric.R")
 check <- function(label, condition) {
   if (!isTRUE(condition)) stop("[FAIL] ", label, call. = FALSE)
   cat("[PASS] ", label, "\n", sep = "")
@@ -37,12 +37,12 @@ cat("filterProbability:", t2["elapsed"], "s\n"); flush.console()
 nLR <- dim(chat@net$cell$prob)[3]
 cat("layers:", nLR, " total nnz:", sum(vapply(unclass(chat@net$cell$prob), function(m) length(m@x), numeric(1))), "\n")
 t3 <- system.time(chat <- computeAvgCommunProb(chat, nboot = 100, seed.use = 1, verbose = FALSE))
-cat("computeAvgCommunProb (Plan A, full):", t3["elapsed"], "s\n"); flush.console()
+cat("computeAvgCommunProb (Plan A, numeric gate, full):", t3["elapsed"], "s\n"); flush.console()
 check("object validates after full pipeline", isTRUE(validateSpatialCellChat(chat)))
 prob.group <- chat@net$group$prob
 check("group-level output shape", identical(dim(prob.group), c(nlevels(chat@idents), nlevels(chat@idents), nLR)))
 
-# ---- 冻结基线对拍（层子样本）----
+# ---- numeric gate reference 对拍（层子样本）----
 set.seed(42)
 prob.cell_ <- unclass(chat@net$cell$prob)
 nnz.vec <- vapply(prob.cell_, function(m) length(m@x), numeric(1))
@@ -63,7 +63,7 @@ pval.diff <- 0
 for (i in sample.idx) {
   rowsL <- .sc_expr_row(geneL[i], sig, complex_subunits, cache)
   rowsR <- .sc_expr_row(geneR[i], sig, complex_subunits, cache)
-  tr <- system.time(ref <- computeAvgCommunProb_baseline_ref(
+  tr <- system.time(ref <- computeAvgCommunProb_numeric_ref(
     prob.cell_ = prob.cell_[i], dataLavg = matrix(rowsL, nrow = 1),
     dataRavg = matrix(rowsR, nrow = 1), group = group,
     avg.type = "avg", nboot = 100, seed.use = 1))

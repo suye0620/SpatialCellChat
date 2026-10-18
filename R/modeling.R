@@ -84,12 +84,12 @@
   v
 }
 
-# Plan A 内部：min.percent 门控的整数阈值。
-# 基线决策 decision(cnt) = signif(mean(rep(c(1,0), c(cnt, n-cnt))), 1) >= min.percent
-# 关于 cnt 单调非降（舍入链逐级单调；组大小在标签置换下不变 -> 分母 n 固定），
-# 因此用 R 自身 mean()+signif() 二分求首个 TRUE 的 cnt（每数据集、每组一次），
-# kernel 内退化为整数比较，与基线逐位一致。单调性在
-# tests_dev/test-computeAvgCommunProb.R 中对 fixture 组大小穷举验证。
+# Plan A 内部：正式的 numeric min.percent 门控使用一位有效数字舍入。
+# contract = signif(mean(...), 1) >= min.percent；这里的 1 是 digits 参数，
+# 不是比例阈值。组大小在标签置换下不变，因此每组可预计算一个整数阈值，
+# kernel 内退化为 cnt >= thr；单调性在 tests_dev/test-computeAvgCommunProb.R
+# 中对 fixture 组大小穷举验证。该契约有意不复现 pinned upstream 的
+# format() 字符比较行为，后者仅作为历史对拍参考。
 .sc_gate_threshold <- function(n, min.percent) {
   decision <- function(cnt)
     isTRUE(signif(mean(rep(c(1, 0), c(cnt, n - cnt))), 1) >= min.percent)
@@ -992,7 +992,7 @@ computeAvgCommunProb_LR_Visium_Avg  <- function (
 # #' between several cell groups according to the parameters `min.percent` and `min.cells.sr`
 # #' when computing the average communication probability of a given pair of ligand-receptor between cell groups.
 # #' Default is TRUE.
-# #' @param min.percent Numeric from 0 to 1. Minimum percentage of expressed ligands or receptors per cell group to require for computing the group-level signaling
+# #' @param min.percent Numeric from 0 to 1. The expressed-ligand/receptor proportion is rounded to one significant digit numerically and must meet this threshold for group-level signaling
 # #' Default is 0.1.
 # #' @param min.cells.sr Integer greater than 0. Minimum number of cells required as senders or receivers per cell group for computing the group-level signaling
 # #' Default is 5.
@@ -1026,7 +1026,7 @@ computeAvgCommunProb_LR_Visium_Avg  <- function (
 #     # min.percent
 #     dataLR_temp <- 1 * (dataLR > 0)
 #     dataLR_temp <- aggregate(dataLR_temp, list(group), FUN = mean)
-#     dataLR_percent <- 1 * (format(dataLR_temp[, -1], digits = 1) >= min.percent)
+#     dataLR_percent <- 1 * (signif(dataLR_temp[, -1], 1) >= min.percent)
 #     Prob_percent <- Matrix::crossprod(matrix(dataLR_percent[, 1], nrow = 1), matrix(dataLR_percent[, 2], nrow = 1))
 #
 #     if(sum(Prob_percent)==0){
@@ -1068,17 +1068,18 @@ computeAvgCommunProb_LR_Visium_Avg  <- function (
 #' group-level communication with a permutation test, on the final 11-slot
 #' object schema.
 #'
-#' Plan A (2026-09-28): numerically faithful acceleration of the baseline
-#' permutation test. The per-boot gated group aggregation runs in the
-#' `cpp_group_avg_obs` / `cpp_group_avg_perm` kernels; group2group CCC values
-#' and p-values match the pre-migration baseline (see agent note 2026-09-28 for
-#' the equivalence contract and `docs/PERMUTATION_TEST_AUDIT.md` for the
-#' statistical audit of the test itself, which is intentionally out of scope).
+#' Plan A (2026-09-28): accelerated group aggregation under the declared numeric
+#' `min.percent` gate. The per-boot gated aggregation runs in the
+#' `cpp_group_avg_obs` / `cpp_group_avg_perm` kernels. The pinned upstream
+#' `format()` character-comparison behavior is a historical comparator, not the
+#' current numeric contract. See `docs/COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md`
+#' for the compatibility boundary and `docs/PERMUTATION_TEST_AUDIT.md` for the
+#' statistical audit of the test itself, which is intentionally out of scope.
 #'
 #' @param object SpatialCellChat object with `net$cell$prob`.
 #' @param group.by cell group information used for computing average communication probabilities.
 #' @param avg.type methods for integrating communication probabilities per cell group.
-#' @param min.percent Numeric from 0 to 1. Minimum percentage of expressed ligands or receptors per cell group to require for computing the group-level signaling
+#' @param min.percent Numeric from 0 to 1. The expressed-ligand/receptor proportion is rounded to one significant digit numerically and must meet this threshold for group-level signaling.
 #' Default is 0.1.
 #' @param min.cells.sr Integer greater than 0. Minimum number of cells required as senders or receivers per cell group for computing the group-level signaling
 #' Default is 5.
@@ -1175,11 +1176,11 @@ computeAvgCommunProb <- function(
   expr.cache <- new.env(parent = emptyenv())
   group_int <- as.integer(group) - 1L
 
-  # min.percent thresholds: one integer threshold per group. The baseline decision
-  # signif(mean, 1) >= min.percent is monotone non-decreasing in the 0/1 count, and
-  # group sizes (the mean denominators) are invariant under label permutation, so a
-  # single per-group threshold, probed against R's own mean()+signif(), reproduces
-  # the baseline gate bitwise for every boot and LR (see .sc_gate_threshold).
+  # min.percent thresholds: one integer threshold per group under the formal
+  # numeric gate `signif(mean, 1) >= min.percent`. Group sizes (the mean
+  # denominators) are invariant under label permutation, so a single per-group
+  # threshold, probed against R's own mean()+signif(), reproduces the declared
+  # numeric gate for every boot and LR (see .sc_gate_threshold).
   grp.size <- tabulate(as.integer(group), nbins = numCluster)
   thr <- vapply(grp.size, .sc_gate_threshold, integer(1), min.percent = min.percent)
 
@@ -1410,7 +1411,7 @@ computeAvgCommunProb_LR_Sum <- function (
 # #' When setting `type = "truncatedMean"`, a value should be assigned to 'trim'. See the function `base::mean`.
 # #'
 # #' @param trim the fraction (0 to 0.25) of observations to be trimmed from each end of x before the mean is computed.
-#' @param min.percent Numeric from 0 to 1. Minimum percentage of expressed ligands or receptors per cell group to require for computing the group-level signaling
+#' @param min.percent Numeric from 0 to 1. The expressed-ligand/receptor proportion is rounded to one significant digit numerically and must meet this threshold for group-level signaling
 #' Default is 0.1.
 #' @param min.cells.sr Integer greater than 0. Minimum number of cells required as senders or receivers per cell group for computing the group-level signaling
 #' Default is 5.

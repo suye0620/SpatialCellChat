@@ -1,12 +1,14 @@
-# 冻结基线参考实现：pre-migration computeAvgCommunProb（modeling.R @ be88f30）的
-# plain-input 快照，供 Plan A 重构对拍（与 test-computeCommunProb 的冻结基线模式一致）。
-# 除以下两点外逐行保真：
-#   1) object 读取替换为显式入参（prob.cell_ / dataLavg / dataRavg / group）；
-#   2) my_future_sapply/lapply 替换为串行 sapply/lapply（并行只影响调度，不影响数值；
-#      串行 = 单 worker 语义）。
-# dataLavg/dataRavg 语义 = 旧 net$tmp$Lavg/Ravg 的第 i 行（门控内经 `1 * (dataLR > 0)`）。
-# 传 0/1 矩阵时 `1 * (x > 0) == x`，与 v2 的 suppL/suppR 门控输入逐位一致。
-computeAvgCommunProb_baseline_ref <- function(
+# Numeric-semantics reference implementation for `computeAvgCommunProb`.
+#
+# This plain-input R reference deliberately uses the project contract
+# `signif(mean, 1) >= min.percent`. It is not a pinned-upstream oracle:
+# pinned upstream's `format(..., digits = 1)` character comparison is retained
+# only in the historical serial comparison artifacts.
+#
+# The reference keeps the pre-migration aggregation shape while replacing
+# future scheduling with serial sapply/lapply, so the kernel can be checked
+# against an independent R aggregation path.
+computeAvgCommunProb_numeric_ref <- function (
     prob.cell_,
     dataLavg,
     dataRavg,

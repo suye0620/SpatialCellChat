@@ -1,5 +1,5 @@
-# Plan A: computeAvgCommunProb v2 —— kernel / R 语义规范 / 冻结基线 对拍
-# 等价性契约见 agent note 2026-09-28 与 docs/PERMUTATION_TEST_AUDIT.md（统计语义审计）。
+# Plan A: computeAvgCommunProb v2 —— kernel / numeric gate reference / semantic checks
+# The formal gate is `signif(mean, 1) >= min.percent`; pinned upstream format behavior is historical only.
 setwd(local({ a <- commandArgs(FALSE); f <- sub("^--file=", "", grep("^--file=", a, value = TRUE)); if (length(f)) dirname(dirname(normalizePath(f))) else getwd() }))
 Sys.setenv(RENV_PATHS_LIBRARY = "renv/library")
 if (!nzchar(Sys.getenv("RENV_PROJECT"))) {
@@ -12,7 +12,7 @@ source("R/SpatialCellChat_class.R")
 source("R/utilities.R")
 source("R/modeling.R")
 Rcpp::sourceCpp("src/SpatialChat_Rcpp.cpp", rebuild = FALSE, showOutput = FALSE)
-source("tests_dev/reference-computeAvgCommunProb-baseline.R")
+source("tests_dev/reference-computeAvgCommunProb-numeric.R")
 
 check <- function(label, condition) {
   if (!isTRUE(condition)) stop("[FAIL] ", label, call. = FALSE)
@@ -38,7 +38,7 @@ make_layer <- function(nC, n.store, seed, n.explicit.zeros = 0L, values = NULL) 
 make_group <- function(sizes, labels) factor(rep(labels, times = sizes))
 
 ## R 语义规范：与 kernel 相同的遍历序（CSC 列升序、列内行升序）与乘加分组，
-## 逐字标量循环累积 -> 可做 identical 逐位对拍。门控用整数阈值（与 kernel 同）。
+## 逐字标量循环累积 -> 可做 identical 逐位对拍。门控使用 numeric contract 的整数阈值。
 .spec_boot <- function(m, suppL, suppR, sr_out, sr_in, g, K, thr, min.cells.sr, do_avg) {
   nC <- ncol(m)
   cntL <- numeric(K); cntR <- numeric(K); Sout <- numeric(K); Sin <- numeric(K)
@@ -151,7 +151,7 @@ for (n in c(1000L, 29536L)) {
 }
 check("gate threshold large-n stratified probes (n=1000, 29536)", TRUE)
 
-## ---- 3. 冻结基线端到端对拍（最小 11-slot 对象）----
+## ---- 3. numeric gate reference 端到端对拍（最小 11-slot 对象）----
 set.seed(2026)
 nC <- 40L
 k <- 3L
@@ -179,7 +179,7 @@ prob.array <- SparseChatArray(layers)
 dimnames(prob.array) <- list(colnames(expr), colnames(expr), names(layers))
 chat@net$cell$prob <- prob.array
 
-# 参考输入：expr 行即旧 tmp$Lavg/Ravg 的 0/1 等价替身（门控内 `1*(x>0)` 逐位一致）
+# 参考输入：expr 行即 numeric gate reference 的 0/1 支持输入。
 complex_subunits <- .sc_complex_subunits(chat@DB$complex)
 cache <- new.env(parent = emptyenv())
 rowsL <- t(vapply(seq_len(nLR), function(i)
@@ -188,7 +188,7 @@ rowsR <- t(vapply(seq_len(nLR), function(i)
   .sc_expr_row(as.character(LRtab$receptor[i]), sig, complex_subunits, cache), numeric(nC)))
 
 for (avg.type in c("avg", "sum")) {
-  ref <- computeAvgCommunProb_baseline_ref(
+  ref <- computeAvgCommunProb_numeric_ref(
     prob.cell_ = layers, dataLavg = rowsL, dataRavg = rowsR, group = group,
     avg.type = avg.type, nboot = 20, seed.use = 1)
   chat2 <- computeAvgCommunProb(chat, avg.type = avg.type, nboot = 20, seed.use = 1,
@@ -197,12 +197,12 @@ for (avg.type in c("avg", "sum")) {
                     dim = c(k, k, nLR))
   Pval.new <- array(unlist(lapply(unclass(chat2@net$group$pval), as.matrix)),
                     dim = c(k, k, nLR))
-  # 等价契约：门控/计数/模式逐位一致；分块和受基线 BLAS dgemm 归约序不可移植性
-    # 约束，允许 ≤1 ulp 级浮点差（实测 ~3.6e-16 相对差）；p 值为离散计数，必须零差异。
+  # numeric gate contract：门控/计数/模式逐位一致；分块和受 BLAS 归约序影响，
+  # 只对 Prob 施加 ≤1e-12 数值界；Pval 在同一 numeric gate 下必须逐位一致。
   rel <- max(abs(Prob.new - ref$Prob) / pmax(abs(ref$Prob), 1e-300))
-  check(sprintf("end-to-end Prob within 1 ulp of frozen baseline (%s): %.2e", avg.type, rel),
+  check(sprintf("end-to-end Prob within numeric contract (%s): %.2e", avg.type, rel),
         rel <= 1e-12)
-  check(sprintf("end-to-end Pval identical vs frozen baseline (%s)", avg.type),
+  check(sprintf("end-to-end Pval identical vs numeric reference (%s)", avg.type),
         same(drop(Pval.new), drop(ref$Pval)))
   check(sprintf("object validates (%s)", avg.type),
         isTRUE(validateSpatialCellChat(chat2)))
