@@ -48,7 +48,7 @@ Plan A（implemented Note 2026-09-28）的等价契约声明离散结果逐位�
 ## Consequences
 
 - numeric gate 行为变更正式接受：148/37 条支撑差异及其 p 值传播不再作为兼容性失败；下游消费者继续读取相同的 `net$group$prob` / `net$group$pval` schema，但必须按 numeric gate 解释结果。
-- 共同支撑的 `Prob` 仍采用 `≤1e-12` 数值界；严格 p 值比较的归约边界继续单独记录，不改 `>`、分母或 null。
+- 共同支撑的 `Prob` 仍采用 `≤1e-12` 数值界；同一 MBM05 post-filter checkpoint 的全量 numeric-gate 重放中 p-value 零差，因此不改 `>`、分母或 null；该结论不升级为跨平台所有输入的逐位 p-value 契约。
 - 全量签名对比仍是 `computeAvgCommunProb` 改动后的验收证据，但 pinned-upstream 差异按已裁定的 numeric contract 解释。
 
 ## Evidence
@@ -63,6 +63,7 @@ Plan A（implemented Note 2026-09-28）的等价契约声明离散结果逐位�
 - Driver 于 2026-10-15 由双 artifact 重建全部对比 CSV/TXT/RDS，`Worker failures: none`；运行日志 `baseline_run4.log`、PID 记录 `baseline_run4.pid`、启动脚本 `launch_baseline_run4.ps1` 同目录留档。
 - Plan A 历史契约与 30 层证据：`.agents/notes/archived/2026-09-28-compute-avg-commun-prob-plan-a.md`（fixture ≤3.55e-16、MBM05 30 层 ≤1.43e-14、Pval 零翻转、契约断言 ≤1e-12）；当前 numeric contract 的直接验证见 `tests_dev/test-computeAvgCommunProb.R`。
 - 规模盲区确认：本 Note 之前所有等价性证据（160 项单元测试、2026-10-09 e2e、30 层冻结对拍）均为小规模 fixture；2026-10-16 串行全量对比是首次 1,563 层双端成功对比。
+- **同一 numeric gate 全量重放（2026-10-18）**：使用 `new_postfilter_object.rds` 的同一 post-filter cell tensor、8 组、seed `1`、`nboot=100`，重放全部 1,555/1,563 个非空 LR 层。R/Matrix numeric reference 与 C++ CSC kernel 的 support mismatch = 0；`Prob` 最大绝对差 `3.604972e-18`、最大相对差 `6.058219e-14`；p-value mismatch = 0、最大 p-value 差 = 0、显著性翻转 = 0。其余 8 个空层固定输出 `Prob=0`、`Pval=1`。运行器为 `tests_dev/benchmarks/replay_numeric_gate_pval.R`，结果写入 `tests_dev/benchmarks/out/mbm05_serial_tensor_comparison/numeric_gate_replay_{layers,pval_diff,summary}.csv`；该结果关闭当前 MBM05 artifact 的残余 p 值风险，不建立跨平台所有输入的逐位契约。
 
 ## Acceptance criteria
 
@@ -70,3 +71,4 @@ Plan A（implemented Note 2026-09-28）的等价契约声明离散结果逐位�
 - [x] 串行全管线对拍完成（同 checkpoint、旧原样代码/新重构代码、无 shim），逐连边 diff 覆盖 filter 前后 cell prob 与 group prob/pval；111+148/37 分歧条目按门控语义和幅值分类完毕（`format()`/`signif()` gate 差异 + 共同支撑 1 ulp 尾差），见 `docs/SERIAL_COMPARISON_GROUP_AVG.md` 与 `docs/COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md`。
 - [x] 分类结论写回本 Note 的 Problem/Decision/Evidence；numeric `signif()` gate 已由维护者选择，旧 Plan A 的 pinned-upstream 离散等价边界由本 Note 取代。
 - [x] `tests_dev/test-computeAvgCommunProb.R` 与 numeric reference 通过；R/C++ 注释、公开参数文档与优化文档同步记录 numeric contract。MBM05 层子样本的既有 2026-09-28 对拍证据保持有效，因本次仅重命名 reference 文件且未改变数值逻辑。
+- [x] 同一 numeric gate 的 post-filter 全量非空层重放完成：1,555/1,563 层、`nboot=100` 下 support 与 p-value 零差、`Prob` 保持数值界；其余 8 个空层固定为 `Prob=0`/`Pval=1`，全量 MBM05 artifact 的残余 p 值风险已关闭。

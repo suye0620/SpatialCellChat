@@ -10,9 +10,10 @@
 
 1. **正式契约采用 numeric `signif()` 门控。** group-level `min.percent` 使用 `signif(mean, 1) >= min.percent`，并由每组固定整数阈值实现。pinned upstream 的 `format(..., digits = 1)` 字符比较被认定为历史缺陷，不再作为新实现的输出 oracle。
 2. **共同支撑内的约 `1 ulp` 尾差来自聚合求和顺序不同。** upstream 通过两段 `Matrix::crossprod`/BLAS 归约；新 kernel 按 CSC 顺序直接向 group bucket 累加。数学结果相同，但 IEEE-754 加法不满足结合律。
-3. **p 值完全翻转主要由门控差异传播而来；部分 `0.01` 量化位移还受到浮点平局边界影响。** 两边的 p 值比较符都是 `Pboot - Pnull > 0`，没有证据表明一边使用 `>=`、另一边使用 `>`。
+3. **历史 p 值完全翻转主要由门控差异传播。** 在相同 numeric gate 下对 MBM05 全部 1,555 个非空 LR 层重放未出现 p-value 差异；两边的比较符仍都是 `Pboot - Pnull > 0`，没有证据表明一边使用 `>=`、另一边使用 `>`。
 4. **没有证据显示 cell-level 输入、`filterProbability`、随机置换流、worker 调度或 OpenMP race 是差异源。** prefilter/postfilter cell-level `prob` 在旧串行与新串行之间均支持集和数值逐位一致。
 5. **新函数的 CSC kernel、显式零计数、置换 gather 和线程隔离设计保持有效。** 本次决策只修订 group gate 的兼容性边界和测试 oracle，不改变置换检验方法。
+6. **同一 numeric gate 的全量阶段重放未观察到 p 值漂移。** 在相同 post-filter cell tensor、seed `1`、`nboot=100` 下重放全部 1,555/1,563 个非空 LR 层，R/Matrix reference 与 C++ CSC kernel 的 support 零差，`Prob` 最大绝对差 `3.604972e-18`、最大相对差 `6.058219e-14`，p-value 零差且无显著性翻转；其余 8 个空层是固定 `Prob=0`、`Pval=1` 的 no-op 路径。该结果关闭了当前 MBM05 artifact 的残余 p 值风险，不升级为跨平台所有输入的逐位 p-value 契约。
 
 ---
 
@@ -278,7 +279,7 @@ den[f] += 1.0;
 - 最大相对差 `6.05822e-14`；
 - 没有共同边超过 `1e-12`。
 
-代表性 p 值变化：
+代表性历史 p 值变化（pinned upstream `format()` gate vs 当前 numeric gate）：
 
 ```text
 TGFB1_TGFBR1_TGFBR2, 1 -> 3
@@ -288,7 +289,7 @@ prob new = 4.42935009099750e-05
 pval      0.08 -> 0.09
 ```
 
-该 LR 层不属于 36 个支撑差异层，说明至少这一类 p 值变化可以在 gate 相同的情况下由浮点求和顺序触发。
+该 LR 层不属于 36 个**观察边**支撑差异层，但这不能证明两侧所有置换的 gate 都相同；置换后的支持集仍可能受 `format()`/`signif()` 语义影响。为隔离该因素，已对同一 numeric gate 的全部 1,555 个非空层重放，p-value mismatch = 0。因此该 MBM05 artifact 中，CSC/BLAS 的约 1 ulp 求和差异表现为 `Prob` 数值尾差，未观察到它改变严格 p 值计数。
 
 ### 4.3 对函数设计的判断
 
@@ -298,7 +299,7 @@ pval      0.08 -> 0.09
 - CSC 单遍聚合的数值差异处于已测 `1 ulp` 级别；
 - 新线程之间处理不同 boot，输出列互斥，已有 `nthreads=1/4` 逐位一致测试。
 
-因此目前没有理由因为这部分尾差而回退 Plan A。需要把 p 值的“严格零差”承诺与浮点归约边界分开描述，而不是把所有差异归结为同一个 tie 机制。
+因此目前没有理由因为 `Prob` 尾差而回退 Plan A；当前 MBM05 全量 numeric-gate 重放也没有理由修改 `>` 或加入 tolerance。若未来其他 BLAS/硬件/输入出现 p 值漂移，应单独提出统计与数值契约决策。
 
 ---
 
@@ -382,9 +383,11 @@ format ↔ signif fixture：仅记录 pinned upstream 历史行为与正式 nume
 
 因此测试不再把新实现错误地标记为 pinned upstream 的逐位 oracle；pinned upstream 仍由串行 artifact 和差异分析文档作为历史比较对象。
 
-### 6.3 `NUM-RISK-01`：严格 p 值比较对归约顺序敏感（已观察，暂不判定为 BUG）
+### 6.3 `NUM-RISK-01`：严格 p 值比较对归约顺序敏感（历史 artifact 已观察；同 gate 全量重放未复现）
 
-`Pboot - Pnull > 0` 是离散判定，数值上极小的尾差可以改变 reject 计数。该现象在 TGFB1 样例中已观察到。
+`Pboot - Pnull > 0` 是离散判定，数值上极小的尾差理论上可能改变 reject 计数。全量 pinned-upstream vs refactored artifact 的 TGFB1 样例确实从 `0.08` 变为 `0.09`，但该比较同时跨越了 `format()` 与 numeric `signif()` gate，不能单独证明是 CSC/BLAS 归约造成的。
+
+为隔离 gate 语义，`tests_dev/benchmarks/replay_numeric_gate_pval.R` 在同一 post-filter cell tensor 上使用 numeric gate 重放全部 1,555/1,563 个非空 LR 层、`nboot=100`。support mismatch、p-value mismatch、显著性翻转均为 0；`Prob` 最大绝对差为 `3.604972e-18`。其余 8 个空层走固定 `Prob=0`、`Pval=1` 路径。因此当前 MBM05 artifact 的残余 p 值风险已量化为 0；这个结论不扩展为所有平台、BLAS 或输入的普适逐位契约。
 
 目前不建议：
 
@@ -392,7 +395,7 @@ format ↔ signif fixture：仅记录 pinned upstream 历史行为与正式 nume
 - 给差值加固定 tolerance；
 - 更改 p 值分母或 null 构造。
 
-这些都会改变既有统计方法。当前应把它记录为“同一统计方法在不同浮点归约路径下的可复现性边界”，待 gate 语义统一后再单独评估剩余 p 值差异。
+这些都会改变既有统计方法。当前保留严格比较规则；未来若其他环境出现同 gate p 值漂移，应单独提出统计与数值契约决策。
 
 ### 6.4 `HARDEN-01`：参数输入校验可以加强（低优先级，未证明为本次 BUG）
 
@@ -450,12 +453,12 @@ cofactor factor = 1 + non-negative expression >= 1
 
 ### 7.2 后续验证顺序
 
-numeric gate 已统一到代码、R 参考实现和 fixture。剩余验证不需要重新跑 7 小时全流程：
+numeric gate 已统一到代码、R 参考实现和 fixture；post-filter 阶段的同 gate 全量非空层重放也已完成，不需要修改统计检验或重新跑旧侧 7 小时全流程：
 
 1. 运行 `tests_dev/test-computeAvgCommunProb.R`，验证 kernel ↔ numeric reference 的 observed/permutation support、Prob 和 Pval；
-2. 运行 MBM05 层子样本 numeric reference 对拍，保留全量 pinned-upstream artifact 作为历史行为证据；
-3. 如需量化纯浮点影响，用同一 post-filter checkpoint 在两侧使用 numeric gate 重放 observed/permutation average；
-4. 再决定是否需要新的 p 值数值复现契约。
+2. 保留全量 pinned-upstream artifact 作为历史行为证据；
+3. `tests_dev/benchmarks/replay_numeric_gate_pval.R` 已在同一 post-filter checkpoint 重放 1,555/1,563 个非空 LR 层、`nboot=100`：support 与 p-value 零差，Prob 最大相对差 `6.058219e-14`，满足 `≤1e-12` 数值界；
+4. 其余 8 个空层固定输出 `Prob=0`、`Pval=1`；不改变严格 `>` 规则，也不建立跨平台所有输入的逐位 p-value 契约。
 
 ### 7.3 当前回归护栏
 
@@ -480,6 +483,11 @@ numeric gate 已统一到代码、R 参考实现和 fixture。剩余验证不需
 - `tests_dev/benchmarks/analyze_group_diff3.R` 至 `analyze_group_diff6.R`
 - `tests_dev/benchmarks/compare_serial_tensors.R`
 
+同一 numeric gate 的阶段重放证据（1,555/1,563 个非空层；其余 8 层为空）：
+
+- `tests_dev/benchmarks/replay_numeric_gate_pval.R`
+- `tests_dev/benchmarks/out/mbm05_serial_tensor_comparison/numeric_gate_replay_{layers,pval_diff,summary}.csv`
+
 基础对比命令：
 
 ```bash
@@ -489,6 +497,14 @@ numeric gate 已统一到代码、R 参考实现和 fixture。剩余验证不需
 
 "C:\Program Files\R\R-4.4.3\bin\Rscript.exe" \
   tests_dev/benchmarks/analyze_group_diff6.R
+```
+
+同一 numeric gate 重放命令：
+
+```bash
+"C:\Program Files\R\R-4.4.3\bin\Rscript.exe" \
+  tests_dev/benchmarks/replay_numeric_gate_pval.R \
+  tests_dev/benchmarks/out/mbm05_serial_tensor_comparison 1563 100
 ```
 
 当前文档对 `SERIAL_COMPARISON_GROUP_AVG.md` 中旧的“`>=`/`>` tie 语义是主要原因”表述进行了机制层面的修正；原始数值证据不变。
@@ -512,7 +528,7 @@ numeric gate 已统一到代码、R 参考实现和 fixture。剩余验证不需
 
 **开放风险：**
 
-- 尚未在同一 numeric gate 下重新生成两侧全量 p 值，因此历史 1,033 个差异中纯浮点归约造成的剩余比例尚未单独量化；
+- 当前 MBM05 post-filter checkpoint 的 1,555 个非空层在同一 numeric gate 下 support 与 p-value 均零差，8 个空层固定输出 `Prob=0`、`Pval=1`；未建立跨平台、不同 BLAS 或任意输入的严格 p-value 逐位契约。
 - `nthreads`、`min.percent`、`nboot` 等入口参数校验是否作为低优先级 hardening 任务，仍未单独裁定。
 
 当前 numeric 契约已写入代码注释、R reference、回归测试和本审查文档；Plan A 的旧 pinned-upstream 离散等价声明由 successor Note 取代。

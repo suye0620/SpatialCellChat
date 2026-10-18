@@ -219,7 +219,7 @@ res <- BiocNeighbors::findNeighbors(
 ## 6. 已裁定事项与剩余讨论点
 
 1. **优先级**：方案 A（279×）与 B（140×）覆盖两个最大热点，且都**不需要并行**。当前实现保留 kernel 化，并将并行作为可选配置。
-2. **数值一致性契约**：A 可逐位一致；B（Rcpp block-sum）与 R/BLAS 累加顺序不同，`Prob` 采用已测 `≤1e-12` 数值界；严格 p 值比较的剩余边界另行量化。
+2. **数值一致性契约**：A 可逐位一致；B（Rcpp block-sum）与 R/BLAS 累加顺序不同，`Prob` 采用已测 `≤1e-12` 数值界；同一 numeric gate 的 post-filter 重放覆盖 1,555/1,563 个非空层，p 值零差，剩余 8 个空层固定为 `Prob=0`/`Pval=1`，但不升级为跨平台所有输入的 p 值逐位契约。
 3. **`format(digits=1)` 字符串比较**：已裁定采用 `signif(x, 1) >= min.percent` numeric semantics；旧字符行为仅作历史比较，不再作为新实现验收 oracle。
 4. **真实数据规模**：合成基准为 Visium（5k spots、200k 边、k=10）。若目标含 slide-seq（5 万 spots），`computeCellDistance` 的稠密瓶颈会先爆——方案 D 的 KD-tree 需提前。
 5. **落地方式**：方案 A+B 可直接实现并用 tutorial 数据（`visium_human_psoriasis.RData`）回归。

@@ -13,6 +13,7 @@
    - p 值全空间差异 1,033(含 0↔1 完全翻转 80/37),完整翻转集中到 **17 个 LR 层**;显著性(<0.05)条目 5,971 → 5,921(净 −50;旧→不显著 90、不显著→显著 40)。
 3. **因果归属:全部差异由重构策略(Plan A kernel 的 `computeAvgCommunProb`)导致**,与 `computeCommunProb`/`filterProbability`/`computeCommunProbPathway` 无关——cell 层两张 prob 张量在 filter 前后都逐位相同是铁证。
 4. 数值后果在**生物量级上可忽略**(最大的旧侧独有条目值 5.5e-4,与典型强边 1e-3 同量级但数量少;数值差 ~1e-18);但在**算法契约文本上**,Plan A 的"离散结果逐位一致 + Pval 零翻转"声明(在 30 层 fixture 上验证)在全量 1,563 层规模被推翻——支撑条目离散差异与 p 值完全翻转都超出了该契约的已验证边界。
+5. **同一 numeric gate 的全量阶段重放**：以新侧 post-filter checkpoint 作为相同 cell-level 输入，R/Matrix numeric reference 与 C++ CSC kernel 重放全部 1,555/1,563 个非空 LR 层、`nboot=100`，support 零差，`Prob` 最大绝对差 `3.604972e-18`、最大相对差 `6.058219e-14`，p-value 零差且无显著性翻转；其余 8 个空层固定为 `Prob=0`、`Pval=1`。该结果关闭当前 MBM05 artifact 的残余 p 值风险，不代表跨平台所有输入的 p 值逐位契约。
 
 ## 1. 实验设置
 
@@ -136,13 +137,28 @@ Serial 端执行脚本(含 dump 逻辑):`tests_dev/test_data/benchmark_mbm05_ups
 **机制复核（基于组件级门控重算）**：支撑差异层与完整翻转层高度重叠，但不能据此直接归因为 `>=`/`>` 的置换平局。pinned upstream 的平均函数使用 `format(dataLR_temp[, -1], digits = 1) >= min.percent`；`format()` 返回字符型，当前 R 环境下会产生字符比较。新 kernel 使用数值 `signif(mean, 1) >= min.percent` 并预计算固定整数阈值。
 以 MBM05 组件的表达支持和 group_edge_diff 逐条回算：36 个支撑差异 LR 层中，148/148 条 only-old 都是 `old gate=1,new gate=0`，37/37 条 only-new 都是 `old gate=0,new gate=1`。因此支撑差异的主因是门控语义不一致，而不是下溢。
 门控差异还会传播到 `Pval[Prob == 0] <- 1`，解释 80 条 `0→1` 与 37 条 `1→0` 完全翻转。两侧 p 值比较符均为 `Pboot - Pnull > 0`；不存在已证实的“一侧 `>=`、另一侧 `>`”差异。
-共同支撑上的另一类 p 值位移仍由求和顺序解释：Matrix/BLAS 两段归约与 C++ CSC 单遍累加可产生约 1 ulp 尾差，严格 `> 0` 比较在平局边界上可改变一个 boot 的 `0.01` 计数。完整复核见 [COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md](COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md)。
+共同支撑上的 `Prob` 尾差确实来自 Matrix/BLAS 两段归约与 C++ CSC 单遍累加的求和顺序；但历史 p 值位移不能仅凭共同观察支撑归因为浮点平局，因为置换后的 `format()`/`signif()` gate 仍可能不同。全量同一 numeric gate 重放没有 p-value mismatch；完整复核见 [COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md](COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md)。
+
+### 3.4 同一 numeric gate 的阶段重放
+
+历史旧/新全量对拍同时包含 pinned-upstream `format()` 字符 gate 与当前 numeric `signif()` gate 的差异，不能直接把 1,033 个 p 值差异归因于浮点归约。为隔离该因素，使用新侧 `new_postfilter_object.rds` 作为共同 cell-level 输入，在 R/Matrix numeric reference 与 C++ CSC kernel 两侧固定 `seed=1`、`nboot=100`，重放全部 1,555/1,563 个非空 LR 层。
+
+| 指标 | 结果 |
+|---|---:|
+| support mismatch | 0 |
+| `Prob` 最大绝对差 | `3.604972e-18` |
+| `Prob` 最大相对差 | `6.058219e-14` |
+| p-value mismatch | 0 |
+| p-value 最大绝对差 | 0 |
+| 显著性翻转(`< 0.05`) | 0 |
+
+运行器：`tests_dev/benchmarks/replay_numeric_gate_pval.R`；结果：`tests_dev/benchmarks/out/mbm05_serial_tensor_comparison/numeric_gate_replay_{layers,pval_diff,summary}.csv`。其余 8 个空层固定输出 `Prob=0`、`Pval=1`。结论限定为当前 MBM05 checkpoint、R/Matrix 与 C++ 实现：同一 numeric gate 下没有观测到 p 值漂移，不建立跨平台所有输入的逐位 p-value 契约。
 
 ## 4. 机制判定与差异归因
 
 1. 差异源头仍是重构后的 `computeAvgCommunProb`，而非 `computeCommunProb`、`filterProbability`、pathway 或 shim；cell-level pre/post-filter tensor 已逐位一致。
 2. 共同支撑约 `1e-18` 的尾数差属于已文档化的求和顺序边界；148/37 条离散支撑差异对应正式采用的 numeric gate 与 pinned upstream 历史字符 gate 的有意行为边界。
-3. p 值差异是两条链路叠加：门控变化导致观察边增删和 `Prob==0` 强制 p=1；共同边上的数值归约差异可在严格比较边界改变部分置换计数。
+3. p 值差异主要由门控变化叠加 `Prob==0` 强制 p=1 传播；共同观察支撑的 `Prob` 归约尾差并未在同一 numeric gate 的 1,555 层重放中改变任何 p-value 计数。
 4. 维护者已裁定采用 `signif(mean, 1) >= min.percent` numeric semantics；Plan A 不再要求新实现复现 pinned upstream 的 `format()` 字符比较结果。
 5. 生物量级评估保持不变：差异集中在弱边，group sum 相对差约 0.13%；后续验收以 numeric reference 和 `Prob ≤1e-12` 数值界为准。
 
@@ -159,6 +175,14 @@ Serial 端执行脚本(含 dump 逻辑):`tests_dev/test_data/benchmark_mbm05_ups
 "C:\Program Files\R\R-4.4.3\bin\Rscript.exe" tests_dev/benchmarks/analyze_group_diff2..6.R
 ```
 
+同一 numeric gate 的阶段重放：
+
+```bash
+"C:\Program Files\R\R-4.4.3\bin\Rscript.exe" \
+  tests_dev/benchmarks/replay_numeric_gate_pval.R \
+  tests_dev/benchmarks/out/mbm05_serial_tensor_comparison 1563 100
+```
+
 ## 6. Artifacts 索引
 
 | 文件 | 内容 |
@@ -166,4 +190,6 @@ Serial 端执行脚本(含 dump 逻辑):`tests_dev/test_data/benchmark_mbm05_ups
 | `tests_dev/benchmarks/out/mbm05_serial_tensor_comparison/{old,new}_*.rds` | 串行各阶段张量与对象 dump |
 | `.../{prefilter,postfilter}_cell_comparison.csv` | cell 级支持+数值差异统计 |
 | `.../group_summary.csv` / `.../group_edge_diff.csv` | group 级聚合 + 8,086 行差异连边详表 |
+| `tests_dev/benchmarks/replay_numeric_gate_pval.R` | 同一 numeric gate 的 post-filter R/Matrix vs C++ CSC 阶段重放器 |
+| `.../numeric_gate_replay_{layers,pval_diff,summary}.csv` | 1,555/1,563 个非空层（其余 8 个空层）的 support、Prob、p-value 与显著性差异结果 |
 | `.agents/notes/implemented/2026-10-15-mbm05-group-avg-signature-divergence.md` | 该发现的治理 Note（implemented；numeric gate 已裁定） |
