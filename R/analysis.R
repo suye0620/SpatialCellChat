@@ -94,6 +94,8 @@ netAnalysis_computeCentrality <- function (
     object <- .sc_assert_spatial_cell_chat(object)
   }
   slot.name <- match.arg(slot.name, c("net", "netP"))
+  t0 <- Sys.time()
+  .cli("netAnalysis_computeCentrality", .type = "subheader")
   degree.all <- isTRUE(degree.only)
   if (is.null(net)) {
     if (isTRUE(do.group)) {
@@ -102,12 +104,11 @@ netAnalysis_computeCentrality <- function (
       if (!inherits(prob.array, "SparseChatArray")) {
         if (slot.name == "net") {
           stop(
-            cli.symbol(2),
-            "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! "
+            "Please run `computeAvgCommunProb` to compute the group-level communication! ",
+            call. = FALSE
           )
         } else {
           stop(
-            cli.symbol(2),
             "Please run `computeCommunProbPathway` to compute the communication probability/strength at the signaling pathway level! "
           )
         }
@@ -136,12 +137,10 @@ netAnalysis_computeCentrality <- function (
       if (is.null(prob.cell)) {
         if (slot.name == "net") {
           stop(
-            cli.symbol(2),
             "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! "
           )
         } else if (slot.name == "netP") {
           stop(
-            cli.symbol(2),
             "Please run `computeCommunProbPathway` to compute the communication probability/strength between any interacting individual cells! "
           )
         }
@@ -187,6 +186,10 @@ netAnalysis_computeCentrality <- function (
       "outdeg", "indeg", "hub", "authority", "eigen",
       "page_rank", "betweenness", "flowbet", "info")
   }
+  .cli("Input: {.val {N}} nodes x {.val {nrun}} signaling layers; {.val {length(centr.name)}} centrality measures",
+       .type = "info")
+  .cli("Network: {.val {slot.name}}; group-level = {.val {do.group}}; degree.only = {.val {degree.all}}",
+       .type = "text")
   centr.all <-  my_future_sapply(
     X = 1:nrun,
     FUN = function(x) {
@@ -202,7 +205,8 @@ netAnalysis_computeCentrality <- function (
   # only Python/reticulate dependency in analysis.R.
   centr.all <- array(as.vector(centr.all), c(nrow(centr.all)/N, N, nrun))
   dimnames(centr.all) <- list(centr.name, node.names,signaling.name)
-  cat(cli.symbol(1), "Computing Net Centrality is done.\n")
+  .cli("Centrality computed: {.val {nrun}} layers; {.val {round(as.numeric(Sys.time() - t0, units = 'secs'), 2)}}s",
+       .type = "success")
 
   if (is.null(object)) {
     return(centr.all)
@@ -2303,7 +2307,7 @@ subsetCommunication <- function(object = NULL, net = NULL, slot.name = "net",
     if (!is.data.frame(pairLR.use)) {
       stop("pairLR.use should be a data frame with a signle column named either 'interaction_name' or 'pathway_name' ")
     } else if ("pathway_name" %in% colnames(pairLR.use)) {
-      message("slot.name is set to be 'netP' when pairLR.use contains signaling pathways")
+      .cli("Using {.val netP}: {.arg pairLR.use} selects signaling pathways.", .type = "info")
       slot.name = "netP"
     }
   }

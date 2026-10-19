@@ -18,7 +18,6 @@
     header    = 1L,
     subheader = 1L,
     text      = 2L,
-    progress  = 2L,
     debug     = 3L,
     1L)
   v <- getOption("SpatialCellChat.verbose", 1L)
@@ -35,6 +34,12 @@
     text      = cli::cli_text(text, .envir = .env, ...),
     cli::cli_alert_info(text, .envir = .env, ...)
   )
+}
+
+#' Internal progress permission shared by inference functions
+#' @noRd
+.sc_progress_enabled <- function(verbose = TRUE) {
+  isTRUE(verbose) && getOption("SpatialCellChat.verbose", 1L) > 0
 }
 
 #' Internal helper to log operations on a SpatialCellChat object
@@ -435,12 +440,6 @@ cli.symbol <- function(symbol=NULL){
 
 #' Set the computation environment
 #'
-#' @param workers A integer greater than 0. See details in \code{\link[future]{multisession}}.
-#' When workers = 1, CellChat will run in sequential mode;
-#' Otherwise, CellChat will run in parallel mode with a respective number of future parallel clusters.
-#' @param gc Boolean. Whether the garbage collector run or not. It's an argument passed to Future().
-#' Set the computation environment
-#'
 #' @param workers Integer > 0. 1 = sequential, >1 = multisession parallel.
 #' @param verbose Verbosity level: 0=quiet, 1=normal, 2=detailed.
 #'   Default reads \code{getOption("SpatialCellChat.verbose", 1L)}.
@@ -607,41 +606,10 @@ my_as_sparse3Darray <- function (x, ... ,strict = FALSE, nonzero = FALSE)
 #' my_future_sapply
 #'
 #' @description
-#' future_sapply with progress bar and stable random number generation
-#'
-#' @param X A vector-like object to iterate over.
-#' @param FUN A function taking at least one argument.
-#' @param ... (optional) Additional arguments passed to `FUN()`.
-#' For `future_*apply()` functions and `replicate()`, any `future.*` arguments
-#' part of `\ldots` are passed on to `future_lapply()` used internally.
-#' @param simplify See \code{\link[base]{sapply}}, respectively.
-#' @param USE.NAMES See \code{\link[base]{sapply}}.
-#' @param future.envir An [environment] passed as argument `envir` to
-#'        \code{\link[future]{future}} as-is.
-#' @param future.seed A logical or an integer (of length one or seven),
-#'        or a list of `length(X)` with pre-generated random seeds.
-#'        For details, see \code{\link[future.apply]{future_lapply}}.
-#' @param future.label If a character string, then each future is assigned
-#'        a label `sprintf(future.label, chunk_idx)`.  If TRUE, then the
-#'        same as `future.label = "future_sapply-%d"`.  If FALSE, no labels
-#'        are assigned.
-#' @param hint.message A hint message shown after the progress bar. By default,
-#' the message is "Computing..."
-#' @param strategy.message Whether to show the future stretegy information
-#'
-#' @return
-#' For `future_sapply()`, a vector with same length and names as \code{X}.
-#' See \code{\link[base]{sapply}} for reference.
-#' @export
-#'
-#' @examples
-#' my_future_sapply(X=1:10,FUN = function(x){Sys.sleep(11-x);sqrt(x)})
-#' my_future_sapply
-#'
-#' @description
 #' future_sapply with progress bar and stable random number generation.
-#' Progress bar only shown when length(X) > 1 and workers > 1.
-#' Strategy info and handler setup are managed once by \code{setEnvironment}.
+#' Progress is supported in sequential and parallel plans when length(X) > 1.
+#' Uses the configured progressr handlers and respects its batch opt-in policy;
+#' the future plan and handlers are not configured by this function.
 #'
 #' @param X A vector-like object to iterate over.
 #' @param FUN A function taking at least one argument.
@@ -651,8 +619,11 @@ my_as_sparse3Darray <- function (x, ... ,strict = FALSE, nonzero = FALSE)
 #' @param USE.NAMES See \code{\link[base]{sapply}}.
 #' @param future.seed A logical or integer seed.
 #'   See \code{\link[future.apply]{future_lapply}}.
-#' @param .progress Whether to show a progress bar (default TRUE; auto-disabled
-#'   for single iterations or sequential mode).
+#' @param .progress Logical permission to report progress (default TRUE).
+#'   FALSE, \code{getOption("SpatialCellChat.verbose", 1L) = 0}, or at most one
+#'   iteration disables progress. TRUE does not override global quiet or
+#'   progressr's controls; non-interactive sessions must opt in with
+#'   \code{options(progressr.enable = TRUE)}.
 #'
 #' @return A vector with same length and names as \code{X}.
 #' @export
@@ -662,21 +633,12 @@ my_future_sapply <- function(X, FUN, ...,
                               future.seed = TRUE,
                               .progress = TRUE) {
   FUN <- match.fun(FUN)
-  n <- length(X)
-  show_progress <- isTRUE(.progress) && n > 1 && future::nbrOfWorkers() > 1
-
-  if (show_progress) {
-    p <- progressr::progressor(along = X)
-    wrapper <- function(x) { res <- FUN(x); p(); res }
-  } else {
-    wrapper <- FUN
-  }
-
-  answer <- future.apply::future_lapply(
+  answer <- my_future_lapply(
     X = X,
-    FUN = wrapper,
+    FUN = FUN,
     ...,
-    future.seed = future.seed
+    future.seed = future.seed,
+    .progress = .progress
   )
 
   if (USE.NAMES && is.character(X) && is.null(names(answer)))
@@ -690,8 +652,9 @@ my_future_sapply <- function(X, FUN, ...,
 #'
 #' @description
 #' future_lapply with progress bar and stable random number generation.
-#' Progress bar only shown when length(X) > 1 and workers > 1.
-#' Strategy info and handler setup are managed once by \code{setEnvironment}.
+#' Progress is supported in sequential and parallel plans when length(X) > 1.
+#' Uses the configured progressr handlers and respects its batch opt-in policy;
+#' the future plan and handlers are not configured by this function.
 #'
 #' @param X A vector-like object to iterate over.
 #' @param FUN A function taking at least one argument.
@@ -700,8 +663,11 @@ my_future_sapply <- function(X, FUN, ...,
 #' @param future.seed A logical or integer seed.
 #'   See \code{\link[future.apply]{future_lapply}}.
 #' @param simplify If TRUE, call \code{unlist()} on the result.
-#' @param .progress Whether to show a progress bar (default TRUE; auto-disabled
-#'   for single iterations or sequential mode).
+#' @param .progress Logical permission to report progress (default TRUE).
+#'   FALSE, \code{getOption("SpatialCellChat.verbose", 1L) = 0}, or at most one
+#'   iteration disables progress. TRUE does not override global quiet or
+#'   progressr's controls; non-interactive sessions must opt in with
+#'   \code{options(progressr.enable = TRUE)}.
 #'
 #' @return A list with same length and names as \code{X}.
 #' @export
@@ -710,22 +676,23 @@ my_future_lapply <- function(X, FUN, ...,
                               simplify = FALSE,
                               .progress = TRUE) {
   FUN <- match.fun(FUN)
-  n <- length(X)
-  show_progress <- isTRUE(.progress) && n > 1 && future::nbrOfWorkers() > 1
-
-  if (show_progress) {
-    p <- progressr::progressor(along = X)
-    wrapper <- function(x) { res <- FUN(x); p(); res }
-  } else {
-    wrapper <- FUN
-  }
-
-  res_ <- future.apply::future_lapply(
-    X = X,
-    FUN = wrapper,
-    ...,
-    future.seed = future.seed
-  )
+  res_ <- progressr::with_progress({
+    p <- progressr::progressor(
+      along = X,
+      enable = .sc_progress_enabled(.progress) && length(X) > 1 &&
+        getOption("progressr.enable", TRUE)
+    )
+    future.apply::future_lapply(
+      X = X,
+      FUN = function(...) {
+        res <- FUN(...)
+        p()
+        res
+      },
+      ...,
+      future.seed = future.seed
+    )
+  })
 
   if (isTRUE(simplify)) res_ <- unlist(res_)
   res_

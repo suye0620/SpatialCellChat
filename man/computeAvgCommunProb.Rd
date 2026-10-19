@@ -10,15 +10,17 @@ computeAvgCommunProb(
   avg.type = c("avg", "sum"),
   min.percent = 0.1,
   min.cells.sr = 5,
-  do.permutation = T,
+  do.permutation = TRUE,
   nboot = 100,
   seed.use = 1L,
-  colocalization.use = F,
-  thresh.colo = 0.05
+  colocalization.use = FALSE,
+  thresh.colo = 0.05,
+  nthreads = 1L,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{object}{SpatialCellChat object with communication probabilities for pairwise individual cells}
+\item{object}{SpatialCellChat object with `net$cell$prob`.}
 
 \item{group.by}{cell group information used for computing average communication probabilities}
 
@@ -39,16 +41,36 @@ Default is 5.}
 \item{colocalization.use}{whether filtering out spatially distant cell groups based on colocalization analysis between any cell groups}
 
 \item{thresh.colo}{removal of cell-cell communication with no significant colocalizations (fdr < 0.05)}
+
+\item{nthreads}{OpenMP threads for the permutation kernel (default 1; results are bitwise identical for any thread count).}
+
+\item{verbose}{Logical. FALSE disables ordinary CLI messages and progress.
+TRUE follows `options(SpatialCellChat.verbose = 0L)`, `1L`, or `2L` for
+quiet, normal, or detailed output and never overrides global quiet.
+Progress also respects progressr's enable policy; noninteractive scripts
+must opt in, for example with `options(progressr.enable = TRUE)`.}
 }
 \value{
-A CellChat object with updated slot 'net':
+A SpatialCellChat object with updated slots:
 
-object@net$prob is the inferred group-level communication probability (strength) array, where the first, second and third dimensions represent a source group, target group and ligand-receptor pair, respectively.
+`net$group$prob` is the inferred group-level communication probability
+(SparseChatArray, K x K x nLR; first/second dimensions = source/target group),
+and `net$group$pval` the corresponding permutation p-values (NULL when
+`do.permutation = FALSE`). Parameters are stored in `misc$.param$averaging`.
 
 USER can access all the inferred cell-cell communications using the function 'subsetCommunication(object)', which returns a data frame.
-
-object@net$pval is the corresponding p-values of each interaction
 }
 \description{
-Compute group-level cell-cell communication
+Aggregate cell-level communication probabilities (`net$cell$prob`, from
+\link{computeCommunProb}, optionally \link{filterProbability}) into
+group-level communication with a permutation test, on the final 11-slot
+object schema.
+}
+\details{
+Plan A (2026-09-28): numerically faithful acceleration of the baseline
+permutation test. The per-boot gated group aggregation runs in the
+`cpp_group_avg_obs` / `cpp_group_avg_perm` kernels; group2group CCC values
+and p-values match the pre-migration baseline (see agent note 2026-09-28 for
+the equivalence contract and `docs/PERMUTATION_TEST_AUDIT.md` for the
+statistical audit of the test itself, which is intentionally out of scope).
 }

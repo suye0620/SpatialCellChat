@@ -108,6 +108,26 @@ chat.n4 <- computeCommunProb(chat, scale.distance = 1, use.AGAN = TRUE,
 check("nthreads 1 vs 4 layers bitwise",
       identical(unclass(chat.cc@net$cell$prob), unclass(chat.n4@net$cell$prob)))
 
+## ---- parallel 内存输出 ----
+local({
+  old.plan <- future::plan("list")
+  on.exit(future::plan(old.plan), add = TRUE)
+  # sourceCpp-backed test sessions cannot serialize the temporary DLL pointer;
+  # the sequential future plan still exercises the parallel output branch.
+  future::plan(future::sequential)
+  chat.parallel <- computeCommunProb(
+    chat, scale.distance = 1, use.AGAN = TRUE,
+    contact.dependent = TRUE, contact.range = 10,
+    parallel = TRUE, future.scheduling = Inf, verbose = FALSE
+  )
+  check("parallel output is a valid SparseChatArray",
+        inherits(chat.parallel@net$cell$prob, "SparseChatArray") &&
+          isTRUE(validObject(chat.parallel)))
+  check("parallel output layers bitwise equal serial output",
+        identical(unclass(chat.parallel@net$cell$prob),
+                  unclass(chat.cc@net$cell$prob)))
+})
+
 ## ---- spill 模式 ----
 sp <- file.path(tempdir(), "ccp_spill_test")
 if (dir.exists(sp)) unlink(sp, recursive = TRUE)
@@ -201,6 +221,8 @@ chat.sp2 <- computeCommunProb(chat, scale.distance = 1, use.AGAN = TRUE,
                               spill.dir = sp2, verbose = FALSE)
 check("spill2 files present pre-filter",
       length(list.files(sp2, pattern = "\\.rds$")) == nrow(LRsig))
+check("spill metadata records all written layers",
+      identical(chat.sp2@misc$.param$communication$spill.count, nrow(LRsig)))
 chat.sp.filt <- filterProbability(chat.sp2, nboot = nboot, seed.use = 666L)
 check("spill consumed: net$cell$prob materialized",
       inherits(chat.sp.filt@net$cell$prob, "SparseChatArray"))
@@ -214,6 +236,40 @@ check("spill filtered == in-memory filtered (bitwise)",
 check("filterProbability logged",
       any(vapply(chat.sp.filt@misc$.log,
                  function(e) identical(e[["function"]], "filterProbability"), logical(1L))))
+
+## ---- parallel spill 输出与消费 ----
+local({
+  old.plan <- future::plan("list")
+  on.exit(future::plan(old.plan), add = TRUE)
+  future::plan(future::sequential)
+  sp.parallel <- file.path(tempdir(), "ccp_parallel_spill_test")
+  if (dir.exists(sp.parallel)) unlink(sp.parallel, recursive = TRUE)
+  chat.parallel.sp <- computeCommunProb(
+    chat, scale.distance = 1, use.AGAN = TRUE,
+    contact.dependent = TRUE, contact.range = 10,
+    parallel = TRUE, future.scheduling = Inf,
+    spill.dir = sp.parallel, verbose = FALSE
+  )
+  check("parallel spill leaves net$cell$prob NULL",
+        is.null(chat.parallel.sp@net$cell$prob))
+  parallel.param <- chat.parallel.sp@misc$.param$communication
+  check("parallel spill records all written layers",
+        identical(parallel.param$spill.count, nrow(LRsig)))
+  check("parallel spill writes one file per LR",
+        length(list.files(sp.parallel, pattern = "\\.rds$")) == nrow(LRsig))
+  for (k in seq_len(nrow(LRsig))) {
+    parallel.layer <- readRDS(file.path(sp.parallel, paste0(names(prob.new)[k], ".rds")))
+    check(sprintf("parallel spill layer %d bitwise vs serial", k),
+          identical(as.numeric(parallel.layer@x),
+                    as.numeric(unclass(chat.cc@net$cell$prob)[[k]]@x)))
+  }
+  chat.parallel.filt <- filterProbability(
+    chat.parallel.sp, nboot = nboot, seed.use = 666L
+  )
+  check("parallel spill is consumed and matches serial filtering",
+        identical(unclass(chat.parallel.filt@net$cell$prob), filt.layers) &&
+          !dir.exists(sp.parallel))
+})
 
 ## ---- (D) ⑤ 门控：signif 数值语义 vs format 字符串语义 ----
 dtemp <- data.frame(group = c("A", "A"), r1 = 1e-4, r2 = 0.5, r3 = 0.05)
@@ -243,3 +299,20 @@ for (k in seq_along(tiny.out)) {
 }
 
 cat("\nAll Wave 1d filterProbability checks passed.\n")
+
+# Local quiet must include nested distance builders, even at global debug level.
+local({
+  old <- options(SpatialCellChat.verbose = 3L, progressr.enable = TRUE)
+  on.exit(options(old))
+  output <- character()
+  messages <- capture.output({
+    output <- capture.output(quiet <- computeCommunProb(
+      chat, scale.distance = 1, use.AGAN = TRUE,
+      contact.dependent = TRUE, contact.range = 10, verbose = FALSE
+    ))
+  }, type = "message")
+  check("local quiet suppresses both streams including distance cache creation",
+        length(messages) == 0L && length(output) == 0L)
+  check("local quiet retains computed probability layers",
+        identical(quiet@net$cell$prob, chat.cc@net$cell$prob))
+})

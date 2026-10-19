@@ -1,218 +1,79 @@
 # SpatialCellChat CLI 提示设计规范
 
-> 2026-07-14 · 与 Claude Desktop 讨论后整理
+## 已实现范围
 
----
+当前约定覆盖 11-slot 推断链的九个函数：`computeCommunProb`、`filterProbability`、`computeAvgCommunProb`、`filterCommunication`、`computeCommunProbPathway`、`aggregateNet`、`netAnalysis_computeCentrality`、`subsetCommunication`、`relabelSpatialCellChat`，以及共享 `.cli()`、`my_future_lapply()` / `my_future_sapply()`。
 
-## 设计目标
+这不是全包输出迁移完成声明。旧 Visium 分支及其他未迁移函数仍可能使用 `cat()`、`message()`、`cli.symbol()` 或 pbapply；其调用尚存，因此不删除 `cli.symbol()` 导出和 pbapply 依赖。
 
-统一重构后所有函数的用户交互输出，消除当前代码中 `cat()` / `message()` / `cli.symbol()` / `cli::cli_alert_*` 四套并存的混乱局面。
+## 用户控制
 
----
+全局选项 `SpatialCellChat.verbose` 默认是 `1L`：
 
-## 核心原则
+| 级别 | 普通消息 | 进度权限 |
+|---|---|---|
+| 0 | 不显示 | 禁用 |
+| 1 | 入口、关键输入、结果摘要 | 允许，仍服从 progressr |
+| 2 | 额外显示分支、阈值、执行模式 | 同级别 1 |
+| 3 | 另含显式 debug 消息 | 同级别 1 |
 
-```
-1. 一个入口初始化        → setEnvironment 统一配置策略/主题/进度条样式
-2. 一种消息机制          → 全包走 cli::cli_alert_* 系列, 零 cat()/message()
-3. 一条封装函数          → 只保留 .cli() 作为唯一调用点, 删除 cli.symbol()
-4. 三级详细度            → verbose=0(静默) / 1(正常) / 2(详细), 全局可设
-5. 进度条统一走 progressr → 用 my_future_lapply 内置, 不手工 cli_progress_bar
-```
-
----
-
-## 第 1 层：入口初始化 (`setEnvironment`)
+`computeCommunProb()` 和 `computeAvgCommunProb()` 的 `verbose` 保持 **logical**，不是整数分级参数。`FALSE` 禁用本次调用的普通消息和进度；`TRUE` 服从全局选项，不能覆盖全局静默。没有新增 `verbose=NULL` 或逐函数整数级别 API。没有局部参数的链路函数使用全局选项。
 
 ```r
-setEnvironment <- function(workers = 4,
-                           verbose = getOption("SpatialCellChat.verbose", 1L),
-                           future.globals.maxSize = 10000 * 1024^2) {
-  if (workers == 1) future::plan("sequential")
-  else future::plan("multisession", workers = workers, gc = TRUE)
+# 一次性配置 future 策略、全局详细度和 CLI handler
+setEnvironment(workers = 2L, verbose = 1L)
 
-  options(
-    future.globals.maxSize = future.globals.maxSize,
-    SpatialCellChat.verbose = verbose
-  )
+# 非交互 Rscript 默认不强制显示进度，需用户显式开启
+options(progressr.enable = TRUE)
 
-  progressr::handlers(global = TRUE)
-  progressr::handlers("cli")
+# 整条迁移链静默；真实 warning()/stop() 仍然可见
+options(SpatialCellChat.verbose = 0L)
 
-  if (verbose >= 1L) {
-    cli::cli_h1("SpatialCellChat")
-    if (workers == 1) cli::cli_alert_info("Sequential mode")
-    else cli::cli_alert_success("Parallel with {workers} workers")
-  }
-}
+# 详细输出下，仅本次核心计算静默
+options(SpatialCellChat.verbose = 2L)
+chat <- computeCommunProb(chat, verbose = FALSE)
 ```
 
-**职责**：并行策略 / 全局选项 / 进度条样式 / 入口提示。一次性完成，运行时无副作用。
+`setEnvironment()` 是显式配置入口，会设置 future plan、全局详细度和 progressr handlers。计算函数不更改这些全局配置。用户可以单独配置 future/progressr，不要求先调用 `setEnvironment()`；`options(progressr.enable = FALSE)` 始终关闭本链路的进度。
 
----
+## 消息与 condition
 
-## 第 2 层：唯一消息封装 (`.cli`)
+- 普通状态统一调用 `.cli()`，在主进程发出；不要再拼接 `cli.symbol()` 或时间戳，也不要打印整张表或逐 LR 状态行。
+- `header` / `subheader`、`info`、`success` 默认要求级别 1；`text` 要求 2；`debug` 要求 3。`.verbose` 仍是显式阈值覆盖，不改变现有语义。
+- `.cli(.type="warning"/"danger")` 是默认阈值 0 的显示样式，不等价于 R warning/error condition。真实问题继续使用 `warning()` / `stop()`，不能为了统一外观而吞掉或替换 condition。
+- 普通消息通过 cli 的 message/stderr 流输出。仅捕获 stdout 不能验证静默。
+- Worker 只发出进度 condition 和真实 warning/error，不打印普通状态；不要把调试日志伪装成 warning。
+- 局部 `verbose` 必须守住入口、参数摘要、嵌套调用和完成提示，不只包住主循环。
 
-升级现有 `.cli()` 为唯一内部消息函数，增加 verbosity 门控：
+## 进度生命周期
 
-```r
-.cli <- function(text, .type = "info", ..., .verbose = NULL,
-                 .env = parent.frame()) {
-  lvl <- .verbose %||% switch(.type,
-    info      = 1L,
-    success   = 1L,
-    warning   = 0L,
-    danger    = 0L,
-    header    = 1L,
-    subheader = 1L,
-    text      = 2L,
-    progress  = 2L,
-    debug     = 3L,
-    1L)
-  v <- getOption("SpatialCellChat.verbose", 1L)
-  if (lvl > v) return(invisible(NULL))
+共享 `.sc_progress_enabled(verbose=TRUE)` 合并局部 logical 权限与全局详细度；progressor 还检查 `progressr.enable` 和工作项数量。只有多于一个工作项时报告进度，不为零项或单项制造进度条。
 
-  switch(.type,
-    info      = cli::cli_alert_info(text, .envir = .env, ...),
-    success   = cli::cli_alert_success(text, .envir = .env, ...),
-    danger    = cli::cli_alert_danger(text, .envir = .env, ...),
-    warning   = cli::cli_alert_warning(text, .envir = .env, ...),
-    header    = cli::cli_h1(text, .envir = .env, ...),
-    subheader = cli::cli_h2(text, .envir = .env, ...),
-    text      = cli::cli_text(text, .envir = .env, ...),
-    cli::cli_alert_info(text, .envir = .env, ...)
-  )
-}
-```
+`my_future_lapply()` / `my_future_sapply()` 在 sequential 和 multisession 下均使用作用域内的 progressr progressor。每项在 `FUN(...)` 返回后才更新；保留 `future.seed`、future 参数、结果命名及简化语义。封装不设置用户 handler，也不强制开启批处理进度。
 
-### Verbosity 级别映射
+串行计算保留原调度：使用 `with_progress()` 包住原循环；先计算/存储结果，再更新进度。`filterCommunication()` 仍为串行，不为显示进度而切换到 future。同步 C++ 内核只能在 LR 调用返回后更新，不能显示内部 permutation 的实时百分比。
 
-| `.type` | 默认级别 | 语义 |
-|---------|---------|------|
-| `warning`, `danger` | 0 | 始终显示 |
-| `header`, `subheader` | 1 | 函数入口 |
-| `info`, `success` | 1 | 关键状态 |
-| `text`, `progress` | 2 | 详细步骤 |
-| `debug` | 3 | 调试信息 |
+| 函数/阶段 | 输出重点 | 进度单位 |
+|---|---|---|
+| `computeCommunProb` | 细胞/LR 规模；详细模式含距离、缓存、LR 分类、线程和落盘模式 | 已计算并写入内存或磁盘的 LR |
+| `filterProbability` | LR 规模、抽样和分位数；详细模式含层来源 | 已过滤 LR |
+| `computeAvgCommunProb` | 细胞群规模和聚合方法；详细模式含门限、置换配置 | 观测聚合、置换各自的有效 LR |
+| `filterCommunication` | 过滤条件及排除计数 | 已处理的细胞级 LR，含被排除项 |
+| `netAnalysis_computeCentrality` | 节点、信号层和指标数量 | 已完成的信号层 |
+| `computeCommunProbPathway` / `aggregateNet` | 输入及输出网络规模 | 无额外进度条 |
+| `relabelSpatialCellChat` | 详细模式显示编排边界；子函数负责自己的输出 | 无外层进度条 |
+| `subsetCommunication` | 保持 getter 风格；保留必要提示和真实 warning | 无进度条 |
 
-### 使用示例
+`computeCellDistance()` 与 `createCellCellContactMatrixFrom_dspatial()` 是静默计算助手；由 `computeCommunProb()` 按自己的详细度报告工作距离单位、阈值及缓存条目，避免嵌套输出穿透局部静默。
 
-```r
-# 函数入口
-.cli("Computing communication probabilities", .type = "subheader")        # lv 1
+## 不变量与边界
 
-# 关键信息
-.cli("Using {nrow(pairLR)} LR pairs", .type = "info")                     # lv 1
-.cli("Done", .type = "success")                                           # lv 1
+- 详细度不改变概率、p 值、随机数序列、过滤阈值、调度、对象 schema 或落盘所有权。
+- 内存安全检查不依赖 `verbose`。串行和并行计算均执行现有输出内存保护；并行模式在 worker 结果汇总后检查完整结果。
+- `computeCommunProb(parallel=TRUE)` 的 LR 结果现在正确组装进 `net$cell$prob`；设置 `spill.dir` 时，调用方在 worker 计算完成后写入每个 LR 的 RDS，`filterProbability()` 可以正常消费并清理。并行落盘是“计算后写盘”，不是 worker 执行期间的流式写盘。
 
-# 详细分支说明（仅 verbose >= 2 显示）
-.cli("Contact mode for Cell-Cell Contact signaling", .type = "text")      # lv 2
-.cli("Enforcing contact.dependent.forced = TRUE", .type = "text")         # lv 2
+## 验证
 
-# 覆盖指定级别
-.cli("Raw matrix dimension: {d}", .type = "text", .verbose = 3)           # lv 3
-```
+`tests_dev/test-parallel.R` 覆盖消息流、完成事件、全局/局部静默、progressr opt-out、串行/多进程、参数/命名/简化、RNG 和 condition。两个核心计算套件保留局部静默回归。数值回归还包括 `test-filterCommunication.R`、`test-netpathway-aggregate.R`、`test-centrality-subset.R` 和 `test-computeCellDistance.R`。
 
----
-
-## 第 3 层：并行进度条 (`my_future_lapply`)
-
-```r
-my_future_lapply <- function(X, FUN, ..., future.seed = TRUE, .progress = TRUE) {
-  n <- length(X)
-  if (.progress && n > 1 && future::nbrOfWorkers() > 1) {
-    p <- progressr::progressor(along = X)
-    f <- function(x) { res <- FUN(x); p(); res }
-  } else {
-    f <- FUN
-  }
-  future.apply::future_lapply(X, f, ..., future.seed = future.seed)
-}
-```
-
-**边界规则**：
-- progressr 只负责**进度条渲染**，不负责状态消息
-- 状态消息由 `.cli()` 在**主进程**中输出
-- **workers 内部不调任何 `.cli()` 或 `cat()`** — future multisession 不保证捕获
-- 调试信息在 worker 中用 `warning()` 走 condition 机制回主进程
-
----
-
-## 第 4 层：函数内部模板
-
-每个主要导出函数遵循固定结构：
-
-```r
-computeSomething <- function(object, ..., verbose = NULL) {
-  # 入口
-  .cli("Beginning operation", .type = "subheader")
-
-  # 关键参数摘要 (lv 1)
-  .cli("Parameters: range={range}, n_cells={n}", .type = "info")
-
-  # 详细分支 (lv 2)
-  .cli("Using distance-based constraints", .type = "text")
-
-  # 并行计算（progressr 内置）
-  result <- my_future_lapply(items, FUN = compute_one, .progress = TRUE)
-
-  # 完成
-  .cli("Operation complete", .type = "success")
-  return(object)
-}
-```
-
----
-
-## 第 5 层：Verbosity 级别
-
-| 级别 | 行为 |
-|------|------|
-| 0 | 静默 — 仅 warning / danger |
-| 1 | **正常（默认）** — header + info + success + 进度条 |
-| 2 | 详细 — 额外显示分支决策和中间步骤 |
-| 3 | 调试 — 所有 debug 信息 |
-
-全局选项：`getOption("SpatialCellChat.verbose", 1L)`
-函数级覆盖：`verbose = NULL`（走全局）或显式传入 0/1/2/3
-
----
-
-## 第 6 层：show 方法
-
-```r
-setMethod("show", "SpatialCellChat", function(object) {
-  .cli("SpatialCellChat", .type = "header")
-  .cli("{n_cells} cells, {n_genes} genes", .type = "info")
-  if (has_net) .cli("Communication network inferred", .type = "success")
-  else .cli("Communication network not yet computed", .type = "info")
-})
-```
-
----
-
-## 不做的事
-
-| ❌ 当前反模式 | ✅ 目标做法 |
-|-------------|-----------|
-| `cat(cli.symbol(), "text\n")` | `.cli("text")` |
-| `cat(paste0("... <<< [", Sys.time(), "]"))` | `.cli("Done", .type = "success")` |
-| `cli.symbol("success")` + 拼接 | 直接 `.cli(.type = "success")` |
-| `message("提示信息")` | `.cli("提示信息", .type = "info")` |
-| workers 内 `cat()` | 删掉或改为 `warning()` 走 condition |
-| 用 `cat()` 显示进度 | `my_future_lapply` 内置 progressr |
-| `cat("Cell groups:", cli::col_red(...))` | `.cli("Cell groups: {.val {groups}}")` |
-
----
-
-## 迁移策略
-
-按 **函数依赖顺序** 从底层往上替换，不一把抓：
-
-1. **先改基础设施** — `.cli()` 封装升级、删除 `cli.symbol()`
-2. **再改工具函数** — `setEnvironment`、`my_future_lapply`
-3. **再改核心计算** — `computeCommunProb` 等 modeling.R
-4. **再改下游分析** — analysis.R
-5. **最后改可视化** — visualization.R、spatial.R
-
-每个函数替换时遵循：**删旧代码（cat/message/cli.symbol）→ 插入 `.cli()` → 验证**。不保留注释掉的旧输出行。
+真实小数据烟测须覆盖整条链路、普通/详细终端输出、串并行消费者及落盘消费，并与修改前的 `net` / `netP` / `idents` 结果比较；不比较时间和日志元数据。决策证据见 `.agents/notes/implemented/2026-10-19-compute-commun-prob-parallel-output.md`。

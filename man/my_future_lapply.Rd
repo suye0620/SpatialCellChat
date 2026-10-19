@@ -8,11 +8,9 @@ my_future_lapply(
   X,
   FUN,
   ...,
-  future.seed = T,
-  simplify = F,
-  hint.message = "Computing...",
-  strategy.message = TRUE,
-  future.label = "future_lapply-\%d"
+  future.seed = TRUE,
+  simplify = FALSE,
+  .progress = TRUE
 )
 }
 \arguments{
@@ -20,34 +18,26 @@ my_future_lapply(
 
 \item{FUN}{A function taking at least one argument.}
 
-\item{...}{(optional) Additional arguments passed to `FUN()`.
-For `future_*apply()` functions and `replicate()`, any `future.*` arguments
-part of `\ldots` are passed on to `future_lapply()` used internally.}
+\item{...}{Additional arguments passed to \code{FUN()}.
+Any \code{future.*} arguments are passed to \code{future_lapply()}.}
 
-\item{future.seed}{A logical or an integer (of length one or seven),
-or a list of `length(X)` with pre-generated random seeds.
-For details, see \code{\link[future.apply]{future_lapply}}.}
+\item{future.seed}{A logical or integer seed.
+See \code{\link[future.apply]{future_lapply}}.}
 
-\item{simplify}{different from the `simplify` parameter in `my_future_sapply`.
-If simplify = TRUE, we run \code{\link[base]{unlist}} upon the result.}
+\item{simplify}{If TRUE, call \code{unlist()} on the result.}
 
-\item{hint.message}{A hint message shown after the progress bar. By default,
-the message is "Computing..."}
-
-\item{strategy.message}{Whether to show the future stretegy information}
-
-\item{future.label}{If a character string, then each future is assigned
-a label `sprintf(future.label, chunk_idx)`.  If TRUE, then the
-same as `future.label = "future_lapply-%d"`.  If FALSE, no labels
-are assigned.}
+\item{.progress}{Logical permission to report progress (default TRUE).
+FALSE, \code{getOption("SpatialCellChat.verbose", 1L) = 0}, or at most one
+iteration disables progress. TRUE does not override global quiet or
+progressr's controls; non-interactive sessions must opt in with
+\code{options(progressr.enable = TRUE)}.}
 }
 \value{
-For `future_lapply()`, a list with same length and names as `X`.
-See \code{\link[base]{lapply}} for reference.
+A list with same length and names as \code{X}.
 }
 \description{
-future_lapply with progress bar and stable random number generation
-}
-\examples{
-my_future_lapply(X=1:10,FUN = function(x){Sys.sleep(11-x);sqrt(x)})
+future_lapply with progress bar and stable random number generation.
+Progress is supported in sequential and parallel plans when length(X) > 1.
+Uses the configured progressr handlers and respects its batch opt-in policy;
+the future plan and handlers are not configured by this function.
 }

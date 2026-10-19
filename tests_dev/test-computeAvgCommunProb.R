@@ -243,4 +243,21 @@ check("nboot=0 with permutation rejected",
       inherits(try(computeAvgCommunProb(chat, nboot = 0, verbose = FALSE), silent = TRUE),
                "try-error"))
 
+# Local quiet must suppress the entry banner as well as phase messages.
+local({
+  old <- options(SpatialCellChat.verbose = 3L, progressr.enable = TRUE)
+  on.exit(options(old))
+  output <- character()
+  messages <- capture.output({
+    output <- capture.output(quiet <- computeAvgCommunProb(
+      chat, avg.type = "avg", nboot = 20, seed.use = 1, verbose = FALSE
+    ))
+  }, type = "message")
+  check("local quiet suppresses both averaging output streams",
+        length(messages) == 0L && length(output) == 0L)
+  check("local quiet retains group probabilities and permutation p-values",
+        identical(quiet@net$group$prob, chat4@net$group$prob) &&
+          identical(quiet@net$group$pval, chat4@net$group$pval))
+})
+
 cat("All computeAvgCommunProb Plan A checks passed.\n")

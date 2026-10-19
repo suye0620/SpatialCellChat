@@ -600,6 +600,9 @@ makeGridSpatialCellChat <- function(
 #' Compute cell-cell distance based on the spatial coordinates and
 #' generate cell-cell contact adjacency matrix with a contact.range restriction
 #'
+#' @details Distance builders emit no ordinary status messages. Inference callers
+#' report their distance parameters and cache status under their own verbosity controls.
+#'
 #' @param coordinates Numeric matrix or data.frame; each row gives the spatial location of one cell/spot. Two- and three-dimensional coordinates are supported.
 #' @param interaction.range Numeric(must positive). The maximum interaction/diffusion range of ligands. This hard threshold is used to filter out the connections between spatially distant cells
 #' @param contact.range Numeric. The interaction range (Unit: microns) to restrict the contact-dependent signaling.
@@ -663,9 +666,6 @@ computeCellDistance <- function (
   # the coordinate unit is already the working unit.
   threshold <- interaction.range + tol
   if (!is.null(ratio)) threshold <- threshold / ratio
-  .cli("computeCellDistance", .type = "subheader")
-  .cli("Input: {n_cells} cells; interaction.range = {interaction.range}, contact.range = {contact.range}, tol = {tol}, ratio = {if (is.null(ratio)) 'NULL (coordinates already in working unit)' else ratio}",
-       .type = "info")
 
   neighbors <- BiocNeighbors::queryNeighbors(
     X = coordinates,
@@ -706,9 +706,6 @@ computeCellDistance <- function (
     tol = tol,
     contact.threshold = contact.range
   )
-  .cli("d.spatial: {.val {length(x)}} distance entries; adj.contact: {.val {length(adj.contact@x)}} contact entries",
-       .type = "info")
-  .cli("Distance cache ready", .type = "success")
   list(
     d.spatial = d.spatial,
     adj.contact = adj.contact,
@@ -736,6 +733,9 @@ computeCellDistance <- function (
 #' passed from `computeCellDistance`'s parameter `contact.range`.
 #' If the distance of a pair of cells is larger than contact.threshold, regard the two cells as not in contact. Otherwise, regard the two cells as in contact.
 #'
+#' @details This matrix helper emits no ordinary status messages; callers own
+#' distance and contact diagnostics.
+#'
 #' @return A `CsparseMatrix` object in `Matrix` Package
 #' @export
 #'
@@ -749,7 +749,6 @@ createCellCellContactMatrixFrom_dspatial <- function(d.spatial,contact.threshold
   # contact.range <- max(contact.threshold,min(adj.contact@x))
   contact.range <- contact.threshold
 
-  cat(paste0(cli.symbol(),"Contact range is set as ",round(contact.range,3),"um, to restrict the contact-dependent signaling.\n"))
   cellcell.contact.index <- which(adj.contact@x <= (contact.range+tol))
 
   # update

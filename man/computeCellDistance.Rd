@@ -13,7 +13,7 @@ computeCellDistance(
 )
 }
 \arguments{
-\item{coordinates}{a data matrix in which each row gives the spatial locations/coordinates of each cell/spot}
+\item{coordinates}{Numeric matrix or data.frame; each row gives the spatial location of one cell/spot. Two- and three-dimensional coordinates are supported.}
 
 \item{interaction.range}{Numeric(must positive). The maximum interaction/diffusion range of ligands. This hard threshold is used to filter out the connections between spatially distant cells}
 
@@ -22,20 +22,27 @@ For spatial transcriptomics in a single-cell resolution, `contact.range` is appr
 Typically, `contact.range = 10`, which is a typical human cell size. However, for low-resolution spatial data such as 10X visium, it should be the cell center-to-center distance (i.e., `contact.range = 100` for visium data).
 Users can run the function `computeCellDistance` to get the center-to-center distance in the result's "d.spatial" key, which will help decide the value of `contact.range`.}
 
-\item{ratio}{NULL or Numeric. ratio The conversion factor when converting spatial coordinates from Pixels or other units to Micrometers (i.e.,Microns).
+\item{ratio}{NULL or Numeric. Conversion factor from coordinate units to the physical unit used by `interaction.range` and `contact.range` (for example, micrometers). `NULL` means the coordinates are already expressed in that working unit.
 
-For example, setting `ratio = 0.18` indicates that 1 pixel equals 0.18um in the coordinates.
-For 10X visium, it is the ratio of the theoretical spot size (i.e., 65um) over the number of pixels that span the diameter of a theoretical spot size in the full-resolution image (i.e., 'spot.size.fullres' in the 'scalefactors_json.json' file).}
+For example, setting `ratio = 0.18` indicates that 1 pixel equals 0.18um; distances are returned in micrometers after conversion.
+For 10X Visium, this is the theoretical spot size (65um) divided by the full-resolution spot diameter in pixels (`spot.size.fullres`).}
 
-\item{tol}{Numeric. set a distance tolerance when computing cell-cell distances and contact adjacent matrix. Typically, `tol` should equal to the half value of cell/spot size in the unit of um.
-For example, for 10X visium, `tol` can be set as `65/2`; for slide-seq, `tol` can be set as `10/2`.
-If the cell/spot size is not known, we provide a function `computeCellDistance` to compute the center-to-center distance. `tol` can be the the half value of the minimum center-to-center distance.
-By default `tol = 10/2`.}
+\item{tol}{Numeric. Add a non-negative tolerance when applying the interaction and contact thresholds, in the same physical unit as `interaction.range`. `NULL` is treated as zero.
+Typically, `tol` should equal half the cell/spot diameter; for example, `65/2` for 10X Visium or `10/2` for Slide-seq.
+
+If the cell/spot size is not known, `tol` can be set to zero while `contact.range` is chosen from the returned center-to-center distances.}
 }
 \value{
-List. A list has two keys: "d.spatial" and "adj.contact", storing cell-cell distance matrix and cell-cell contact adjacency matrix
+List. The `d.spatial` and `adj.contact` keys store the cell-cell
+distance and contact adjacency matrices. `.parameters` records the
+thresholds used to build the cache so downstream plots do not silently
+reuse a cache made with different ranges.
 }
 \description{
 Compute cell-cell distance based on the spatial coordinates and
 generate cell-cell contact adjacency matrix with a contact.range restriction
+}
+\details{
+Distance builders emit no ordinary status messages. Inference callers
+report their distance parameters and cache status under their own verbosity controls.
 }

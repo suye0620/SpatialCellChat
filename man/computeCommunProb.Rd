@@ -14,47 +14,86 @@ computeCommunProb(
   tol = NULL,
   interaction.range = 250,
   scale.distance = 0.01,
-  use.AGAN = T,
+  use.AGAN = TRUE,
   contact.dependent = TRUE,
   contact.range = 10,
-  contact.dependent.forced = FALSE
+  contact.dependent.forced = FALSE,
+  spill.dir = NULL,
+  spill.backend = c("rds"),
+  nthreads = 1L,
+  parallel = FALSE,
+  future.scheduling = NULL,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{A SpatialCellChat object with `assay$signaling` (from
+\link{subsetData}) and `LR$LRsig` (from \link{identifyOverExpressedInteractions}).}
 
-\item{LR.use}{A subset of ligand-receptor interactions used in inferring communication network}
+\item{LR.use}{Optional custom ligand-receptor table (same columns as `LR$LRsig`).}
 
-\item{raw.use}{Whether use the raw data (i.e., `object@data.signaling`) or the projected data (i.e., `object@data.project`).
-Set raw.use = FALSE to use the projected data when analyzing single-cell data with shallow sequencing depth because the projected data could help to reduce the dropout effects of signaling genes, in particular for possible zero expression of subunits of ligands/receptors.}
+\item{raw.use}{Only `TRUE` is supported (the projected-data path via
+`projectData()` is not yet migrated to the final schema).}
 
-\item{Kh}{Parameter in Hill function}
+\item{Kh}{Hill-function EC50 parameter (input is globally max-scaled to [0, 1]).}
 
-\item{n}{Parameter in Hill function}
+\item{n}{Hill coefficient (n = 1 uses the division fast path in the kernel).}
 
-\item{distance.use}{Whether to use distance constraints to compute communication probability. Setting `distance.use = TRUE` indicates that the cell-cell communication probability is inversely proportional to the computed distance.}
+\item{distance.use}{Whether to weight communication by 1/(scaled distance).}
 
-\item{tol}{NULL or Numeric. set a distance tolerance when computing cell-cell distances and contact adjacent matrix. By default `tol = NULL` means distance tolerance equals to spot.size/2 or cell.diameter/2.}
+\item{tol}{Distance tolerance (defaults to `images$spatial.factors$tol`).}
 
-\item{interaction.range}{The maximum interaction/diffusion length of ligands (Unit: microns). This hard threshold is used to filter out the connections between spatially distant individual cells}
+\item{interaction.range}{Maximum diffusion length in microns.}
 
-\item{scale.distance}{A scale or normalization factor for the spatial distances when setting `distance.use = TRUE`. For example, scale.distance equals 1, 0.1, 0.01, 0.001, 0.11, or 0.011. We choose this values such that the minimum value of the scaled distances is in [1,2]. This value is not necessary when setting `distance.use = FALSE`.}
+\item{scale.distance}{Distance unit normalization; the check requires
+min(scaled distance) >= 1 so that SCL <= 1 keeps probabilities in [0, 1].
+The thesis formula SCL = 1/d corresponds to scale.distance = 1.}
 
-\item{use.AGAN}{Boolean. Whether to take agonist (AG) and antagonist (AN) into consideration when calculating the intercellular communication probability}
+\item{use.AGAN}{Whether to include agonist/antagonist cofactor modulation.}
 
-\item{contact.dependent}{Boolean. Whether determining spatially proximal cell groups based on the `contact.range`. By default `contact.dependent = TRUE` when inferring contact-dependent and juxtacrine signaling (including ECM-Receptor and Cell-Cell Contact signaling classified in CellChatDB$interaction$annotation).
-If only focusing on `Secreted Signaling`, the `contact.dependent` will be automatically set as FALSE except for `contact.dependent.forced = TRUE`.}
+\item{contact.dependent}{Whether `Cell-Cell Contact` signaling is restricted
+to the contact adjacency pattern.}
 
-\item{contact.range}{Numeric. The interaction range (Unit: microns) to restrict the contact-dependent signaling.
-For spatial transcriptomics in a single-cell resolution, `contact.range` is approximately equal to the estimated cell diameter (i.e., the cell center-to-center distance), which means that contact-dependent and juxtacrine signaling can only happens when the two cells are contact to each other.
-Typically, `contact.range = 10`, which is a typical human cell size. However, for low-resolution spatial data such as 10X visium, it should be the cell center-to-center distance (i.e., `contact.range = 100` for visium data).  The function \link{computeCellDistance} can compute the center-to-center distance.}
+\item{contact.range}{Contact threshold in the working physical distance unit;
+`tol` is added when building the contact adjacency pattern.}
 
-\item{contact.dependent.forced}{Boolean. Whether forcing to determine spatially proximal cell regions based on the `contact.range` for all cells/spots in the CellChat Object.
-Users can set `contact.dependent.forced = TRUE` to turn `Secreted Signaling` interactions into a contact manner.}
+\item{contact.dependent.forced}{Force all LRs to be contact-dependent.}
+
+\item{spill.dir}{Optional directory to write per-LR layers to disk instead of
+retaining them in the final object (for cell counts where the output tensor
+exceeds RAM; `filterProbability` consumes and clears the spilled layers). NULL
+keeps all layers in memory. In parallel mode, workers finish first and the
+caller then writes the completed layers; this is correct but not streaming
+during worker execution.}
+
+\item{spill.backend}{Spill storage backend; currently only "rds" (per-layer
+saveRDS, bitwise lossless). Further backends (e.g. BPCells) are reserved.}
+
+\item{nthreads}{OpenMP threads for the kernel (default 1; results are bitwise
+identical for any thread count).}
+
+\item{parallel}{Whether to distribute LR iterations via `my_future_lapply`
+(default FALSE: after sparse optimization the sequential kernel is fastest;
+measured multisession scheduling overhead dominates at 4.6 ms/LR task size).}
+
+\item{future.scheduling}{Optional future.scheduling value passed through when
+parallel = TRUE (default: chunked to the number of workers).}
+
+\item{verbose}{Logical. FALSE disables ordinary CLI messages and progress.
+TRUE follows `options(SpatialCellChat.verbose = 0L)`, `1L`, or `2L` for
+quiet, normal, or detailed output and never overrides global quiet.
+Progress also respects progressr's enable policy; noninteractive scripts
+must opt in, for example with `options(progressr.enable = TRUE)`.}
 }
 \value{
-CellChat object
+A SpatialCellChat object with `net$cell$prob` as a SparseChatArray
+(nC x nC x nLR, one named dgCMatrix layer per LR pair) and parameters in
+`misc$.param$communication`.
 }
 \description{
-Compute the communication probability/strength between any interacting individual cells
+Compute the communication probability/strength between any interacting individual
+cells with spatial distance constraints, on the final 11-slot object schema.
+Sparse optimized: per-LR work is O(nnz(P.spatial)) via the `cpp_prob_layer` kernel
+(single fused pass, OpenMP-capable); cell-level layers are bitwise identical to the
+baseline dense-crossprod implementation (see agent note 2026-09-10, Wave 1b tests).
 }

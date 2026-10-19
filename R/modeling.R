@@ -127,13 +127,15 @@
 #' @param use.AGAN Whether to include agonist/antagonist cofactor modulation.
 #' @param contact.dependent Whether `Cell-Cell Contact` signaling is restricted
 #' to the contact adjacency pattern.
-#' @param contact.range Contact range in microns (multiplied by the `tol`
-#' cell-radius tolerance, matching the thesis boundary convention).
+#' @param contact.range Contact threshold in the working physical distance unit;
+#' `tol` is added when building the contact adjacency pattern.
 #' @param contact.dependent.forced Force all LRs to be contact-dependent.
-#' @param spill.dir Optional directory to stream per-LR layers to disk instead of
-#' accumulating them in memory (for cell counts where the output tensor exceeds
-#' RAM; `filterProbability` consumes and clears the spilled layers). NULL keeps
-#' all layers in memory (fine up to ~10 GB of output tensor).
+#' @param spill.dir Optional directory to write per-LR layers to disk instead of
+#' retaining them in the final object (for cell counts where the output tensor
+#' exceeds RAM; `filterProbability` consumes and clears the spilled layers). NULL
+#' keeps all layers in memory. In parallel mode, workers finish first and the
+#' caller then writes the completed layers; this is correct but not streaming
+#' during worker execution.
 #' @param spill.backend Spill storage backend; currently only "rds" (per-layer
 #' saveRDS, bitwise lossless). Further backends (e.g. BPCells) are reserved.
 #' @param nthreads OpenMP threads for the kernel (default 1; results are bitwise
@@ -143,7 +145,11 @@
 #' measured multisession scheduling overhead dominates at 4.6 ms/LR task size).
 #' @param future.scheduling Optional future.scheduling value passed through when
 #' parallel = TRUE (default: chunked to the number of workers).
-#' @param verbose Whether to emit progress and CLI messages.
+#' @param verbose Logical. FALSE disables ordinary CLI messages and progress.
+#' TRUE follows `options(SpatialCellChat.verbose = 0L)`, `1L`, or `2L` for
+#' quiet, normal, or detailed output and never overrides global quiet.
+#' Progress also respects progressr's enable policy; noninteractive scripts
+#' must opt in, for example with `options(progressr.enable = TRUE)`.
 #'
 #' @return A SpatialCellChat object with `net$cell$prob` as a SparseChatArray
 #' (nC x nC x nLR, one named dgCMatrix layer per LR pair) and parameters in
@@ -172,15 +178,15 @@ computeCommunProb <- function(
     verbose = TRUE) {
   t0 <- Sys.time()
   object <- .sc_assert_spatial_cell_chat(object)
-  .cli("computeCommunProb", .type = "subheader")
+  if (isTRUE(verbose)) .cli("computeCommunProb", .type = "subheader")
   if (!isTRUE(raw.use))
     stop("raw.use = FALSE requires `projectData()` (assay$smooth), which is not ",
          "yet migrated to the final schema; use raw.use = TRUE", call. = FALSE)
   spill.backend <- match.arg(spill.backend)
   if (!is.null(spill.dir)) {
     if (!dir.exists(spill.dir)) dir.create(spill.dir, recursive = TRUE, showWarnings = FALSE)
-    .cli("Spill mode: layers stream to {.val {spill.dir}} (backend {.val {spill.backend}})",
-         .type = "info")
+    if (isTRUE(verbose)) .cli("Spill mode: layers stream to {.val {spill.dir}} (backend {.val {spill.backend}})",
+                              .type = "text", .verbose = 2L)
   }
 
   # ---- LR table (baseline semantics preserved) ----
@@ -218,12 +224,14 @@ computeCommunProb <- function(
   # 全局 max 缩放（基线语义：data@x/max(data@x)，支撑 Kh=0.5 半最大语义）；副本，不改对象
   sig.scaled <- sig
   sig.scaled@x <- sig.scaled@x / max(sig.scaled@x)
-  .cli("Input: assay$signaling ({.val {nrow(sig)}} signaling genes x {.val {nC}} cells); {.val {nLR}} LR pairs",
-       .type = "info")
+  if (isTRUE(verbose)) .cli("Input: assay$signaling ({.val {nrow(sig)}} signaling genes x {.val {nC}} cells); {.val {nLR}} LR pairs",
+                            .type = "info")
 
   # ---- distance cache: validate or compute (baseline semantics) ----
   ratio <- object@images$spatial.factors[["ratio"]]
   if (is.null(tol)) tol <- object@images$spatial.factors[["tol"]]
+  if (isTRUE(verbose)) .cli("Distance limits: interaction.range = {.val {interaction.range}}, contact.range = {.val {contact.range}}, tol = {.val {if (is.null(tol)) 0 else tol}}; ratio = {.val {if (is.null(ratio)) 'NULL (coordinates already in working units)' else ratio}}. Ranges and tolerance use the working distance unit after ratio conversion.",
+                            .type = "text", .verbose = 2L)
   data.spatial <- as.matrix(object@images$coordinates)
   cache.d <- object@images$.distance
   expected <- list(interaction.range = interaction.range,
@@ -233,13 +241,16 @@ computeCommunProb <- function(
     isTRUE(all.equal(cache.d$.parameters, expected)) &&
     ncol(cache.d$d.spatial) == nC
   if (!valid.cache) {
-    if (verbose) .cli("Distance cache absent or stale; recomputing with `computeCellDistance()`.", .type = "info")
+    if (isTRUE(verbose)) .cli("Distance cache absent or stale; recomputing with `computeCellDistance()`.",
+                              .type = "text", .verbose = 2L)
     res <- computeCellDistance(coordinates = data.spatial, ratio = ratio,
                                interaction.range = interaction.range,
                                contact.range = contact.range, tol = tol)
     images(object, ".distance") <- res
     cache.d <- res
   }
+  if (isTRUE(verbose)) .cli("Distance cache: {.val {length(cache.d$d.spatial@x)}} distance entries; {.val {length(cache.d$adj.contact@x)}} contact entries",
+                            .type = "text", .verbose = 2L)
   res <- cache.d
 
   # ---- P.spatial + loop invariants ----
@@ -295,8 +306,13 @@ computeCommunProb <- function(
   } else {
     nLR1 <- nLR
   }
-  if (verbose) .cli("LR split: {.val {nLR1}} diffusible / {.val {nLR - nLR1}} contact-dependent (forced = {.val {contact.dependent.forced}})",
-                    .type = "text", .verbose = 2L)
+  if (isTRUE(verbose)) {
+    nLR.diffusible <- if (all.contact.dependent) 0L else nLR1
+    .cli("LR split: {.val {nLR.diffusible}} diffusible / {.val {nLR - nLR.diffusible}} contact-dependent (forced = {.val {contact.dependent.forced}})",
+         .type = "text", .verbose = 2L)
+    .cli("Execution: {.val {if (isTRUE(parallel)) 'future' else 'serial'}}; {.val {nthreads}} kernel threads; distance weighting = {.val {distance.use}}; agonists/antagonists = {.val {use.AGAN}}",
+         .type = "text", .verbose = 2L)
+  }
 
   # ---- per-LR loop ----
   complex_subunits <- .sc_complex_subunits(complex_input)
@@ -344,50 +360,60 @@ computeCommunProb <- function(
   if (isTRUE(parallel)) {
     sched <- if (is.null(future.scheduling)) ceiling(nLR / max(future::nbrOfWorkers(), 1L)) else future.scheduling
     Prob.cell_ <- my_future_lapply(seq_len(nLR), run_one,
-                                   future.scheduling = sched, future.seed = TRUE)
+                                   future.scheduling = sched, future.seed = TRUE,
+                                   .progress = verbose)
     names(Prob.cell_) <- rownames(pairLRsig)
     nnz.cum <- sum(vapply(Prob.cell_, function(m) length(m@x), numeric(1)))
+    if (nLR >= guard.nLR) {
+      guard.checked <- TRUE
+      proj <- nnz.cum / nLR * nLR * 12
+      if (proj > GUARD.BYTES && is.null(spill.dir))
+        stop(sprintf(paste0("Projected cell-level output tensor is ~%.1f GB ",
+                            "(> %.0f GB in-memory threshold). Set `spill.dir` to ",
+                            "stream layers to disk, or reduce broadly expressed ",
+                            "LR pairs."), proj / 1e9, GUARD.BYTES / 1e9),
+             call. = FALSE)
+    }
+    layers <- Prob.cell_
+    if (!is.null(spill.dir)) {
+      for (i in seq_len(nLR)) {
+        saveRDS(layers[[i]], file.path(spill.dir, paste0(names(layers)[i], ".rds")),
+                compress = FALSE)
+        spill.i <- spill.i + 1L
+      }
+      layers <- NULL
+      rm(Prob.cell_)
+    }
   } else {
-    if (verbose) {
-      progressr::with_progress({
-        pr <- progressr::progressor(along = seq_len(nLR))
-        lapply(seq_len(nLR), function(i) {
-          layer <- run_one(i)
-          nnz.cum <<- nnz.cum + length(layer@x)
-          if (!guard.checked && i >= guard.nLR) {
-            guard.checked <<- TRUE
-            proj <- nnz.cum / i * nLR * 12
-            if (proj > GUARD.BYTES && is.null(spill.dir))
-              stop(sprintf(paste0("Projected cell-level output tensor is ~%.1f GB ",
-                                  "(> %.0f GB in-memory threshold). Set `spill.dir` to ",
-                                  "stream layers to disk, or reduce broadly expressed ",
-                                  "LR pairs."), proj / 1e9, GUARD.BYTES / 1e9),
-                   call. = FALSE)
-          }
-          pr(sprintf("LR %d/%d", i, nLR))
-          if (!is.null(spill.dir)) {
-            saveRDS(layer, file.path(spill.dir, paste0(names(layers)[i], ".rds")),
-                    compress = FALSE)
-          } else {
-            layers[[i]] <<- layer
-          }
-          NULL
-        })
-      })
-    } else {
+    progressr::with_progress({
+      pr <- progressr::progressor(along = seq_len(nLR),
+                                 message = "Computing LR probabilities",
+                                 enable = .sc_progress_enabled(verbose) && nLR > 1L &&
+                                   getOption("progressr.enable", TRUE))
       lapply(seq_len(nLR), function(i) {
         layer <- run_one(i)
         nnz.cum <<- nnz.cum + length(layer@x)
+        if (!guard.checked && i >= guard.nLR) {
+          guard.checked <<- TRUE
+          proj <- nnz.cum / i * nLR * 12
+          if (proj > GUARD.BYTES && is.null(spill.dir))
+            stop(sprintf(paste0("Projected cell-level output tensor is ~%.1f GB ",
+                                "(> %.0f GB in-memory threshold). Set `spill.dir` to ",
+                                "stream layers to disk, or reduce broadly expressed ",
+                                "LR pairs."), proj / 1e9, GUARD.BYTES / 1e9),
+                 call. = FALSE)
+        }
         if (!is.null(spill.dir)) {
           saveRDS(layer, file.path(spill.dir, paste0(names(layers)[i], ".rds")),
                   compress = FALSE)
+          spill.i <<- spill.i + 1L
         } else {
           layers[[i]] <<- layer
         }
+        pr()
         NULL
       })
-    }
-    if (verbose) .cli("Layers computed: {.val {nLR}}; total nnz = {.val {nnz.cum}}", .type = "info")
+    })
   }
   if (is.null(spill.dir)) {
     prob.array <- SparseChatArray(layers)
@@ -415,8 +441,8 @@ computeCommunProb <- function(
     spill.backend = spill.backend,
     spill.dir = if (is.null(spill.dir)) NULL else normalizePath(spill.dir),
     run.time = as.numeric(Sys.time() - t0, units = "secs")))
-  .cli("computeCommunProb done: {.val {nC}} x {.val {nC}} x {.val {nLR}} layers; nnz = {.val {nnz.cum}}; {.val {round(as.numeric(Sys.time() - t0, units = 'secs'), 2)}}s",
-       .type = "success")
+  if (isTRUE(verbose)) .cli("computeCommunProb done: {.val {nC}} x {.val {nC}} x {.val {nLR}} layers; nnz = {.val {nnz.cum}}; {.val {round(as.numeric(Sys.time() - t0, units = 'secs'), 2)}}s",
+                            .type = "success")
   object
 }
 
@@ -600,6 +626,8 @@ relabelSpatialCellChat <- function(
     stop("Please check the `labelSet`, make sure the cell groups
     to be dropped are in the `group.by` column.\n")
   }
+  .cli("Relabeling {.val {length(group.drop)}} of {.val {length(group.level)}} cell groups; recomputing group and pathway summaries",
+       .type = "text", .verbose = 2L)
 
   tmp.df <- data.frame(
     pre = group.lab,
@@ -670,6 +698,8 @@ relabelSpatialCellChat <- function(
   )
 
   object <- aggregateNet(object)
+  .cli("Relabeling done: {.val {length(group.level)}} original groups to {.val {nlevels(object@idents)}} groups",
+       .type = "text", .verbose = 2L)
 
   return(object)
 }
@@ -1088,7 +1118,11 @@ computeAvgCommunProb_LR_Visium_Avg  <- function (
 #' @param colocalization.use whether filtering out spatially distant cell groups based on colocalization analysis between any cell groups
 #' @param thresh.colo removal of cell-cell communication with no significant colocalizations (fdr < 0.05)
 #' @param nthreads OpenMP threads for the permutation kernel (default 1; results are bitwise identical for any thread count).
-#' @param verbose Whether to emit progress and CLI messages.
+#' @param verbose Logical. FALSE disables ordinary CLI messages and progress.
+#' TRUE follows `options(SpatialCellChat.verbose = 0L)`, `1L`, or `2L` for
+#' quiet, normal, or detailed output and never overrides global quiet.
+#' Progress also respects progressr's enable policy; noninteractive scripts
+#' must opt in, for example with `options(progressr.enable = TRUE)`.
 #'
 #' @return A SpatialCellChat object with updated slots:
 #'
@@ -1116,7 +1150,7 @@ computeAvgCommunProb <- function(
 ){
   t0 <- Sys.time()
   object <- .sc_assert_spatial_cell_chat(object)
-  .cli("computeAvgCommunProb", .type = "subheader")
+  if (isTRUE(verbose)) .cli("computeAvgCommunProb", .type = "subheader")
   avg.type <- match.arg(avg.type)
   do_avg <- avg.type == "avg"
 
@@ -1138,13 +1172,12 @@ computeAvgCommunProb <- function(
          `meta$labels = droplevels(meta$labels, exclude = setdiff(levels(meta$labels),unique(meta$labels)))`",
          call. = FALSE)
   }
-  if (verbose) .cli("The cell groups used for averaging cell-cell communication are {.val {levels(group)}}",
-                    .type = "info")
+  if (isTRUE(verbose)) .cli("Groups: {.val {levels(group)}}",
+                            .type = "text", .verbose = 2L)
 
   # ---- cell-level layers (11-slot input) ----
   if (is.null(object@net$cell$prob)) {
-    stop(cli.symbol(2),
-         "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! ",
+    stop("Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! ",
          call. = FALSE)
   }
   prob.array <- object@net$cell$prob
@@ -1192,8 +1225,12 @@ computeAvgCommunProb <- function(
     pval.colo <- matrix(0, nrow = numCluster, ncol = numCluster)
   }
 
-  if (verbose) .cli("Compute group-level cell-cell communication... ({.val {avg.type}}; {.val {nLR}} LR pairs x {.val {numCluster}} groups, nC = {.val {nC}})",
-                    .type = "info")
+  if (isTRUE(verbose)) {
+    .cli("Input: {.val {nC}} cells; {.val {numCluster}} groups; {.val {nLR}} LR pairs; method = {.val {avg.type}}",
+         .type = "info")
+    .cli("Gates: min.percent = {.val {min.percent}}, min.cells.sr = {.val {min.cells.sr}}; colocalization = {.val {colocalization.use}}; permutation = {.val {do.permutation}}",
+         .type = "text", .verbose = 2L)
+  }
 
   Prob <- array(0, dim = c(numCluster, numCluster, nLR),
                 dimnames = list(levels(group), levels(group), LRsig))
@@ -1229,29 +1266,25 @@ computeAvgCommunProb <- function(
     Prob.avg
   }
 
-  if (verbose) {
-    progressr::with_progress({
-      pr <- progressr::progressor(along = seq_along(LRsig.use.idx))
-      for (x in seq_along(LRsig.use.idx)) {
-        i <- LRsig.use.idx[[x]]
-        Prob[, , i] <- run_avg(i)
-        pr(sprintf("avg LR %d/%d", x, length(LRsig.use.idx)))
-      }
-    })
-  } else {
+  progressr::with_progress({
+    pr <- progressr::progressor(along = seq_along(LRsig.use.idx),
+                               message = "Averaging LR probabilities",
+                               enable = .sc_progress_enabled(verbose) && length(LRsig.use.idx) > 1L &&
+                                 getOption("progressr.enable", TRUE))
     for (x in seq_along(LRsig.use.idx)) {
       i <- LRsig.use.idx[[x]]
       Prob[, , i] <- run_avg(i)
+      pr()
     }
-  }
+  })
 
   # ---- permutation (baseline my_future_lapply section) ----
   ggc.counts <- apply(Prob > 0, 3, sum)
   LRsig.use.idx.perm <- which(ggc.counts > 0)
   if (do.permutation) {
     if (nboot < 1) stop("nboot must be >= 1 when do.permutation = TRUE", call. = FALSE)
-    if (verbose) .cli("Perform permutation test for group-level communication... ({.val {nboot}} boots x {.val {length(LRsig.use.idx.perm)}} active LRs, nthreads = {.val {nthreads}})",
-                      .type = "info")
+    if (isTRUE(verbose)) .cli("Permutation test: {.val {nboot}} boots x {.val {length(LRsig.use.idx.perm)}} active LR pairs; {.val {nthreads}} kernel threads",
+                              .type = "text", .verbose = 2L)
     # Baseline RNG: this single replicate() call after set.seed(seed.use) above.
     permutation <- replicate(nboot, sample.int(nC, size = nC))
 
@@ -1269,21 +1302,17 @@ computeAvgCommunProb <- function(
       matrix(p, nrow = numCluster, ncol = numCluster, byrow = FALSE)
     }
 
-    if (verbose) {
-      progressr::with_progress({
-        pr <- progressr::progressor(along = seq_along(LRsig.use.idx.perm))
-        for (x in seq_along(LRsig.use.idx.perm)) {
-          i <- LRsig.use.idx.perm[[x]]
-          Pval[, , i] <- run_perm(i)
-          pr(sprintf("perm LR %d/%d", x, length(LRsig.use.idx.perm)))
-        }
-      })
-    } else {
+    progressr::with_progress({
+      pr <- progressr::progressor(along = seq_along(LRsig.use.idx.perm),
+                                 message = "Testing LR permutations",
+                                 enable = .sc_progress_enabled(verbose) && length(LRsig.use.idx.perm) > 1L &&
+                                   getOption("progressr.enable", TRUE))
       for (x in seq_along(LRsig.use.idx.perm)) {
         i <- LRsig.use.idx.perm[[x]]
         Pval[, , i] <- run_perm(i)
+        pr()
       }
-    }
+    })
     Pval[Prob == 0] <- 1
   } else {
     Pval <- NULL
@@ -1321,8 +1350,8 @@ computeAvgCommunProb <- function(
     nLR = nLR, numCluster = numCluster, nboot = nboot, avg.type = avg.type,
     do.permutation = do.permutation, nthreads = nthreads,
     run.time = as.numeric(Sys.time() - t0, units = "secs")))
-  if (verbose) .cli("computeAvgCommunProb done: {.val {numCluster}} x {.val {numCluster}} x {.val {nLR}} group-level layers; {.val {length(LRsig.use.idx.perm)}} active LRs; {.val {round(as.numeric(Sys.time() - t0, units = 'secs'), 2)}}s",
-                    .type = "success")
+  if (isTRUE(verbose)) .cli("computeAvgCommunProb done: {.val {numCluster}} x {.val {numCluster}} x {.val {nLR}} group-level layers; {.val {length(LRsig.use.idx.perm)}} active LR pairs; {.val {round(as.numeric(Sys.time() - t0, units = 'secs'), 2)}}s",
+                            .type = "success")
   object
 }
 
@@ -1635,6 +1664,7 @@ computeCommunProbPathway <- function(
     do.group = TRUE,
     do.cell = TRUE
 ) {
+  .cli("computeCommunProbPathway", .type = "subheader")
   if (is.null(net)) {
     net <- object@net
   }
@@ -1642,12 +1672,17 @@ computeCommunProbPathway <- function(
     pairLR.use <- object@LR$LRsig
   }
   pathways <- unique(pairLR.use$pathway_name)
+  .cli("Input: {.val {nrow(pairLR.use)}} LR annotations; {.val {length(pathways)}} candidate pathways",
+       .type = "info")
+  .cli("Levels: group = {.val {do.group}}, cell = {.val {do.cell}}; group p-value threshold = {.val {thresh}}",
+       .type = "text", .verbose = 2L)
 
   if (do.group) {
     if ( !inherits(net$group$prob, "SparseChatArray") ) {
       stop("Please run `computeAvgCommunProb` to compute the group-level signaling! ")
     }
-    cat(cli.symbol(),"Compute the communication probability between cell groups at signaling pathway level by summarizing all related ligands/receptors...\n")
+    .cli("Summing {.val {dim(net$group$prob)[3]}} group-level LR layers; significance filter = {.val {!is.null(net$group$pval)}}",
+         .type = "text", .verbose = 2L)
     prob.layers <- unclass(net$group$prob)
     # layer names = dimnames[[3]] = rownames(LRsig) (Plan A invariant); layers
     # without a matching pairLR.use row belong to no pathway and are excluded
@@ -1701,7 +1736,8 @@ computeCommunProbPathway <- function(
       cell.layers <- unclass(net$cell$prob)
       layer.pathway.cell <- pairLR.use$pathway_name[match(dimnames(net$cell$prob)[[3]], rownames(pairLR.use))]
 
-      cat(cli.symbol(),"Compute the communication probability between individual cells at signaling pathway level by summarizing all related ligands/receptors...\n")
+      .cli("Summing {.val {length(cell.layers)}} individual-cell LR layers",
+           .type = "text", .verbose = 2L)
       cell.pathways <- lapply(pathways, function(one_pathway) {
         idx <- which(layer.pathway.cell == one_pathway)
         if (length(idx) == 0L) {
@@ -1721,7 +1757,8 @@ computeCommunProbPathway <- function(
       pathways.sig.cell <- pathways[PathwaySig.use.idx][idx]
 
       # sort `cell.pathways`
-      cat(cli.symbol(),"Subset the pathways with non-zero communication probability and arrange them in a decreasing order based on the total communication probabilities ...\n")
+      .cli("Retaining {.val {length(pathways.sig.cell)}} non-zero cell-level pathways in decreasing total-probability order",
+           .type = "text", .verbose = 2L)
       cell.prob <- SparseChatArray(
         unname(cell.pathways[pathways.sig.cell]),
         dimnames = list(dimnames(net$cell$prob)[[1]],
@@ -1729,6 +1766,8 @@ computeCommunProbPathway <- function(
                         pathways.sig.cell)
       )
     } else {
+      .cli("Cell-level pathway summary skipped: no cell-level probabilities",
+           .type = "text", .verbose = 2L)
       pathways.sig.cell <- NULL
       cell.prob <- NULL
     }
@@ -1738,7 +1777,8 @@ computeCommunProbPathway <- function(
   }
   # group-level: pathways; group$prob
   # individual cell-level: pathways.cell; cell$prob
-  cat(cli.symbol(1),"Computing the communication probability on signaling pathway level is done. \n")
+  .cli("computeCommunProbPathway done: {.val {length(pathways.sig)}} group-level and {.val {length(pathways.sig.cell)}} cell-level pathways",
+       .type = "success")
   if (is.null(object)) {
     return(list(pathways = pathways.sig,
                 group = list(prob = group.prob),
@@ -1819,13 +1859,19 @@ computeCommunProbPathway <- function(
 #' @export
 #'
 filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells.sr = 5) {
+  .cli("filterCommunication", .type = "subheader")
+  .cli("Input: {.val {length(object@idents)}} cells; {.val {nlevels(object@idents)}} groups; group filter = {.val {!is.null(min.cells)}}, cell filter = {.val {!is.null(min.links) || !is.null(min.cells.sr)}}",
+       .type = "info")
+  n.groups.excluded <- 0L
+  n.lr.links.excluded <- 0L
+  n.lr.cells.excluded <- 0L
 
   if (!is.null(min.cells)) {
-    message("Filter cell-group level communication...", "\n")
+    .cli("Group-level filter: min.cells = {.val {min.cells}}",
+         .type = "text", .verbose = 2L)
     group.prob <- object@net$group$prob
     if (!inherits(group.prob, "SparseChatArray")) {
       stop(
-        cli.symbol(2),
         "Please run `computeAvgCommunProb` to compute the group-level communication!",
         call. = FALSE
       )
@@ -1840,6 +1886,7 @@ filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells
     }
 
     cell.excludes <- which(as.numeric(table(object@idents)) < min.cells)
+    n.groups.excluded <- length(cell.excludes)
     if (length(cell.excludes) > 0L) {
       group.levels <- levels(object@idents)
       group.names <- dimnames(group.prob)[[1L]]
@@ -1852,12 +1899,8 @@ filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells
         )
       }
 
-      cat(
-        cli.symbol(),
-        "The cell-cell communication related with the following cell groups are excluded due to the few number of cells: ",
-        paste(excluded.names, collapse = ", "),
-        "\n"
-      )
+      .cli("Groups excluded for insufficient cells: {.val {excluded.names}}",
+           .type = "text", .verbose = 2L)
 
       group.prob <- .sc_map_sparse_layers(group.prob, function(layer) {
         layer[group.excludes, ] <- 0
@@ -1886,11 +1929,10 @@ filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells
   }
 
   if (!is.null(min.links) || !is.null(min.cells.sr)) {
-    message("Filter individual cell-level communication...", "\n")
+    .cli("Filtering individual-cell LR layers", .type = "text", .verbose = 2L)
     prob.cell <- object@net$cell$prob
     if (!inherits(prob.cell, "SparseChatArray")) {
       stop(
-        cli.symbol(2),
         "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! ",
         call. = FALSE
       )
@@ -1903,6 +1945,8 @@ filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells
       numeric(1)
     )
     dimArr <- dim(prob.cell)
+    .cli("Cell-level input: {.val {dimArr[3]}} LR layers; {.val {dimArr[1]}} cells",
+         .type = "text", .verbose = 2L)
 
     AllzeroMat <- Matrix::sparseMatrix(
       i = integer(0),
@@ -1914,15 +1958,12 @@ filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells
     )
 
     if (!is.null(min.links)) {
-      cat(cli.symbol(), "Filter communication according to min.links...\n")
+      .cli("Link filter: min.links = {.val {min.links}}", .type = "text", .verbose = 2L)
       idx.signaling.excludes <- which((prob.sum < min.links) & (prob.sum > 0))
+      n.lr.links.excluded <- length(idx.signaling.excludes)
       if (length(idx.signaling.excludes) > 0L) {
-        cat(
-          "The cell-cell communication related with #",
-          length(idx.signaling.excludes),
-          "L-R pairs are excluded due to the few number of interactions.",
-          "\n"
-        )
+        .cli("Excluded {.val {n.lr.links.excluded}} LR pairs for insufficient links",
+             .type = "text", .verbose = 2L)
         prob.cell_[idx.signaling.excludes] <- rep(
           list(AllzeroMat),
           length(idx.signaling.excludes)
@@ -1931,7 +1972,8 @@ filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells
     }
 
     if (!is.null(min.cells.sr)) {
-      cat(cli.symbol(), "Filter communication according to min.cells.sr... \n")
+      .cli("Sender/receiver filter: min.cells.sr = {.val {min.cells.sr}}",
+           .type = "text", .verbose = 2L)
       if (is.null(min.links)) {
         pathway.idx <- which(prob.sum > 0)
       } else {
@@ -1939,28 +1981,30 @@ filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells
       }
 
       if (length(pathway.idx) > 0L) {
-        pathways.remove.idx <- pbapply::pblapply(
-          X = pathway.idx,
-          FUN = function(x) {
-            prob.cell.i <- prob.cell_[[x]] > 0
-            if (
-              (sum(Matrix::rowSums(prob.cell.i) > 0) < min.cells.sr) |
-              (sum(Matrix::colSums(prob.cell.i) > 0) < min.cells.sr)
-            ) {
-              return(x)
+        pathways.remove.idx <- progressr::with_progress({
+          pr <- progressr::progressor(along = pathway.idx,
+                                     message = "Filtering sender/receiver support",
+                                     enable = .sc_progress_enabled() && length(pathway.idx) > 1L &&
+                                       getOption("progressr.enable", TRUE))
+          lapply(
+            X = pathway.idx,
+            FUN = function(x) {
+              prob.cell.i <- prob.cell_[[x]] > 0
+              excluded <-
+                (sum(Matrix::rowSums(prob.cell.i) > 0) < min.cells.sr) |
+                (sum(Matrix::colSums(prob.cell.i) > 0) < min.cells.sr)
+              result <- if (excluded) x else NULL
+              pr()
+              result
             }
-            NULL
-          }
-        )
+          )
+        })
         pathways.remove.idx <- unlist(pathways.remove.idx, use.names = FALSE)
+        n.lr.cells.excluded <- length(pathways.remove.idx)
 
         if (length(pathways.remove.idx) > 0L) {
-          cat(
-            "The cell-cell communication related with #",
-            length(pathways.remove.idx),
-            "L-R pairs are excluded due to the few number of sending/receiving cells.",
-            "\n"
-          )
+          .cli("Excluded {.val {n.lr.cells.excluded}} LR pairs for insufficient sending/receiving cells",
+               .type = "text", .verbose = 2L)
           prob.cell_[pathways.remove.idx] <- rep(
             list(AllzeroMat),
             length(pathways.remove.idx)
@@ -1973,9 +2017,10 @@ filterCommunication <- function(object, min.cells = 10, min.links = 5, min.cells
       prob.cell_,
       dimnames(prob.cell)
     )
-    cat(paste0(cli.symbol(1), "Filtering cell-cell communication is done.<<< [", Sys.time(), "]", "\n"))
   }
 
+  .cli("filterCommunication done: excluded {.val {n.groups.excluded}} groups; {.val {n.lr.links.excluded}} LR pairs by link count and {.val {n.lr.cells.excluded}} by sender/receiver support",
+       .type = "success")
   object
 }
 
@@ -2088,21 +2133,19 @@ filterProbability <- function (
     seed.use = 666L,
     thresh = 0.05
 ){
+  .cli("filterProbability", .type = "subheader")
   quantile.prob <- 1-thresh
   if(quantile.prob==0){
-    cat(cli.symbol(1),"Do not filter any CCC probability!")
+    .cli("filterProbability skipped: quantile is zero; probabilities unchanged", .type = "success")
     return(object)
   } else { # quantile.prob<1
     comm.param <- object@misc$.param$communication
     spill.dir <- if (is.null(comm.param)) NULL else comm.param$spill.dir
     if (is.null(object@net$cell$prob) && is.null(spill.dir)) {
       stop(
-        cli.symbol(2),
         "Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! "
       )
     } else {
-      cat(paste0(cli.symbol(), "Filter out non-significant communication with a probability quantile being ",
-                 quantile.prob, " for each L-R pair... \n"))
       # 层来源：内存模式读 net$cell$prob（SparseChatArray 即命名 list）；spill 模式逐层读盘并消费
       if (!is.null(spill.dir)) {
         pair.LR.use <- comm.param$layer.names
@@ -2126,6 +2169,10 @@ filterProbability <- function (
       nLR <- length(pair.LR.use)
       nLR1 <- comm.param$nLR1
       nC <- NROW(d.spatial)
+      .cli("Input: {.val {nC}} cells; {.val {nLR}} LR pairs; {.val {nboot}} sampled cells per LR; quantile = {.val {quantile.prob}}",
+           .type = "info")
+      .cli("Layer source: {.val {if (is.null(spill.dir)) 'memory' else spill.dir}}; seed = {.val {seed.use}}",
+           .type = "text", .verbose = 2L)
 
       set.seed(seed.use)
       if (comm.param$all.contact.dependent == TRUE) {
@@ -2225,12 +2272,14 @@ filterProbability <- function (
       comm.param$spill.count <- NULL
       comm.param$layer.names <- NULL
       object@misc$.param$communication <- comm.param
+      .cli("Consumed spilled LR layers and cleared spill metadata", .type = "text", .verbose = 2L)
     }
     object <- .log_operation(object, "filterProbability", params = list(
       nLR = nLR, nboot = nboot, thresh = thresh,
       spill.consumed = !is.null(spill.dir)))
 
-    cat(cli.symbol(1), "Filtering is done.\n")
+    .cli("filterProbability done: {.val {nLR}} LR layers retained at quantile {.val {quantile.prob}}",
+         .type = "success")
     return(object)
     } # whether probability computed
   } # whether to filter out
@@ -2260,7 +2309,10 @@ filterProbability <- function (
 #' @export
 #'
 aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signaling = NULL, pairLR.use = NULL, remove.isolate = TRUE, thresh = 0.05, return.object = TRUE) {
+  .cli("aggregateNet", .type = "subheader")
   net <- object@net
+  .cli("Input: {.val {dim(net$group$prob)[1]}} groups; {.val {dim(net$group$prob)[3]}} group-level LR layers; p-value threshold = {.val {thresh}}",
+       .type = "info")
   if (is.null(sources.use) && is.null(targets.use) && is.null(signaling) && is.null(pairLR.use)) {
     if ( !inherits(net$group$prob, "SparseChatArray") ) {
       stop("Please run `computeAvgCommunProb` to compute the group-level signaling! ")
@@ -2292,6 +2344,8 @@ aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signali
     if ( !inherits(net$group$prob, "SparseChatArray") ) {
       stop("Please run `computeAvgCommunProb` to compute the group-level signaling! ")
     }
+    .cli("Subsetting group-level sources, targets, or signaling before aggregation",
+         .type = "text", .verbose = 2L)
     prob.layers <- unclass(net$group$prob)
     pval.layers <- if (!is.null(net$group$pval)) unclass(net$group$pval) else NULL
     LR <- object@LR$LRsig
@@ -2353,7 +2407,8 @@ aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signali
     df.net2$target <- as.character(a[, 2])
     cells.level <- levels(object@idents)
     if (remove.isolate) {
-      message("Isolate cell groups without any interactions are removed. To block it, set `remove.isolate = FALSE`")
+      .cli("Removing isolated groups; set `remove.isolate = FALSE` to retain them",
+           .type = "text", .verbose = 2L)
       df.net2$source <- factor(df.net2$source, levels = cells.level[cells.level %in% unique(df.net2$source)])
       df.net2$target <- factor(df.net2$target, levels = cells.level[cells.level %in% unique(df.net2$target)])
     } else {
@@ -2382,10 +2437,13 @@ aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signali
     dimnames(net$cell$weight) <- dn.cell
     net$cell$LR.sig <- dimnames(net$cell$prob)[[3]][vapply(cell.layers, function(m) sum(m@x), numeric(1)) > 0]
     if (!is.null(sources.use) | !is.null(targets.use) | !is.null(signaling) | !is.null(pairLR.use)) {
-      message("Subsetting cells or signaling is not applicable to individual cell-based `prob.cell`!", '\n')
+      .cli("Source, target, and signaling subsets apply only to group-level aggregation; individual-cell layers remain unsubsetted",
+           .type = "text", .verbose = 2L)
     }
   }
 
+  .cli("aggregateNet done: {.val {nrow(net$group$count)}} source x {.val {ncol(net$group$count)}} target groups; cell-level network = {.val {!is.null(net$cell$prob)}}",
+       .type = "success")
 
   if (return.object) {
     object@net <- net

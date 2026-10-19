@@ -26,3 +26,7 @@ A `CsparseMatrix` object in `Matrix` Package
 A function defined for `computeCellDistance`. We use the function `createSparseMatrixFrom_distObj` to convert the dist object into a CsparseMatrix object when running `computeCellDistance`.
 Here we design the function to generate cell-cell contact adjacency matrix with a `contact.range` restriction and a `tol` tolerance passed from `computeCellDistance`'s parameters respectively
 }
+\details{
+This matrix helper emits no ordinary status messages; callers own
+distance and contact diagnostics.
+}

@@ -6,24 +6,23 @@
 \usage{
 setEnvironment(
   workers,
+  verbose = getOption("SpatialCellChat.verbose", 1L),
   future.globals.maxSize = 10000 * 1024^2,
-  gc = T,
+  gc = TRUE,
   conda_env = NULL
 )
 }
 \arguments{
-\item{workers}{A integer greater than 0. See details in \code{\link[future]{multisession}}.
-When workers = 1, CellChat will run in sequential mode;
-Otherwise, CellChat will run in parallel mode with a respective number of future parallel clusters.}
+\item{workers}{Integer > 0. 1 = sequential, >1 = multisession parallel.}
 
-\item{future.globals.maxSize}{Run \code{?future::future.globals.maxSize} to see details.}
+\item{verbose}{Verbosity level: 0=quiet, 1=normal, 2=detailed.
+Default reads \code{getOption("SpatialCellChat.verbose", 1L)}.}
 
-\item{gc}{Boolean. Whether the garbage collector run or not. It's an argument passed to Future().
-See details in \code{\link[future]{Future}}}
+\item{future.globals.maxSize}{Passed to \code{options(future.globals.maxSize)}.}
 
-\item{conda_env}{We use some functions coded with Python in CellChat. Users
-may need to set Python Lib Path here or otherwhere explicitly. For example, setEnvironment(workers = 2L,conda_env = "path/to/.conda/envs/env_name/")
-See details in \code{\link[reticulate]{use_condaenv}} or use `reticulate`'s other relevant functions to get a Python support.}
+\item{gc}{Whether to run garbage collector on each future worker.}
+
+\item{conda_env}{Path to conda environment (passed to \code{reticulate::use_condaenv}).}
 }
 \description{
 Set the computation environment
