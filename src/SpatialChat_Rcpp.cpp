@@ -192,27 +192,27 @@ Rcpp::List cpp_prob_layer(Rcpp::NumericVector x0, Rcpp::IntegerVector row0,
 // ============================================================================
 // computeAvgCommunProb v2 (Plan A): gated group-level aggregation kernels.
 //
-// Replicates baseline computeAvgCommunProb_LR_{Avg,Sum} (modeling.R) element-for-element:
+// Implements the declared numeric computeAvgCommunProb contract:
 //   num[a,b] = sum_{i in a (sender row), j in b (receiver col)} v_ij
 //              accumulated in CSC traversal order (j outer ascending, i inner ascending)
-//   den[a,b] = count of STORED entries in the block (baseline binarized-crossprod;
+//   den[a,b] = count of STORED entries in the block (numeric reference binarized-crossprod;
 //              explicit zeros count too, matching prob@x <- 1 + crossprod)
-//   avg: val = num/den with 0/0 -> 0 (baseline NaN -> 0); sum: val = num
+//   avg: val = num/den with 0/0 -> 0 (numeric reference NaN -> 0); sum: val = num
 //   val *= indL[a]*indR[b]*indS[a]*indI[b]   (0/1 gate product = Prob_percent * cells.sr)
 //
 // Gate decisions are INTEGER threshold comparisons:
-//   indL/indR: cnt >= thr[a] -- min.percent. thr[a] is precomputed in R against the
-//     baseline's own mean()+signif() chain (decision is monotone non-decreasing in the
+//   indL/indR: cnt >= thr[a] -- numeric min.percent. thr[a] is precomputed in R against
+//     the declared mean()+signif() chain (decision is monotone non-decreasing in the
 //     0/1 count cnt because group sizes are invariant under label permutation, so the
 //     mean denominator n_a is a per-group constant; monotonicity is verified
 //     exhaustively in tests_dev/test-computeAvgCommunProb.R).
 //   indS/indI: sum >= min_cells_sr -- min.cells.sr. Sums of integer-valued doubles are
 //     exact in double for any accumulation order.
 // All gate quantities are integer-valued doubles: order cannot change them.
-// The only order-sensitive quantity is num (~1 ulp vs the baseline's row-partial +
-// BLAS dgemm chain; empirically verified in tests).
+// The only order-sensitive quantity is num (~1 ulp vs the numeric R reference's
+// row-partial + BLAS dgemm chain; empirically verified in tests).
 // Output layout: flat K*K with the SENDER group index fastest, f = a + b*K,
-// i.e. exactly as.vector() of the K x K baseline matrix (column-major, a fastest).
+// i.e. exactly as.vector() of the numeric reference matrix (column-major, a fastest).
 
 #include <limits>
 #include <algorithm>

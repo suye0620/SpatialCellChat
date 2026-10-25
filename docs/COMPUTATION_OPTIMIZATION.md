@@ -90,17 +90,17 @@
 - `computeCommunProb` 主循环：当前 ≈ 21 min → 稀疏化后 ≈ 5 s（单进程）；
 - `computeAvgCommunProb` 置换段：当前 ≈ 25 min（500 有信号 LR）→ Rcpp 后 ≈ 5 s。
 
-### 3.4 顺带发现的隐藏行为（需确认是否修复）
+### 3.4 `min.percent` 门控契约（已裁定）
 
-`computeAvgCommunProb_LR_Avg` 的 `1 * (format(dataLR_percent, digits = 1) >= min.percent)` 是**字符串比较**而非数值比较。实测：
+`computeAvgCommunProb_LR_Avg` 的旧实现使用 `format(dataLR_percent, digits = 1) >= min.percent`，比较对象实际为字符。实测：
 
-```
-format(0.0999999, digits=1) = "0.1"    # 四舍五入到 1 位有效数字
+```text
+format(0.0999999, digits=1) = "0.1"    # 一位有效数字
 format(0.0001,    digits=1) = "1e-04"
-"1e-04" >= "0.1" → TRUE               # 字符串比较：'1' > '0'
+"1e-04" >= "0.1" → TRUE               # 字符串比较
 ```
 
-即表达率 0.0001（万分之一）的细胞群会被误判为"过表达"（数值语义应为 FALSE）。这是原 CellChat 实现的隐藏 bug/特性。**改为数值比较（signif(x,1) >= min.percent）会改变下游结果**，属行为变更，需拍板。
+项目已裁定采用 numeric contract：`signif(x, 1) >= min.percent`。这保留一位有效数字的数值意图，并将 upstream 的字符比较视为历史 bug；因此 group support/p-value 与 pinned upstream 的差异是有意记录的行为边界，不再是待拍板事项。
 
 ---
 
@@ -216,11 +216,11 @@ res <- BiocNeighbors::findNeighbors(
 
 ---
 
-## 6. 待拍板讨论点
+## 6. 已裁定事项与剩余讨论点
 
-1. **优先级**：方案 A（279×）与 B（140×）覆盖两个最大热点，且都**不需要并行**。方向选择：先稀疏化/Rcpp 化、并行降级为可选配置？还是保留并行框架 + 逐步加速？
-2. **数值一致性契约**：A 可逐位一致；B（Rcpp block-sum）与 R/BLAS 累加顺序不同，p 值结果可能有个位数级边界差异。可接受吗？
-3. **`format(digits=1)` 字符串比较 bug**（3.4）：重构时改为数值比较会改变下游结果——修还是保持原语义？
+1. **优先级**：方案 A（279×）与 B（140×）覆盖两个最大热点，且都**不需要并行**。当前实现保留 kernel 化，并将并行作为可选配置。
+2. **数值一致性契约**：A 可逐位一致；B（Rcpp block-sum）与 R/BLAS 累加顺序不同，`Prob` 采用已测 `≤1e-12` 数值界；同一 numeric gate 的 post-filter 重放覆盖 1,555/1,563 个非空层，p 值零差，剩余 8 个空层固定为 `Prob=0`/`Pval=1`，但不升级为跨平台所有输入的 p 值逐位契约。
+3. **`format(digits=1)` 字符串比较**：已裁定采用 `signif(x, 1) >= min.percent` numeric semantics；旧字符行为仅作历史比较，不再作为新实现验收 oracle。
 4. **真实数据规模**：合成基准为 Visium（5k spots、200k 边、k=10）。若目标含 slide-seq（5 万 spots），`computeCellDistance` 的稠密瓶颈会先爆——方案 D 的 KD-tree 需提前。
 5. **落地方式**：方案 A+B 可直接实现并用 tutorial 数据（`visium_human_psoriasis.RData`）回归。
 
@@ -283,9 +283,9 @@ n=2000 探针：`crossprod(1×n, 1×n)` 产出 4M nnz 的 dgCMatrix，45.8 MB。
 | 稀疏 one-hot 版 | 13.00 ms | ~694 s |
 | Rcpp block-sum 预估（文档第 4 节方案 B） | ~0.1 ms 级 | ~5 s |
 
-- **`identity (no perm): FALSE` 实测复现**：稀疏版的数值 `pct >= min.percent` 与当前 `format(digits=1)` 字符串比较在边界值（如 0.0999999 → "0.1"）语义不同——即文档 3.4 节隐藏行为，任何替换都必须显式拍板保持字符串语义还是修正为数值语义。
-- **结论：R 层稀疏重写收益仅 ~4%，置换段必须 Rcpp 化（~140×）才有实质改善。**
-- **2026-09-28 Plan A 落地（computeAvgCommunProb v2，见 `.agents/notes/implemented/2026-09-28-compute-avg-commun-prob-plan-a.md`）**：MBM05 实测（1563 层 × nboot=100，nC=29536，K=8）全量 **125.66 s**；冻结基线参考 1518 ms/层 → 外推 2372.6 s → **19×**。等价性：门控/计数/p 值逐位一致（30 层 Pval 零翻转），Prob 相对差 ≤1.43e-14（dgemm 归约序不可移植复现的 1 ulp 契约）。统计语义未动（空间混淆等见 PERMUTATION_TEST_AUDIT.md，后置 Plan B）。
+- **历史 `identity (no perm): FALSE` 已解释**：稀疏版使用 numeric `signif(x, 1) >= min.percent`，旧 benchmark `cur` 使用 pinned upstream 的 `format(digits=1)` 字符比较；两者差异是已裁定的行为边界，不是 Rcpp 聚合回归。
+- **结论：** R 层稀疏重写收益仅 ~4%，置换段仍需 Rcpp 化（~140×）才有实质改善。
+- **2026-09-28 Plan A 落地**：MBM05 实测（1563 层 × nboot=100，nC=29536，K=8）全量 **125.66 s**；冻结基线参考 1518 ms/层 → 外推 2372.6 s → **19×**。当前 numeric contract 下，门控/计数由 kernel 与 R numeric reference 对齐，Prob 采用 `≤1e-12` 数值界；p 值严格比较的归约边界单独记录于 `docs/COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md`。统计语义未动（空间混淆等见 PERMUTATION_TEST_AUDIT.md，后置 Plan B）。
 - **2026-10-08 Wave 2b 落地（computeCommunProbPathway / aggregateNet / relabelSpatialCellChat → 11-slot，见 `.agents/notes/proposed/2026-10-08-netpathway-aggregate-migration.md`）**：`tests_dev/test-netpathway-aggregate.R` 38 项 fixture 级对拍全绿——pathway 聚合（门控单步 `>=`、全零 pathway 剔除、降序排列）、两步门控 count/weight、细胞级二值化 count（显式零计为 link）均与手工参考**逐位一致**（无浮点求和跨层顺序变化：逐 pathway `.sc_sum_layers` 与基线同层序）；subset 分支原生复刻 `subsetCommunication_internal(slot.name="net")`（count=显著 LR 行数、weight=prob 和）；relabel e2e + 同 seed 确定性逐位复现。`pbsapply`/`my_as_sparse3Darray`/`spatstat.sparse` 依赖自该链路移除。
 - **2026-10-11 Wave 3a (`netAnalysis_computeCentrality` / `subsetCommunication` → 11-slot，见 `.agents/notes/implemented/2026-10-10-centrality-subset-migration.md`)**：`tests_dev/test-centrality-subset.R` 全部通过——中心性 5/11 measures、两步 `net` 门控、netP 无条件不再门控、纯 R F-order reshape、cell/group 写回与 validObject；subset 的 `>=` 门控、pathway join、缺失 `evidence` 补 NA、netP `pval=NA`、筛选和 BUG-A~E 回归均通过。`compare_centrality_subset_s3_s2.R` 捕获基线 net/netP 的 evidence 崩溃并完成四路手工 subset 对拍；基线 reticulate 中心性因 `should not be called with handlers on the stack` 降级为基线包纯 R helper + 原始数组 oracle，unweighted degree 逐位一致，weighted degree 最大绝对差 `5.684342e-12`/`4.831691e-12`（继承既有组级 prob 归约差异，脚本执行确定性 fallback），full measures ≤`1e-9`。reticulate 的 analysis.R 唯一调用点已移除。
 
@@ -303,9 +303,9 @@ n=2000 探针：`crossprod(1×n, 1×n)` 产出 4M nnz 的 dgCMatrix，45.8 MB。
 ### 9.6 优化优先级
 
 2. **P0（10 万细胞可运行性前提）**：方案 A 外积稀疏化（299×，逐位一致，含消灭 `map_dbl` Hill）；`makeGridSpatialCellChat` 与 `computeGridSize` 已使用 `sparse = TRUE` 成员关系（**2026-09-02**，见 `tests_dev/test-makeGridSpatialCellChat.R` 与 `tests_dev/test-computeGridSize.R`）；新 schema 下删除 `my_as_sparse3Darray` 串行合并（`SparseChatArray` 即 list，直接保留）。
-2. **P1**：方案 B 置换检验 Rcpp 化（~140×，需先拍板 `format(digits=1)` 语义）。
+2. **P1**：方案 B 置换检验 Rcpp 化（~140×，numeric `min.percent` gate 已裁定）。
 3. **P2**：并行配置修正——`my_future_lapply/sapply` 暴露 `future.scheduling` 默认分块到 workers 数；`computeCommunProbPathway` do.cell 统一为 `my_future_lapply`；方案 A 落地后重测并行取舍（当前证据指向顺序执行）。
-4. **P3（决策项）**：`min.percent` 字符串比较语义（修复会改变下游结果）。
+4. **P3（已完成）**：`min.percent` 采用 numeric `signif(x, 1) >= min.percent`，旧 `format()` 字符行为仅保留为历史比较。
 
 ### 9.7 2026-09-02 稀疏点-网格规模复验
 

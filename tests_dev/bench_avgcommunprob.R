@@ -1,4 +1,4 @@
-## Benchmark: computeAvgCommunProb_LR_Avg current vs sparse-matrix version
+## Benchmark: computeAvgCommunProb_LR_Avg numeric-gate path vs sparse-matrix version
 suppressMessages({
   library(Matrix); library(stats)
 })
@@ -9,12 +9,12 @@ prob <- Matrix::rsparsematrix(nC, nC, density = 200000 / nC^2)  # ~200k nnz
 group <- factor(sample(paste0("G", 1:k), nC, replace = TRUE))
 dataLR <- cbind(runif(nC), runif(nC))   # nC x 2 dense
 
-## ---- current implementation (as in computeAvgCommunProb_LR_Avg) ----
+## ---- numeric reference implementation (as in computeAvgCommunProb_LR_Avg) ----
 cur <- function(prob, group, dataLR, min.percent = 0.1, min.cells.sr = 5) {
   cell.type.mat <- model.matrix(~ group - 1)
   dataLR_temp <- 1 * (dataLR > 0)
   dataLR_temp <- aggregate(dataLR_temp, list(group), FUN = mean)
-  dataLR_percent <- 1 * (format(dataLR_temp[, -1], digits = 1) >= min.percent)
+  dataLR_percent <- 1 * (signif(dataLR_temp[, -1], 1) >= min.percent)
   Prob_percent <- Matrix::crossprod(matrix(dataLR_percent[, 1], nrow = 1),
                                     matrix(dataLR_percent[, 2], nrow = 1))
   if (sum(Prob_percent) == 0) {
@@ -37,15 +37,15 @@ cur <- function(prob, group, dataLR, min.percent = 0.1, min.cells.sr = 5) {
   as.matrix(Prob.avg)
 }
 
-## ---- proposed: precomputed one-hot G + sparse products; permuted by row-index ----
+## ---- proposed: precomputed one-hot G + sparse products; numeric gate, permuted by row-index ----
 G <- Matrix::sparse.model.matrix(~ group - 1)         # nC x k
 cnt <- as.numeric(Matrix::colSums(G))
 Lp <- as.numeric(dataLR[, 1] > 0); Rp <- as.numeric(dataLR[, 2] > 0)
 
 prop <- function(prob, G, perm = NULL, min.percent = 0.1, min.cells.sr = 5) {
   Gp <- if (is.null(perm)) G else G[perm, , drop = FALSE]
-  pctL <- as.numeric(Matrix::crossprod(Gp, Lp)) / cnt
-  pctR <- as.numeric(Matrix::crossprod(Gp, Rp)) / cnt
+  pctL <- signif(as.numeric(Matrix::crossprod(Gp, Lp)) / cnt, 1)
+  pctR <- signif(as.numeric(Matrix::crossprod(Gp, Rp)) / cnt, 1)
   Prob_percent <- outer(pctL >= min.percent, pctR >= min.percent) * 1
   if (sum(Prob_percent) == 0) return(Prob_percent)
   Prob.avg <- Matrix::crossprod(Gp, prob %*% Gp)

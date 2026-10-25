@@ -1,14 +1,14 @@
 # Agent Note: computeAvgCommunProb 迁移至 11-slot 与置换检验 Plan A 加速
 
-Status: implemented
+Status: superseded
 Governance: v1
 Date: 2026-09-28
 Decision type: architecture + performance
-Scope: `R/modeling.R` `computeAvgCommunProb`、`src/SpatialChat_Rcpp.cpp`（`cpp_group_avg_obs`/`cpp_group_avg_perm`）、`tests_dev/{test-computeAvgCommunProb.R, test-mbm05-avgperm.R, reference-computeAvgCommunProb-baseline.R}`
+Scope: `R/modeling.R` `computeAvgCommunProb`、`src/SpatialChat_Rcpp.cpp`（`cpp_group_avg_obs`/`cpp_group_avg_perm`）、`tests_dev/{test-computeAvgCommunProb.R, test-mbm05-avgperm.R, reference-computeAvgCommunProb-numeric.R}`
 Owner: SpatialCellChat maintainer
 Impact: high
 Supersedes: none
-Superseded by: none
+Superseded by: .agents/notes/implemented/2026-10-15-mbm05-group-avg-signature-divergence.md
 
 ## Problem
 
