@@ -6,6 +6,7 @@
 
 - [DATA_STRUCTURE.md](DATA_STRUCTURE.md)：合作者确认的最终 11-slot schema；`.mode`、`.datatype` 位于 `misc` 内部。
 - [REFACTORING_PLAN.md](REFACTORING_PLAN.md)：当前实施顺序、SparseChatArray 落点和迁移边界。
+- [FUNCTION_INVENTORY.md](FUNCTION_INVENTORY.md)：`R/` 下 300 个函数的逐函数档案（迁移标签、功能、流程位置、上下游、renv 依赖、死代码），用于评估重构进度。
 - [ANALYSIS_SEMANTICS.md](ANALYSIS_SEMANTICS.md)：下游分析的科学问题、约简/分解、返回契约、信息损失与待裁定事项；不是迁移完成报告。
 - [VISUALIZATION_SEMANTICS.md](VISUALIZATION_SEMANTICS.md)：逐函数可视化语义卡，明确表达、通讯、角色、空间统计的视觉编码与解释边界。
 - [PP1_DOWNSTREAM_REFACTORING_PLAN.md](PP1_DOWNSTREAM_REFACTORING_PLAN.md)：以真实 PP1 脚本为调用方的 IO/参数矩阵、上游前置契约、分批迁移与分层验收方案。
