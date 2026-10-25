@@ -214,6 +214,13 @@ spatial3Dstack <- function(xy, layers, color.heatmap = "RdBu", point.size = 3, z
 - Phase 5 应先完成 `assay()` / `communication()` / `LR()` 访问层迁移，再统一 theme 和坐标变换；不要在旧 slot 上继续加兼容分支。
 - P1 收敛重复代码应和 `visualization.R` 拆分同步完成，避免迁移后再次复制。
 - Gi/Lee 默认值属于接口决策：`do.binary`、`cutoff.Lee`、`spot_highlight` 必须在 API 文档和回归测试中固定。
+- 迁移前置语义入口为 [可视化语义卡](VISUALIZATION_SEMANTICS.md) 与
+  [分析语义卡](ANALYSIS_SEMANTICS.md)。它们区分科学用途、当前实现和未决修正，
+  不更新本报告所列函数的实现完成状态；适用门禁见
+  [下游语义契约提案](../.agents/notes/proposed/2026-10-20-downstream-communication-semantics-contract.md)。
+  特别注意 `extractEnrichedLR*` 的缓存选择、实时 LR 聚合与 `netP` 的差异，
+  以及表达/共表达图并非 source→target 通讯图。
+- [PP1 调用方审计](PP1_DOWNSTREAM_REFACTORING_PLAN.md) 补充实际返回值的二次消费：Gi 写回列用于热点分类、Lee 的 Heatmap 需批处理显式 draw、rankNet 的图数据用于 CSV、topic loadings 用于 Seurat。基础 Field 的旧缓存读取和 Gi 的 matrix/data.frame 契约仍未闭合；评分与两指标角色热图已有局部运行观察，不等于 PP1 整链通过。
 
 ---
 

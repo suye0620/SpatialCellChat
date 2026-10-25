@@ -201,6 +201,33 @@ params(object, key = NULL)
 4. **先测试再整合** — 重写完的函数在 `tests_dev/` 下用 testthat 验证后，才合并到 `R/`
 5. **roxygen2 完整手写** — 不跨文件引用 `@template`，每个函数独立完整，降低 co-authors 维护负担
 
+### Phase 4/5 前置：科学语义核定
+
+存储迁移之前，先按 [分析语义卡](ANALYSIS_SEMANTICS.md) 和
+[可视化语义卡](VISUALIZATION_SEMANTICS.md) 核定本批次的科学问题、观察单位、
+计算定义、视觉编码、信息损失、统计边界、前置计算/返回契约和判别反例。
+治理边界见 [下游语义契约提案](../.agents/notes/proposed/2026-10-20-downstream-communication-semantics-contract.md)。
+卡片完成不代表函数已经迁移，也不将源码缺陷自动升级为应保持的行为。
+
+- **存储迁移**：已核定含义不变，复用访问器/稀疏方法，保持名称对齐与返回含义。
+- **实现与文档不一致**：先确认错误所在；文档更新不能掩盖尚未修复的实现。
+- **科学/API 变化**：阈值、归一化、缺失值、统计单位和默认值分别裁定并记录，
+  不与单纯路径替换混在一起。争议只阻断相关路径，不阻断独立已核定的路径。
+
+优先批次的依赖边界为 `extractEnrichedLR*` 的 LR/基因选择、表达层选择、
+LR 实时门控与聚合，再到四个可视化入口。不能仅修改入口便宣称 signaling/enriched
+分支完成；也不能因名称为 pathway 图便把 `netVisual_aggregate()` 直接切到 `netP`。
+当前 `centr/centr.cell` 仍在所选 net/netP 根部，另行嵌套归位不是本次语义记录的决定。
+
+后续每批验收须同时提供数值/名称对照和实际运行观察；需要图形的路径检查图形本身，
+不是只检查返回 class。无语义争议的错误行为也不应被新增黄金基线永久固定。
+
+[PP1 下游调用方方案](PP1_DOWNSTREAM_REFACTORING_PLAN.md) 进一步给出 B0–B7 批次、
+四层 fixture 和 T01–T22 链级验收。PP1 整链先核定真实输入、六列混合比例与九群的
+关系，再闭合 Visium 生产者；Gi 的 metadata→Lee、topic 的 community→Seurat→markers
+不能由孤立绘图成功替代。该方案不重排已核定独立入口的优先级，也不标记任何新迁移完成。
+
+
 ### 实施顺序
 
 ```
@@ -254,4 +281,4 @@ tests_dev/
 ## 参考
 
 - 数据结构设计详细说明：[DATA_STRUCTURE.md](DATA_STRUCTURE.md)
-- 旧版重构计划（2026-06-25，v3 讨论版）：[refactoring-plan.html](refactoring-plan.html)
+- 旧版重构计划（2026-06-25，v3 讨论版）：`refactoring-plan.html`；当前 `docs/` 下未提供该 HTML，仅保留历史说明。

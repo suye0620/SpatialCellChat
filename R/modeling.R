@@ -706,239 +706,257 @@ relabelSpatialCellChat <- function(
 
 
 
-#' Compute group-level cell-cell communication for Visium Low Definition(LD)
+#' Compute group-level cell-cell communication for Visium Low Definition (LD)
 #'
 #' @description
-#' For Visium HD ST datasets, please use \link{computeAvgCommunProb} instead.
+#' Consume cell-level communication probabilities from the final 11-slot schema
+#' and aggregate them with a cell-type decomposition. For Visium HD ST datasets,
+#' please use \link{computeAvgCommunProb} instead.
 #'
-#' @param object SpatialCellChat object with communication probabilities for pairwise individual cells
-#' @param cell.type.decomposition NCells x NTypes Matrix, which comes from any kind of cell type decomposition.
-#' @param group.by cell group information used for computing average communication probabilities
-# @param min.percent minimum percentage of expressed ligands or receptors per cell group to require for computing the group-level signaling
-# @param min.cells.sr minimum number of cells required as senders or receivers per cell group for computing the group-level signaling
-#' @param avg.type methods for integrating communication probabilities per cell group
-#' @param do.permutation whether performing permutation test
-#' @param nboot the number of permutations
-#' @param seed.use set a random seed. By default, set the seed to 1.
-#' @param colocalization.use whether filtering out spatially distant cell groups based on colocalization analysis between any cell groups
-#' @param thresh.colo removal of cell-cell communication with no significant colocalizations (fdr < 0.05)
-# #' @inheritParams computeAvgCommunProb_LR_Visium_Avg
-# #' @inheritParams computeAvgCommunProb_LR_Visium_Sum
+#' @param object SpatialCellChat object with communication probabilities in
+#'   `net$cell$prob`.
+#' @param cell.type.decomposition NCells x NTypes matrix of cell-type proportions.
+#' @param group.by Cell-group metadata column; NULL uses `object@idents`.
+#' @param avg.type Methods for integrating communication probabilities per cell group.
+#' @param do.permutation Whether to perform the group-column permutation test.
+#' @param nboot Number of permutations when `do.permutation = TRUE`.
+#' @param seed.use Random seed.
+#' @param colocalization.use Whether to gate interactions by colocalization.
+#' @param thresh.colo Remove interactions whose colocalization p-value exceeds this threshold.
 #'
-#' @return A CellChat object with updated slot 'net':
+#' @return A SpatialCellChat object with updated final 11-slot `net`:
+#'   `net$group$prob` is a `SparseChatArray` of group-level LR probabilities and
+#'   `net$group$pval` is the corresponding `SparseChatArray`, or NULL without
+#'   permutation. Runtime counts and parameters, including the decomposition, are
+#'   stored in `net$tmp` and `misc$.param$averaging`, respectively.
 #'
-#' object@net$prob is the inferred group-level communication probability (strength) array, where the first, second and third dimensions represent a source group, target group and ligand-receptor pair, respectively.
-#'
-#' USER can access all the inferred cell-cell communications using the function 'subsetCommunication(object)', which returns a data frame.
-#'
-#' object@net$pval is the corresponding p-values of each interaction
-#'
-#' @return
 #' @export
 computeAvgCommunProb_Visium <- function(
     object,
     cell.type.decomposition,
     avg.type = c("avg","sum"),
     group.by = NULL,
-    do.permutation = T,
+    do.permutation = TRUE,
     nboot = 100,
     seed.use = 1L,
-    colocalization.use = F,
+    colocalization.use = FALSE,
     thresh.colo = 0.05
 ){
+  t0 <- Sys.time()
+  object <- .sc_assert_spatial_cell_chat(object)
 
   if (is.null(group.by)) {
     group <- object@idents
   } else {
-    if (!(group.by %in% colnames(object@meta))) {
-      stop("The 'group.by' is not a column name in the `object@meta`, which will be used for cell grouping.")
-    } else {
-      group <- object@meta[[group.by]]
+    if (length(group.by) != 1L || is.na(group.by) ||
+        !(group.by %in% colnames(object@meta))) {
+      stop("The 'group.by' is not a column name in the `object@meta`, which will be used for cell grouping.",
+           call. = FALSE)
     }
-    if (!is.factor(group)) {
-      group <- factor(group)
-    }
+    group <- object@meta[[group.by]]
   }
-  cat(cli.symbol(),"The cell groups used for averaging cell-cell communication are ", cli::col_red(levels(group)), '\n')
-  if (!inherits(x = cell.type.decomposition, what = c("matrix", "Matrix"))) {
-    stop(cli.symbol("fail"),"`cell.type.decomposition` must be a matrix!")
-  }
-  if(!all(colnames(cell.type.decomposition)==levels(group))){
-    stop(cli.symbol("fail"),"Please check your `cell.type.decomposition`'s colnames, and make sure they are the same as the cell groups' names in the SpatialCellChat.")
-  }
-  if(!all(rownames(cell.type.decomposition)==rownames(object@images$coordinates))){
-    stop(cli.symbol("fail"),"Please check your `cell.type.decomposition`'s rownames, and make sure they are the same as the cells' names in the SpatialCellChat.")
-  }
-  cell.type.onehot <- 1*(cell.type.decomposition>0)
+  if (is.null(group) || length(group) == 0L)
+    stop("The selected group labels must not be empty.", call. = FALSE)
+  if (anyNA(group) || any(!nzchar(trimws(as.character(group)))))
+    stop("The selected group labels must be non-missing and non-empty.", call. = FALSE)
+  if (!is.factor(group)) group <- factor(group)
+  group <- droplevels(group)
+  if (nlevels(group) == 0L)
+    stop("The selected group labels must contain at least one group.", call. = FALSE)
 
+  if (length(do.permutation) != 1L || !is.logical(do.permutation) ||
+      is.na(do.permutation))
+    stop("do.permutation must be one non-missing logical value.", call. = FALSE)
+  do.permutation <- isTRUE(do.permutation)
+  if (do.permutation &&
+      (length(nboot) != 1L || !is.numeric(nboot) || !is.finite(nboot) ||
+       nboot < 1 || nboot != floor(nboot) || nboot > .Machine$integer.max))
+    stop("nboot must be a positive integer when do.permutation = TRUE.", call. = FALSE)
+  if (do.permutation) nboot <- as.integer(nboot)
+
+  prob.array <- object@net$cell$prob
+  if (is.null(prob.array) || !inherits(prob.array, "SparseChatArray"))
+    stop("`object@net$cell$prob` must be a SparseChatArray; run `computeCommunProb` first.",
+         call. = FALSE)
+  prob.dim <- dim(prob.array)
+  prob.dimnames <- dimnames(prob.array)
+  if (length(prob.dim) != 3L || length(prob.dimnames) != 3L ||
+      is.null(prob.dimnames[[1L]]) || is.null(prob.dimnames[[2L]]) ||
+      is.null(prob.dimnames[[3L]]) ||
+      !identical(prob.dimnames[[1L]], prob.dimnames[[2L]]) ||
+      prob.dim[[1L]] != prob.dim[[2L]] ||
+      length(prob.dimnames[[1L]]) != prob.dim[[1L]] ||
+      length(prob.dimnames[[3L]]) != prob.dim[[3L]] ||
+      anyDuplicated(prob.dimnames[[1L]]) || anyDuplicated(prob.dimnames[[3L]]))
+    stop("`object@net$cell$prob` must have named, identically ordered square cell axes and named LR layers.",
+         call. = FALSE)
+  cell.names <- prob.dimnames[[1L]]
+  LRsig <- prob.dimnames[[3L]]
+  prob.cell_ <- unclass(prob.array)
+  if (!all(vapply(prob.cell_, inherits, logical(1L), "dgCMatrix")))
+    stop("Every layer of `object@net$cell$prob` must be a dgCMatrix.", call. = FALSE)
+  nC <- prob.dim[[1L]]
+
+  if (length(group) != nC)
+    stop("Group label count (", length(group), ") != cell count (", nC,
+         "); `group.by` must cover exactly the cells of `net$cell$prob`.", call. = FALSE)
+  if (!is.null(names(group))) {
+    if (anyDuplicated(names(group)) || !setequal(names(group), cell.names))
+      stop("Named group labels must contain exactly the cell names of `net$cell$prob`.",
+           call. = FALSE)
+    group <- group[match(cell.names, names(group))]
+    names(group) <- cell.names
+  }
   numCluster <- nlevels(group)
-  # if (numCluster != length(unique(group))) {
-  #   stop("Please check `unique(object@idents)` and ensure that the factor levels are correct!
-  #        You may need to drop unused levels using 'droplevels' function. e.g.,
-  #        `meta$labels = droplevels(meta$labels, exclude = setdiff(levels(meta$labels),unique(meta$labels)))`")
-  # }
+  if (numCluster < 1L || length(unique(group)) != numCluster)
+    stop("The selected group labels must contain at least one observed group.", call. = FALSE)
 
-  if ( is.null(object@net$prob.cell) ) {
-    stop(cli.symbol(2),"Please run `computeCommunProb` to compute the communication probability/strength between any interacting individual cells! ")
-  } else {
-    prob.cell <- object@net$prob.cell # nC x nC x nLR
-    prob.cell_ <- object@net$tmp$prob.cell # a list
-    nC <- dim(prob.cell)[[1]]
-  }
-
-  LRsig <- dimnames(prob.cell)[[3]]
-  nLR <- length(LRsig)
-  interaction_input <- object@DB$interaction
-  pairLRsig <- interaction_input[LRsig, , drop = FALSE]
-
+  if (!(is.matrix(cell.type.decomposition) || inherits(cell.type.decomposition, "Matrix")) ||
+      length(dim(cell.type.decomposition)) != 2L)
+    stop("`cell.type.decomposition` must be a matrix or Matrix object.", call. = FALSE)
+  if (!identical(as.integer(dim(cell.type.decomposition)), c(nC, numCluster)) ||
+      !identical(rownames(cell.type.decomposition), cell.names) ||
+      !identical(colnames(cell.type.decomposition), levels(group)))
+    stop("`cell.type.decomposition` dimensions and dimnames must exactly match the cell axis and group levels.",
+         call. = FALSE)
+  decomposition.values <- .sc_matrix_values(cell.type.decomposition)
+  if (!is.numeric(decomposition.values) || any(!is.finite(decomposition.values)) ||
+      any(decomposition.values < 0))
+    stop("`cell.type.decomposition` must contain only finite, non-negative values.",
+         call. = FALSE)
+  cell.type.onehot <- 1 * (cell.type.decomposition > 0)
   avg.type <- match.arg(avg.type)
-  if(avg.type=="avg"){
-    computeAvgCommunProb_LR_Visium <- computeAvgCommunProb_LR_Visium_Avg
-  } else if (avg.type=="sum"){
-    computeAvgCommunProb_LR_Visium <- computeAvgCommunProb_LR_Visium_Sum
-  }
-  gc()
 
-  if (colocalization.use) {
-    data.spatial <- object@images$coordinates
-    pval.colo = computeColocalization(coordinates = data.spatial, group = group, nboot = nboot, seed.use = seed.use)
-  } else {
-    pval.colo <- matrix(0, nrow = numCluster, ncol = numCluster)
-  }
-
-  cat(paste0(cli.symbol(),'Compute group-level cell-cell communication... <<< [', Sys.time(),']'),'\n')
-
-  Prob <- array(0, dim = c(numCluster,numCluster,nLR))
-  Pval <- array(1, dim = c(numCluster,numCluster,nLR))
-  dimnames(Prob) <- list(levels(group), levels(group), rownames(pairLRsig))
-  dimnames(Pval) <- dimnames(Prob)
-
-  set.seed(seed.use)
-
-  # retain dim-3, sum up dim-1 && dim-2, `prob.sum` stores each LR's number of cell-level links/interactions
-  prob.sum <- purrr::map_dbl(
-    .x = prob.cell_,
-    .f = function(Mat){
-      return(length(Mat@x))
-    }
-  )
-  names(prob.sum) <- LRsig
-  object@net$tmp$LRsig.CCC.counts <- prob.sum
-
-  LRsig.use.idx <- which(prob.sum > 0)
-
-  object@net$tmp$LRsig.use.idx <- LRsig.use.idx
-  gc()
-
-  if(length(LRsig.use.idx) < 1){
-    stop("Each LR pair does not have any spot-level links/interactions.")
-  }
-
-  cat(cli.symbol(),"compute the average signaling per cell group...\n")
-  Prob.avg_ <- my_future_sapply(
-    X = seq_len(length(LRsig.use.idx)),
-    FUN = function(x) {
-      i <- LRsig.use.idx[[x]] # one LR pair index
-
-      # compute the average signaling per cell group
-      prob.cell.i <- prob.cell_[[i]]
-
-      Prob.avg <-
-        computeAvgCommunProb_LR_Visium(
-          prob.cell.i,
-          cell.type.proportion = cell.type.decomposition,
-          cell.type.onehot = cell.type.onehot
-        )
-
-      Prob.avg[pval.colo > thresh.colo] <- 0
-      # Prob: array(0, dim = c(numCluster,numCluster,nLR))
-      gc()
-      return(Prob.avg)
-    },
-    simplify = F # return a list
-  )
-
-  for (x in seq_len( length(LRsig.use.idx) ) ) {
-    i <- LRsig.use.idx[[x]]
-    Prob[ , , i] <- Prob.avg_[[x]]
-  }
-
-  # update `prob.sum` & `LRsig.use.idx` to do permutation
-  # retain dim-3, sum up dim-1 && dim-2, `prob.sum` stores each LR's number of group-level links/interactions
-  prob.sum <- apply(Prob > 0, 3, sum) # return a named vector
-  # each LR's number of group-level links/interactions
-  object@net$tmp$LRsig.GGC.counts <- prob.sum
-
-  LRsig.use.idx <- which(prob.sum > 0)
-  if (do.permutation) {
-    cat(paste0(cli.symbol(),'Perform permutation test for group-level communication... <<< [', Sys.time(),']'),'\n')
-    permutation <- replicate(nboot, sample.int(numCluster, size = numCluster)) # numCluster x nboot
-    Pval_ <- my_future_lapply(
-      # LRsig.use.idx is a numeric vector
-      X = seq_len(length(LRsig.use.idx)),
-      FUN = function(x){
-        i <- LRsig.use.idx[[x]] # one LR pair index
-
-        # compute the average signaling per cell group after permutation
-        prob.cell.i <- prob.cell_[[i]]
-        Pnull <- as.vector(Prob[ , , i])
-
-        Pboot <- sapply(
-          X = 1:nboot,
-          FUN = function(nE) {
-            # permutation is nGroups x nboot
-            decomposition.boot <- cell.type.decomposition[ ,permutation[, nE]] # group labels order unchanged, change ratio order
-            onehot.boot <- 1*(decomposition.boot>0)
-            Pboot.avg <- computeAvgCommunProb_LR_Visium(
-              prob = prob.cell.i,
-              cell.type.proportion = decomposition.boot,
-              cell.type.onehot = onehot.boot
-            )
-            return(as.vector(Pboot.avg))
-          }
-        )
-        gc()
-        Pboot <- matrix(unlist(Pboot), nrow=length(Pnull), ncol = nboot, byrow = FALSE)
-
-        nReject <- rowSums(Pboot - Pnull > 0)
-        p = nReject/nboot
-        Pval.i <- matrix(p, nrow = numCluster, ncol = numCluster, byrow = FALSE)
-        return(Pval.i)
-      },
-      simplify = F, # return a list
+  if (isTRUE(colocalization.use)) {
+    pval.colo <- computeColocalization(
+      coordinates = object@images$coordinates,
+      group = group,
+      nboot = nboot,
+      seed.use = seed.use
     )
-
-    for (x in seq_len(length(LRsig.use.idx))) {
-      # get correct index
-      i <- LRsig.use.idx[[x]]
-      # update the values
-      Pval[ , , i] <- Pval_[[x]]
-    }
-
-    Pval[Prob == 0] <- 1
   } else {
-    Pval <- NULL
+    pval.colo <- matrix(0, nrow = numCluster, ncol = numCluster,
+                        dimnames = list(levels(group), levels(group)))
   }
 
-  object@net$prob <- Prob
-  object@net$pval <- Pval
-  # object@options$parameter$min.percent <- min.percent;
-  # object@options$parameter$min.cells.sr <- min.cells.sr;
-  object@options$parameter$do.permutation <- do.permutation;
-  object@options$parameter$nboot <- nboot;
-  object@options$parameter$avg.type <- avg.type;
-  object@options$parameter$seed.use <- seed.use;
-  object@options$parameter$colocalization.use <- colocalization.use;
-  object@options$parameter$thresh.colo <- thresh.colo;
-  # object@options$parameter$do.filter <- do.filter;
-  # object@net$tmp$Lavg <- NULL;object@net$tmp$Ravg <- NULL; # clean the cache
-  object@net$tmp$cell.type.decomposition <- cell.type.decomposition
-
-  if (colocalization.use) {
-    object@images$colocalization <- pval.colo
+  computeAvgCommunProb_LR_Visium <- if (identical(avg.type, "avg")) {
+    computeAvgCommunProb_LR_Visium_Avg
+  } else {
+    computeAvgCommunProb_LR_Visium_Sum
   }
-  cat(paste0(cli.symbol(symbol = "success"),'Inference of group-level cell-cell communication is done. Parameter values are stored in `object@options$parameter` <<< [', Sys.time(),']'))
-  return(object)
+  cat(paste0(cli.symbol(), "Compute group-level cell-cell communication... <<< [",
+             Sys.time(), "]\n"))
+
+  ccc.counts <- vapply(prob.cell_, function(mat) length(mat@x), numeric(1L))
+  names(ccc.counts) <- LRsig
+  LRsig.use.idx <- which(ccc.counts > 0)
+  if (length(LRsig.use.idx) < 1L)
+    stop("Each LR pair does not have any spot-level links/interactions.", call. = FALSE)
+
+  prob.results <- lapply(seq_len(length(LRsig)), function(i)
+    matrix(0, nrow = numCluster, ncol = numCluster,
+           dimnames = list(levels(group), levels(group))))
+  names(prob.results) <- LRsig
+  for (i in LRsig.use.idx) {
+    prob.avg <- computeAvgCommunProb_LR_Visium(
+      prob = prob.cell_[[i]],
+      cell.type.proportion = cell.type.decomposition,
+      cell.type.onehot = cell.type.onehot
+    )
+    dimnames(prob.avg) <- list(levels(group), levels(group))
+    prob.avg[pval.colo > thresh.colo] <- 0
+    prob.results[[i]] <- prob.avg
+  }
+
+  ggc.counts <- vapply(prob.results, function(mat) sum(mat > 0), numeric(1L))
+  names(ggc.counts) <- LRsig
+  LRsig.use.idx.perm <- which(ggc.counts > 0)
+  pval.results <- NULL
+
+  if (do.permutation) {
+    cat(paste0(cli.symbol(), "Perform permutation test for group-level communication... <<< [",
+               Sys.time(), "]\n"))
+    set.seed(seed.use)
+    permutation <- matrix(
+      replicate(nboot, sample.int(numCluster, size = numCluster)),
+      nrow = numCluster, ncol = nboot
+    )
+    pval.results <- lapply(seq_len(length(LRsig)), function(i)
+      matrix(1, nrow = numCluster, ncol = numCluster,
+             dimnames = list(levels(group), levels(group))))
+    names(pval.results) <- LRsig
+    for (i in LRsig.use.idx.perm) {
+      pnull <- as.vector(prob.results[[i]])
+      pboot <- vapply(seq_len(nboot), function(nE) {
+        decomposition.boot <- cell.type.decomposition[, permutation[, nE], drop = FALSE]
+        onehot.boot <- 1 * (decomposition.boot > 0)
+        as.vector(computeAvgCommunProb_LR_Visium(
+          prob = prob.cell_[[i]],
+          cell.type.proportion = decomposition.boot,
+          cell.type.onehot = onehot.boot
+        ))
+      }, numeric(numCluster * numCluster))
+      nReject <- rowSums(pboot - pnull > 0)
+      pval.i <- matrix(nReject / nboot, nrow = numCluster, ncol = numCluster,
+                       byrow = FALSE,
+                       dimnames = list(levels(group), levels(group)))
+      pval.i[prob.results[[i]] == 0] <- 1
+      pval.results[[i]] <- pval.i
+    }
+  }
+
+  group.layers <- lapply(prob.results, function(mat) as(mat, "dgCMatrix"))
+  names(group.layers) <- LRsig
+  if (is.null(object@net$group)) object@net$group <- list()
+  object@net$group$prob <- SparseChatArray(
+    group.layers,
+    dimnames = list(levels(group), levels(group), LRsig)
+  )
+  if (do.permutation) {
+    pval.layers <- lapply(pval.results, function(mat) as(mat, "dgCMatrix"))
+    names(pval.layers) <- LRsig
+    object@net$group$pval <- SparseChatArray(
+      pval.layers,
+      dimnames = list(levels(group), levels(group), LRsig)
+    )
+  } else {
+    object@net$group$pval <- NULL
+  }
+
+  if (is.null(object@net$tmp) || !is.list(object@net$tmp)) object@net$tmp <- list()
+  object@net$tmp$prob.cell <- NULL
+  object@net$tmp$cell.type.decomposition <- NULL
+  object@net$tmp$LRsig.CCC.counts <- ccc.counts
+  object@net$tmp$LRsig.GGC.counts <- ggc.counts
+  object@net$tmp$LRsig.use.idx <- LRsig.use.idx
+  object@net$tmp$LRsig.use.idx.perm <- LRsig.use.idx.perm
+
+  run.time <- as.numeric(Sys.time() - t0, units = "secs")
+  averaging.params <- list(
+    avg.type = avg.type,
+    do.permutation = do.permutation,
+    nboot = nboot,
+    seed.use = seed.use,
+    colocalization.use = colocalization.use,
+    thresh.colo = thresh.colo,
+    group.by = group.by,
+    nLR = length(LRsig),
+    numCluster = numCluster,
+    LRsig.CCC.counts = ccc.counts,
+    LRsig.GGC.counts = ggc.counts,
+    LRsig.use.idx = LRsig.use.idx,
+    LRsig.use.idx.perm = LRsig.use.idx.perm,
+    cell.type.decomposition = cell.type.decomposition,
+    run.time = run.time
+  )
+  if (is.null(object@misc$.param) || !is.list(object@misc$.param))
+    object@misc$.param <- list()
+  object@misc$.param$averaging <- averaging.params
+  if (isTRUE(colocalization.use)) object@images$colocalization <- pval.colo
+  object <- .log_operation(object, "computeAvgCommunProb_Visium", params = averaging.params)
+  .cli("Inference of group-level cell-cell communication is done. Parameters are stored in `object@misc$.param$averaging`",
+       .type = "success")
+  object
 }
 
 
