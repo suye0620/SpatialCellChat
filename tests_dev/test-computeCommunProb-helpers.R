@@ -11,6 +11,10 @@ source("R/SpatialCellChat_class.R")
 source("R/database.R")
 source("R/utilities.R")
 source("R/modeling.R")
+# 归档依赖：computeExpr_agonist / _antagonist 已移入 R/legacy/，仅对拍脚本仍需要
+if (!exists("computeExpr_agonist", mode = "function")) {
+  source("R/legacy/expression-toolchain.R")
+}
 
 check <- function(label, condition) {
   if (!isTRUE(condition)) stop("[FAIL] ", label, call. = FALSE)

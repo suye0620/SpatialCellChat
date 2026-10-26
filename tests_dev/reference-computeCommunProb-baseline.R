@@ -3,6 +3,11 @@
 # 修正：computeExpr_complex/_coreceptor 依赖漂移的 my_future_sapply 签名（先在缺陷），
 # 此处按其内联语义重写（geometricMean(子矩阵) / ∏(1+e)），数值与基线意图逐位一致。
 # 返回 list(prob.cell = sparse3Darray, tmp = list(Lavg, Ravg, prob.cell_), res = 距离缓存)。
+# 归档依赖：本文件调用 HillFunctionFordataLR / myElementwiseProduct / computeExpr_*，
+# 这些实现已于 2026-10-26 移入 R/legacy/expression-toolchain.R。
+if (!exists("HillFunctionFordataLR", mode = "function")) {
+  source("R/legacy/expression-toolchain.R")
+}
 baseline_reference_commun_prob <- function(
     data.signaling, LR.use, coordinates, spatial.factors,
     complex_input, cofactor_input, group,

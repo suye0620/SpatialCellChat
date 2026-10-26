@@ -10,6 +10,10 @@ suppressPackageStartupMessages({
 source("R/SpatialCellChat_class.R")
 source("R/utilities.R")
 source("R/modeling.R")
+# 归档依赖：HillFunctionFordataLR / myElementwiseProduct 已移入 R/legacy/，仅对拍脚本仍需要
+if (!exists("HillFunctionFordataLR", mode = "function")) {
+  source("R/legacy/expression-toolchain.R")
+}
 Rcpp::sourceCpp("src/SpatialChat_Rcpp.cpp", rebuild = FALSE, showOutput = FALSE)
 
 check <- function(label, condition) {

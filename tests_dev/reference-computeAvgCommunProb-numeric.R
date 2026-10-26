@@ -8,6 +8,12 @@
 # The reference keeps the pre-migration aggregation shape while replacing
 # future scheduling with serial sapply/lapply, so the kernel can be checked
 # against an independent R aggregation path.
+#
+# 归档依赖：本文件引用 computeAvgCommunProb_LR_Avg，该实现已于 2026-10-26
+# 移入 R/legacy/expression-toolchain.R。
+if (!exists("computeAvgCommunProb_LR_Avg", mode = "function")) {
+  source("R/legacy/expression-toolchain.R")
+}
 computeAvgCommunProb_numeric_ref <- function (
     prob.cell_,
     dataLavg,
