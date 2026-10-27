@@ -136,10 +136,28 @@ silently scrambled.
 
 Plan: `stopifnot(nrow(A) == ncol(A), !is.null(rownames(A)), identical(rownames(A), colnames(A)))`.
 
-**P6 (missing capability) — `alpha = "auto"` is not supported.**
-netSmooth defaults to scanning alpha over 0.1…0.9 and choosing by cluster robustness or
-2D-embedding entropy. Out of scope here; document explicitly that only a fixed alpha is
-available, so nobody assumes the paper's recommended usage is reachable.
+**P6 — `alpha = "auto"` is deliberately not supported.**
+netSmooth's default is `alpha = "auto"`: it runs the full smoothing once per candidate in
+`0.1 * (1:9)`, scores every result by cluster robustness or 2D-embedding entropy, and
+keeps the best. Three reasons to keep it out of this package:
+
+1. **Dependency cost.** `scoreSmoothing()`'s robustness branch needs `clusterExperiment`;
+   the entropy branch needs a 2D PCA embedding plus `pickDimReduction()`. Those are
+   exactly the `Depends` (`scater`, `clusterExperiment`) that vendoring the six helpers
+   was meant to avoid.
+2. **Cost multiplier on the wrong axis.** `auto` performs nine full smoothings. With P1
+   unresolved each one allocates a dense `n_net × n_cells` matrix and an `O(n³)` solve;
+   adding a 9× multiplier before fixing the memory profile is the wrong order.
+3. **Misaligned objective.** `auto` optimises "are the cells better separated", not "is
+   the ligand/receptor expression estimate more trustworthy". Here the smoothed matrix is
+   only an input to `computeCommunProb()`, so an alpha that separates clusters better can
+   flatten a group-specific ligand.
+
+Decision: `projectData()` accepts a single numeric `alpha` only; anything else stops with
+a message pointing at this note. The roxygen block states that netSmooth's
+`alpha = "auto"` usage is not reachable. Revisit only if (a) P1 is solved, (b) a scoring
+rule aligned with the communication objective is defined, and (c) the candidate range
+becomes an explicit argument.
 
 ### D4. `CellChat2Seurat()`
 
@@ -217,8 +235,9 @@ so the community chain can export signaling/raw without going through `counts`.
 - **Switch the default solver to iterative.** Rejected: the result would differ from the
   baseline at ~1e-8 relative, which is exactly the kind of silent numeric drift this
   project has been documenting against.
-- **Support `alpha = "auto"`.** Deferred: needs a clustering/entropy criterion and a
-  second dimension-reduction path; out of scope for a slot migration.
+- **Support `alpha = "auto"`.** Rejected, see P6: it needs `clusterExperiment`/`scater`,
+  multiplies the most expensive step by nine, and optimises a criterion that does not
+  match this package's objective.
 
 ## Acceptance criteria
 

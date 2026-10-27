@@ -1673,37 +1673,146 @@ identifyOverExpressedInteractions <- function(object, features.name = "features"
 
 
 
+#' Validate a PPI adjacency matrix
+#'
+#' Square, named on both dimensions with identical ordering, and free of
+#' all-zero rows/columns. Projection uses `rownames()` while the diffusion uses
+#' the matrix's own row/column order, so a column permutation would silently
+#' mix two different gene spaces.
+#'
+#' @param adjMatrix adjacency matrix supplied by the user
+#' @return `TRUE`, invisibly; errors otherwise
+#' @keywords internal
+.sc_validate_adjacency <- function(adjMatrix) {
+  if (!(is.matrix(adjMatrix) || inherits(adjMatrix, "Matrix")))
+    stop("`adjMatrix` must be a matrix or Matrix object", call. = FALSE)
+  if (nrow(adjMatrix) != ncol(adjMatrix))
+    stop("`adjMatrix` must be square", call. = FALSE)
+  if (is.null(rownames(adjMatrix)) || is.null(colnames(adjMatrix)))
+    stop("`adjMatrix` must have both rownames and colnames", call. = FALSE)
+  if (!identical(rownames(adjMatrix), colnames(adjMatrix)))
+    stop("`adjMatrix` rownames and colnames must be identical and in the same order",
+         call. = FALSE)
+  if (any(Matrix::rowSums(adjMatrix) == 0) || any(Matrix::colSums(adjMatrix) == 0))
+    stop("PPI cannot have zero rows/columns", call. = FALSE)
+  invisible(TRUE)
+}
+
+
 #' Project gene expression data onto a protein-protein interaction network
 #'
-#' A diffusion process is used to smooth genes’ expression values based on their neighbors’ defined in a high-confidence experimentally validated protein-protein network.
+#' A diffusion process is used to smooth genes' expression values based on their
+#' neighbors defined in a high-confidence experimentally validated
+#' protein-protein network.
 #'
-#' This function is useful when analyzing single-cell data with shallow sequencing depth because the projection reduces the dropout effects of signaling genes, in particular for possible zero expression of subunits of ligands/receptors
+#' This function is useful when analyzing single-cell data with shallow
+#' sequencing depth because the projection reduces the dropout effects of
+#' signaling genes, in particular for possible zero expression of subunits of
+#' ligands/receptors.
 #'
-#' @param object  CellChat object
-#' @param adjMatrix adjacency matrix of protein-protein interaction network to use
-#' @param alpha numeric in [0,1] alpha = 0: no smoothing; a larger value alpha results in increasing levels of smoothing.
-#' @param normalizeAdjMatrix    how to normalize the adjacency matrix
-#'                              possible values are 'rows' (in-degree)
-#'                              and 'columns' (out-degree)
-#' @return a projected gene expression matrix
+#' The projected matrix is written to `assay$smooth`, which keeps the gene space
+#' of `assay$signaling`, and is consumed by `computeCommunProb(raw.use = FALSE)`.
+#' Any later `subsetData()` clears it, because it would belong to a different
+#' gene set.
+#'
+#' @param object A SpatialCellChat object with a non-empty `assay$signaling`
+#'   (see [subsetData()]).
+#' @param adjMatrix Adjacency matrix of the protein-protein interaction network.
+#'   Must be square, carry identical `rownames` and `colnames`, and have no
+#'   all-zero row or column.
+#' @param alpha Numeric in (0, 1): the diffusion coefficient, i.e. `1 - restart
+#'   probability` of the random walk. Larger values smooth more. 0 (no
+#'   smoothing) is rejected, and netSmooth's `alpha = "auto"` is deliberately
+#'   not supported: it requires `clusterExperiment`/`scater`, multiplies the most
+#'   expensive step by nine, and optimizes a clustering criterion rather than
+#'   the communication estimates this package consumes.
+#' @param normalizeAdjMatrix Normalize the adjacency by `"rows"` (in-degree) or
+#'   `"columns"` (out-degree).
+#' @param solver `"solve"` solves `(I - alpha * A) E_sm = (1 - alpha) E`
+#'   directly and reproduces the pre-migration results bit for bit.
+#'   `"iterative"` uses the equivalent fixed-point iteration: it avoids the
+#'   dense identity matrix and the O(n^3) factorization, so it is the only
+#'   variant that scales to large networks, but it stops at `tol` and is
+#'   therefore not bit-identical.
+#' @param tol Convergence tolerance on the largest entry-wise change, used by
+#'   `solver = "iterative"`.
+#' @param max.iter Maximum number of iterations, used by
+#'   `solver = "iterative"`.
+#'
+#' @return A SpatialCellChat object with `assay$smooth` written and the run
+#'   parameters recorded in `misc$.param$projection`.
 #' @export
 #'
 # This function is adapted from https://github.com/BIMSBbioinfo/netSmooth
-projectData <- function(object, adjMatrix, alpha=0.5, normalizeAdjMatrix=c('rows','columns')){
-  data <- as.matrix(object@data.signaling)
+projectData <- function(object, adjMatrix, alpha = 0.5,
+                        normalizeAdjMatrix = c("rows", "columns"),
+                        solver = c("solve", "iterative"),
+                        tol = 1e-8, max.iter = 500L) {
+  object <- .sc_assert_spatial_cell_chat(object)
   normalizeAdjMatrix <- match.arg(normalizeAdjMatrix)
-  stopifnot(is(adjMatrix, 'matrix') || is(adjMatrix, 'sparseMatrix'))
-  stopifnot((is.numeric(alpha) && (alpha > 0 && alpha < 1)))
-  if(sum(Matrix::rowSums(adjMatrix)==0)>0) stop("PPI cannot have zero rows/columns")
-  if(sum(Matrix::colSums(adjMatrix)==0)>0) stop("PPI cannot have zero rows/columns")
-  if(is.numeric(alpha)) {
-    if(alpha<0 | alpha > 1) {
-      stop('alpha must be between 0 and 1')
-    }
-    data.projected <- projectAndRecombine(data, adjMatrix, alpha,normalizeAdjMatrix=normalizeAdjMatrix)
-  } else stop("unsupported alpha value: ", class(alpha))
-  object@data.project <- data.projected
-  return(object)
+  solver <- match.arg(solver)
+
+  signaling <- assay(object, "signaling")
+  if (is.null(signaling) || sum(dim(signaling)) == 0)
+    stop("assay$signaling is empty; run `subsetData()` first", call. = FALSE)
+
+  .sc_validate_adjacency(adjMatrix)
+
+  if (length(alpha) != 1L || !is.numeric(alpha) || !is.finite(alpha) ||
+      alpha <= 0 || alpha >= 1)
+    stop("`alpha` must be a single finite number in (0, 1); alpha = 0 ",
+         "(no smoothing) and netSmooth's alpha = \"auto\" are not supported",
+         call. = FALSE)
+  if (identical(solver, "iterative")) {
+    if (length(tol) != 1L || !is.numeric(tol) || !is.finite(tol) || tol <= 0)
+      stop("`tol` must be a single positive number", call. = FALSE)
+    if (length(max.iter) != 1L || !is.numeric(max.iter) || !is.finite(max.iter) ||
+        max.iter < 1 || max.iter != floor(max.iter))
+      stop("`max.iter` must be a positive integer", call. = FALSE)
+  }
+
+  network.genes <- rownames(adjMatrix)
+  overlap <- intersect(rownames(signaling), network.genes)
+  if (!length(overlap))
+    stop("No gene name overlap between `assay$signaling` and `adjMatrix` ",
+         "rownames; check that both use the same identifier type ",
+         "(symbol vs Ensembl, case, version suffix)", call. = FALSE)
+  if (length(overlap) < 0.1 * length(network.genes))
+    warning(sprintf(paste0("Only %d of %d network genes (%.1f%%) are present in ",
+                           "`assay$signaling`, so the projection covers little of ",
+                           "the network; check the gene identifiers."),
+                    length(overlap), length(network.genes),
+                    100 * length(overlap) / length(network.genes)),
+            call. = FALSE)
+
+  data.projected <- if (identical(solver, "iterative")) {
+    projectAndRecombine(as.matrix(signaling), adjMatrix, alpha,
+                        projecting.function = randomWalkByIterations,
+                        normalizeAdjMatrix = normalizeAdjMatrix,
+                        tol = tol, max.iter = max.iter)
+  } else {
+    projectAndRecombine(as.matrix(signaling), adjMatrix, alpha,
+                        normalizeAdjMatrix = normalizeAdjMatrix)
+  }
+
+  assay(object, "smooth") <- data.projected
+
+  projection.params <- list(
+    alpha = alpha,
+    normalizeAdjMatrix = normalizeAdjMatrix,
+    solver = solver,
+    n.network.genes = length(network.genes),
+    n.overlap.genes = length(overlap),
+    source = "assay$signaling"
+  )
+  if (identical(solver, "iterative"))
+    projection.params$tol <- tol
+  if (identical(solver, "iterative"))
+    projection.params$max.iter <- as.integer(max.iter)
+  params(object, "projection") <- projection.params
+  object <- .log_operation(object, "projectData", params = projection.params)
+  methods::validObject(object)
+  object
 }
 
 #' Perform network projecting on network when the network genes and the
@@ -1729,16 +1838,21 @@ projectData <- function(object, adjMatrix, alpha=0.5, normalizeAdjMatrix=c('rows
 #'                              adjacency matrix be normalized by. rows
 #'                              corresponds to in-degree, columns to
 #'                              out-degree.
+#' @param ...    passed on to `projecting.function` (for example `tol` and
+#'               `max.iter` when using [randomWalkByIterations()]).
 #' @return  matrix with network-projected gene expression data. Genes that are
 #'          not present in projecting network will retain original values.
 #' @keywords internal
 #'
 projectAndRecombine <- function(gene_expression, adj_matrix, alpha,
                                 projecting.function=randomWalkBySolve,
-                                normalizeAdjMatrix=c('rows','columns')) {
+                                normalizeAdjMatrix=c('rows','columns'),
+                                ...) {
   normalizeAdjMatrix <- match.arg(normalizeAdjMatrix)
   gene_expression_in_A_space <- projectOnNetwork(gene_expression,rownames(adj_matrix))
-  gene_expression_in_A_space_project <- projecting.function(gene_expression_in_A_space, adj_matrix, alpha, normalizeAdjMatrix)
+  gene_expression_in_A_space_project <- projecting.function(
+    gene_expression_in_A_space, adj_matrix, alpha,
+    normalizeAdjMatrix = normalizeAdjMatrix, ...)
   gene_expression_project <- projectFromNetworkRecombine(gene_expression, gene_expression_in_A_space_project)
   return(gene_expression_project)
 }
@@ -1770,13 +1884,14 @@ projectOnNetwork <- function(gene_expression, new_features, missing.value=0) {
 #' @param E      initial data matrix [NxM]
 #' @param A      adjacency matrix of graph to network project on will be column-normalized.
 #' @param alpha  projecting coefficient (1 - restart probability of random walk)
+#' @param normalizeAdjMatrix  which dimension to normalize the adjacency by
 #' @return network-projected gene expression
 #' @keywords internal
-randomWalkBySolve <- function(E, A, alpha, normalizeAjdMatrix=c('rows','columns')) {
-  normalizeAjdMatrix <- match.arg(normalizeAjdMatrix)
-  if (normalizeAjdMatrix=='rows') {
+randomWalkBySolve <- function(E, A, alpha, normalizeAdjMatrix=c('rows','columns')) {
+  normalizeAdjMatrix <- match.arg(normalizeAdjMatrix)
+  if (normalizeAdjMatrix=='rows') {
     Anorm <- l1NormalizeRows(A)
-  } else if (normalizeAjdMatrix=='columns') {
+  } else if (normalizeAdjMatrix=='columns') {
     Anorm <- l1NormalizeColumns(A)
   }
   eye <- diag(dim(A)[1])
@@ -1785,6 +1900,38 @@ randomWalkBySolve <- function(E, A, alpha, normalizeAjdMatrix=c('rows','columns'
   return(solve(AA, BB))
 }
 
+#' Network diffusion by fixed-point iteration
+#'
+#' Solves the same fixed point as [randomWalkBySolve()],
+#' `f = alpha * A_norm %*% f + (1 - alpha) * E`, but only needs sparse-matrix by
+#' dense-matrix products: no dense identity matrix and no O(n^3) factorization.
+#' This is the only variant that scales to large protein-protein networks, at the
+#' cost of stopping at `tol` instead of solving exactly.
+#'
+#' @param E      initial data matrix [N x M]
+#' @param A      adjacency matrix of the graph
+#' @param alpha  smoothing coefficient (1 - restart probability)
+#' @param normalizeAdjMatrix  which dimension to normalize the adjacency by
+#' @param tol    absolute tolerance on the largest entry-wise change
+#' @param max.iter maximum number of iterations
+#' @return network-smoothed gene expression
+#' @keywords internal
+randomWalkByIterations <- function(E, A, alpha,
+                                   normalizeAdjMatrix = c("rows", "columns"),
+                                   tol = 1e-8, max.iter = 500L) {
+  normalizeAdjMatrix <- match.arg(normalizeAdjMatrix)
+  Anorm <- if (normalizeAdjMatrix == "rows") l1NormalizeRows(A) else l1NormalizeColumns(A)
+  f <- E
+  delta <- Inf
+  for (i in seq_len(max.iter)) {
+    f.next <- alpha * (Anorm %*% f) + (1 - alpha) * E
+    delta <- max(abs(f.next - f))
+    if (delta < tol) return(as.matrix(f.next))
+    f <- f.next
+  }
+  stop(sprintf("randomWalkByIterations did not converge in %d iterations (last change %s); increase `max.iter` or relax `tol`",
+               as.integer(max.iter), format(delta, digits = 3)), call. = FALSE)
+}
 #' Column-normalize a sparse, symmetric matrix (using the l1 norm) so that each
 #' column sums to 1.
 #'
