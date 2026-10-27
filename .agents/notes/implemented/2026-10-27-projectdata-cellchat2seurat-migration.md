@@ -1,10 +1,10 @@
 # Agent Note: migrate projectData / CellChat2Seurat to the 11-slot schema
 
-Status: proposed
+Status: implemented
 Governance: v1
 Date: 2026-10-27
 Decision type: migration
-Scope: R/utilities.R (`projectData`, projection chain, `CellChat2Seurat`, `subsetData`), R/modeling.R (`computeCommunProb` raw.use branch), R/SpatialCellChat_class.R (`.sc_validate_assay`), tests_dev
+Scope: R/utilities.R (`projectData`, projection chain, `CellChat2Seurat`, `subsetData`), R/modeling.R (`computeCommunProb` raw.use branch), R/SpatialCellChat_class.R (`.sc_validate_assay`, `.sc_assay_layer`), tests_dev
 Owner: maintainer
 Impact: high
 Supersedes: none
@@ -272,3 +272,43 @@ Four commits, each independently reviewable:
 4. `CellChat2Seurat` slot migration + Seurat bridge tests.
 
 Open item before step 1: confirm D2 (smooth in the signaling gene space).
+
+## Implementation outcome
+
+D2 was confirmed; the four commits landed as planned:
+
+| Commit | Content |
+|---|---|
+| `4e26ad6` | `.sc_validate_subset_layer()` + smooth in the subset branch; `subsetData()` clears smooth |
+| `8f2b131` | `projectData()` slot migration, `.sc_validate_adjacency()`, overlap stop/warning, `randomWalkByIterations()`, `solver` argument; fixes the `normalizeAjdMatrix` typo |
+| `eeb4312` | `computeCommunProb(raw.use = FALSE)`, `.sc_scale_expression()` |
+| `cd8035b` | `CellChat2Seurat()` accessor migration, `.sc_assay_layer()` |
+
+Deviations from the plan, all recorded deliberately:
+
+1. The validation helpers live next to their only caller (`projectData`) instead of
+   landing in step 1, so no commit carries unused code.
+2. Two defects surfaced only while porting `CellChat2Seurat`, so they were fixed there
+   rather than in a separate change:
+   - `SlideSeq` validates `coordinates` as a **data.frame** while the object stores a
+     matrix, so `new("SlideSeq", ...)` failed on every call;
+   - the function's own `assay` argument shadows the `assay()` accessor, so the layer is
+     read through `.sc_assay_layer()`. A test fixture that defines a global `meta` object
+     hits the same shadowing and fails with "could not find function"; the test renames
+     its fixture instead of weakening the accessor.
+3. `computeCommunProb` scales by matrix class (`.sc_scale_expression()`): the sparse path
+   keeps `@x / max(@x)`, the dense projection uses `data / max(data)`, matching the two
+   baseline branches. An all-zero layer now errors instead of yielding NaN.
+
+Verification on 2026-10-27: `test-projectData.R` 19 checks, `test-seurat-bridge.R` 14,
+`test-computeCommunProb.R` 61 (up from 54), `test-computeAvgCommunProb.R` 162,
+`test-filterCommunication.R` 22, `test-cpp-prob-layer.R` 20,
+`test-computeCommunProb-helpers.R` 16, `test-parallel.R` 147 passed,
+`test-normalizeData.R` 9, `test-pre-inference-new-schema.R` 15,
+`test-SpatialCellChat-class.R` / `-accessors.R` 22 each.
+`R CMD INSTALL` still reports only the four pre-existing undefined exports.
+`test-SparseChatArray.R` cannot run here: it requires the uninstalled `microbenchmark`.
+
+Not done, by decision: `alpha = "auto"` (P6). Still open elsewhere: `makeGridSpatialCellChat()`
+with `data.slot = "smooth"` now receives a gene subset and builds a grid object whose norm
+is a subset; document or guard it when that path is touched.
