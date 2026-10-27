@@ -13,9 +13,10 @@ CellChat2Seurat(
 )
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{A SpatialCellChat object with a non-empty \code{assay$norm}.}
 
-\item{counts}{Alternatively, use user-input `counts` for creating Seurat object instead of `object@data`}
+\item{counts}{Optional user-supplied matrix used instead of \code{assay$norm}.
+Must carry both rownames and colnames.}
 
 \item{group.by}{Name of one metadata columns to group (color) cells. Default is the defined cell groups in CellChat object}
 
@@ -27,5 +28,6 @@ CellChat2Seurat(
 a Seurat object
 }
 \description{
-Convert a CellChat object into a Seurat object
+Reads \code{assay$norm} (the default main matrix), \code{meta()}, \code{idents()} and, when
+\code{assay = "Spatial"}, \code{images(object, "coordinates")}.
 }

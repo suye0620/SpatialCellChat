@@ -569,8 +569,12 @@ my_future_lapply <- function(X, FUN, ...,
 
 #' Convert a CellChat object into a Seurat object
 #'
-#' @param object CellChat object
-#' @param counts Alternatively, use user-input `counts` for creating Seurat object instead of `object@data`
+#' Reads `assay$norm` (the default main matrix), `meta()`, `idents()` and, when
+#' `assay = "Spatial"`, `images(object, "coordinates")`.
+#'
+#' @param object A SpatialCellChat object with a non-empty `assay$norm`.
+#' @param counts Optional user-supplied matrix used instead of `assay$norm`.
+#'   Must carry both rownames and colnames.
 #' @param group.by Name of one metadata columns to group (color) cells. Default is the defined cell groups in CellChat object
 #' @param assay Name of the initial assay. Default is "Spatial" when working on spatial imaging data
 #' @param check.object whether checking the converted Seurat object. Set check.object = FALSE when not visualizing spatial clustering
@@ -579,17 +583,24 @@ my_future_lapply <- function(X, FUN, ...,
 #' @export
 #'
 CellChat2Seurat <- function(object,counts = NULL, group.by = NULL, assay = "Spatial", check.object = TRUE) {
-  meta <- object@meta
-  meta$group.cellchat <- object@idents
-  if (!identical(rownames(meta), colnames(object@data))) {
-    cat("The cell barcodes in 'meta' is ", head(rownames(meta)),'\n')
+  object <- .sc_assert_spatial_cell_chat(object)
+  # `assay` is this function's parameter (the target Seurat assay name), so the
+  # layer has to be read through a helper rather than the shadowed accessor.
+  norm <- .sc_assay_layer(object, "norm")
+  if (is.null(norm) || sum(dim(norm)) == 0)
+    stop("assay$norm is empty; provide `counts` or run `normalizeData()` first",
+         call. = FALSE)
+  meta.df <- meta(object)
+  meta.df$group.cellchat <- idents(object)
+  if (!identical(rownames(meta.df), colnames(norm))) {
+    cat("The cell barcodes in 'meta' is ", head(rownames(meta.df)),'\n')
     warning("The cell barcodes in 'meta' is different from those in the used data matrix.
               We now simply assign the colnames in the data matrix to the rownames of 'meta'!")
-    rownames(meta) <- colnames(object@data)
+    rownames(meta.df) <- colnames(norm)
   }
 
   if(is.null(counts)){
-    data.use <- object@data
+    data.use <- norm
   } else {
     if(is.null(colnames(counts))|is.null(rownames(counts))){
       stop("Please check the dimnames of `counts`!")
@@ -597,15 +608,18 @@ CellChat2Seurat <- function(object,counts = NULL, group.by = NULL, assay = "Spat
     data.use <- counts
   }
 
-  obj.new = Seurat::CreateSeuratObject(counts = data.use, meta.data = meta, assay = assay)
-  if (assay == "Spatial") {
-    spatial_locs <- object@images$coordinates
-    obj.new@images$image =  new(
-      Class = 'SlideSeq',
-      assay = "Spatial",
-      key = "image_",
-      coordinates = spatial_locs
-    )
+  obj.new = Seurat::CreateSeuratObject(counts = data.use, meta.data = meta.df, assay = assay)
+  if (identical(assay, "Spatial")) {
+    spatial_locs <- images(object, "coordinates")
+    if (!is.null(spatial_locs)) {
+      # SlideSeq validates `coordinates` as a data.frame; the object stores a matrix.
+      obj.new@images$image =  new(
+        Class = 'SlideSeq',
+        assay = "Spatial",
+        key = "image_",
+        coordinates = as.data.frame(spatial_locs)
+      )
+    }
   }
   if (is.null(group.by)) {
     group.by <- "group.cellchat"

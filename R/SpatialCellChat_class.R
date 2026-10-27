@@ -1367,6 +1367,12 @@ assay <- function(object, layer = NULL) {
   object@assay[[layer]]
 }
 
+# Read one assay layer from inside a function whose own argument is called
+# `assay` (CellChat2Seurat), where the accessor above would be shadowed.
+.sc_assay_layer <- function(object, layer) {
+  assay(object, layer)
+}
+
 #' Replace expression layers.
 #' @export
 `assay<-` <- function(object, layer = NULL, value) {
