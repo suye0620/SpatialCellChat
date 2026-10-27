@@ -316,3 +316,35 @@ local({
   check("local quiet retains computed probability layers",
         identical(quiet@net$cell$prob, chat.cc@net$cell$prob))
 })
+
+## ---- (E) raw.use = FALSE: PPI projection path ----
+local({
+  genes <- rownames(assay(chat, "signaling"))
+  n <- length(genes)
+  ppi <- matrix(0, n, n, dimnames = list(genes, genes))
+  if (n > 1L) for (i in seq_len(n - 1L)) ppi[i, i + 1L] <- ppi[i + 1L, i] <- 1
+  chat.proj <- projectData(chat, ppi, alpha = 0.5)
+  check("projectData writes assay$smooth", !is.null(assay(chat.proj, "smooth")))
+  check("smooth keeps the signaling gene space",
+        identical(rownames(assay(chat.proj, "smooth")), genes))
+
+  chat.smooth <- computeCommunProb(chat.proj, scale.distance = 1, use.AGAN = TRUE,
+                                   contact.dependent = TRUE, contact.range = 10,
+                                   nthreads = 1L, verbose = FALSE, raw.use = FALSE)
+  check("raw.use = FALSE validates", isTRUE(validObject(chat.smooth)))
+  check("raw.use = FALSE is recorded",
+        isFALSE(chat.smooth@misc$.param$communication$raw.use))
+  check("raw.use = FALSE keeps the same LR layers",
+        identical(names(chat.smooth@net$cell$prob), names(chat.cc@net$cell$prob)))
+  check("smoothed input changes the probabilities",
+        !isTRUE(all.equal(as.numeric(chat.smooth@net$cell$prob[[1]]@x),
+                          as.numeric(chat.cc@net$cell$prob[[1]]@x))))
+
+  chat.resub <- subsetData(chat.proj, features = c("G1", "R1"))
+  bad <- tryCatch({
+    computeCommunProb(chat.resub, scale.distance = 1, raw.use = FALSE,
+                      verbose = FALSE, nthreads = 1L)
+    NA_character_
+  }, error = function(e) conditionMessage(e))
+  check("stale smooth after subsetData is rejected", grepl("projectData", bad))
+})

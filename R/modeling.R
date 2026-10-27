@@ -4,6 +4,27 @@
 # per-LR rows are computed on demand with a per-symbol cache (genes repeat across
 # LR pairs, distinct names are far fewer than LR pairs).
 
+# Baseline scaling, kept per matrix class: a sparse layer is scaled through @x
+# (implicit zeros untouched), a dense layer by dividing the whole matrix. Both
+# branches agree whenever every stored value is non-negative, which holds for
+# signaling and for the PPI projection.
+.sc_scale_expression <- function(x) {
+  if (inherits(x, "sparseMatrix")) {
+    if (!length(x@x))
+      stop("expression layer has no non-zero values; cannot scale it",
+           call. = FALSE)
+    maximum <- max(x@x)
+    if (!is.finite(maximum) || maximum <= 0)
+      stop("expression layer has no positive values; cannot scale it", call. = FALSE)
+    x@x <- x@x / maximum
+    return(x)
+  }
+  maximum <- max(x)
+  if (!is.finite(maximum) || maximum <= 0)
+    stop("expression layer has no positive values; cannot scale it", call. = FALSE)
+  x / maximum
+}
+
 .sc_expr_row <- function(gene, sig, complex_subunits, cache) {
   row <- cache[[gene]]
   if (!is.null(row)) return(row)
@@ -114,8 +135,10 @@
 #' @param object A SpatialCellChat object with `assay$signaling` (from
 #' \link{subsetData}) and `LR$LRsig` (from \link{identifyOverExpressedInteractions}).
 #' @param LR.use Optional custom ligand-receptor table (same columns as `LR$LRsig`).
-#' @param raw.use Only `TRUE` is supported (the projected-data path via
-#' `projectData()` is not yet migrated to the final schema).
+#' @param raw.use `TRUE` (default) reads `assay$signaling`; `FALSE` reads
+#' `assay$smooth`, the PPI projection written by \link{projectData}. The two
+#' must cover the same genes, and `assay$smooth` is cleared by `subsetData()`,
+#' so `projectData()` has to be re-run after any re-subsetting.
 #' @param Kh Hill-function EC50 parameter (input is globally max-scaled to [0, 1]).
 #' @param n Hill coefficient (n = 1 uses the division fast path in the kernel).
 #' @param distance.use Whether to weight communication by 1/(scaled distance).
@@ -179,9 +202,8 @@ computeCommunProb <- function(
   t0 <- Sys.time()
   object <- .sc_assert_spatial_cell_chat(object)
   if (isTRUE(verbose)) .cli("computeCommunProb", .type = "subheader")
-  if (!isTRUE(raw.use))
-    stop("raw.use = FALSE requires `projectData()` (assay$smooth), which is not ",
-         "yet migrated to the final schema; use raw.use = TRUE", call. = FALSE)
+  if (length(raw.use) != 1L || !is.logical(raw.use) || is.na(raw.use))
+    stop("`raw.use` must be TRUE or FALSE", call. = FALSE)
   spill.backend <- match.arg(spill.backend)
   if (!is.null(spill.dir)) {
     if (!dir.exists(spill.dir)) dir.create(spill.dir, recursive = TRUE, showWarnings = FALSE)
@@ -216,15 +238,28 @@ computeCommunProb <- function(
     stop("Please check `unique(object@idents)` and drop unused levels with ",
          "`droplevels()` before running `computeCommunProb()`.", call. = FALSE)
 
-  sig <- assay(object, "signaling")
-  if (is.null(sig) || sum(dim(sig)) == 0)
-    stop("assay$signaling is empty; run `subsetData()` first", call. = FALSE)
+  # raw.use = TRUE reads the subsetData gene subset; FALSE reads the PPI
+  # projection written by projectData(), which must cover the same space.
+  layer <- if (raw.use) "signaling" else "smooth"
+  sig <- assay(object, layer)
+  if (is.null(sig) || sum(dim(sig)) == 0) {
+    if (raw.use)
+      stop("assay$signaling is empty; run `subsetData()` first", call. = FALSE)
+    stop("assay$smooth is empty; run `projectData()` first, or use raw.use = TRUE",
+         call. = FALSE)
+  }
+  if (!raw.use) {
+    signaling <- assay(object, "signaling")
+    if (is.null(signaling) || !identical(rownames(sig), rownames(signaling)) ||
+        !identical(colnames(sig), colnames(signaling)))
+      stop("assay$smooth must carry the same genes and cells as assay$signaling; ",
+           "rerun `projectData()` after the last `subsetData()`", call. = FALSE)
+  }
   cell.names <- colnames(sig)
   nC <- ncol(sig)
-  # 全局 max 缩放（基线语义：data@x/max(data@x)，支撑 Kh=0.5 半最大语义）；副本，不改对象
-  sig.scaled <- sig
-  sig.scaled@x <- sig.scaled@x / max(sig.scaled@x)
-  if (isTRUE(verbose)) .cli("Input: assay$signaling ({.val {nrow(sig)}} signaling genes x {.val {nC}} cells); {.val {nLR}} LR pairs",
+  # 全局 max 缩放（基线语义：sparse 用 @x / max(@x)，dense 用 data / max(data)）；副本，不改对象
+  sig.scaled <- .sc_scale_expression(sig)
+  if (isTRUE(verbose)) .cli("Input: assay${layer} ({.val {nrow(sig)}} genes x {.val {nC}} cells); {.val {nLR}} LR pairs",
                             .type = "info")
 
   # ---- distance cache: validate or compute (baseline semantics) ----
