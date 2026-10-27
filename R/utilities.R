@@ -1196,6 +1196,9 @@ subsetData <- function(object, features = NULL) {
     .sc_clean_gene_names(features)
   }
   gene.use <- intersect(gene.use_input, rownames(norm))
+  # projectData() derives assay$smooth from assay$signaling: rewriting the
+  # signaling gene set invalidates any previous projection (mirrors normalizeData()).
+  assay(object, "smooth") <- NULL
   assay(object, "signaling") <- norm[rownames(norm) %in% gene.use, , drop = FALSE]
   .cli("assay$signaling written: {length(gene.use)} signaling genes x {ncol(norm)} cells",
        .type = "success")

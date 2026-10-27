@@ -359,9 +359,32 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+# Gene-subset layers (signaling, smooth) share one contract: the object cells as
+# columns in order, rows drawn from assay$norm and keeping its gene order.
+.sc_validate_subset_layer <- function(x, gene_names, cell_names, label) {
+  if (!.sc_matrix_like(x)) {
+    return(paste0("assay$", label, " must be a matrix or Matrix object"))
+  }
+  if (ncol(x) != length(cell_names) || !identical(colnames(x), cell_names)) {
+    return(paste0("assay$", label, " must carry the object cells as columns"))
+  }
+  genes <- rownames(x)
+  if (is.null(genes)) {
+    return(paste0("assay$", label, " must have gene rownames"))
+  }
+  if (!all(genes %in% gene_names)) {
+    return(paste0("assay$", label, " genes must be a subset of assay$norm genes"))
+  }
+  if (is.unsorted(match(genes, gene_names), strictly = TRUE)) {
+    return(paste0("assay$", label, " rows must preserve the assay$norm gene order"))
+  }
+  character()
+}
+
 .sc_validate_assay <- function(assay, gene_names, cell_names) {
   if (!is.list(assay)) return("assay must be a list")
   required <- c("raw", "norm", "scale", "smooth", "signaling")
+  subset_layers <- c("signaling", "smooth")
   errors <- character()
   missing <- setdiff(required, names(assay))
   if (length(missing)) {
@@ -372,28 +395,17 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   }
   expected <- c(length(gene_names), length(cell_names))
   expected_names <- list(gene_names, cell_names)
-  for (name in setdiff(intersect(required, names(assay)), "signaling")) {
+  for (name in setdiff(intersect(required, names(assay)), subset_layers)) {
     errors <- c(errors, .sc_validate_matrix(
       assay[[name]], expected, expected_names, paste0("assay$", name)))
   }
-  # assay$signaling is a gene subset written by subsetData: cells must match
-  # the object exactly and its genes must keep the assay$norm row order.
-  if (!is.null(assay$signaling)) {
-    signaling <- assay$signaling
-    if (!.sc_matrix_like(signaling)) {
-      errors <- c(errors, "assay$signaling must be a matrix or Matrix object")
-    } else if (ncol(signaling) != length(cell_names) ||
-               !identical(colnames(signaling), cell_names)) {
-      errors <- c(errors, "assay$signaling must carry the object cells as columns")
-    } else {
-      signaling_genes <- rownames(signaling)
-      if (is.null(signaling_genes)) {
-        errors <- c(errors, "assay$signaling must have gene rownames")
-      } else if (!all(signaling_genes %in% gene_names)) {
-        errors <- c(errors, "assay$signaling genes must be a subset of assay$norm genes")
-      } else if (is.unsorted(match(signaling_genes, gene_names), strictly = TRUE)) {
-        errors <- c(errors, "assay$signaling rows must preserve the assay$norm gene order")
-      }
+  # assay$signaling is the subsetData gene subset; assay$smooth is the
+  # projectData projection of that same space. Both are gene subsets of
+  # assay$norm and neither may reorder its rows.
+  for (name in intersect(subset_layers, names(assay))) {
+    if (!is.null(assay[[name]])) {
+      errors <- c(errors, .sc_validate_subset_layer(
+        assay[[name]], gene_names, cell_names, name))
     }
   }
   errors
