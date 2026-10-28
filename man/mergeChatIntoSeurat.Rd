@@ -2,39 +2,34 @@
 % Please edit documentation in R/utilities.R
 \name{mergeChatIntoSeurat}
 \alias{mergeChatIntoSeurat}
-\title{Merge SpatialCellChat objects}
+\title{Merge SpatialCellChat objects (deprecated)}
 \usage{
 mergeChatIntoSeurat(
   object.list,
   slot.name = "net",
   pattern = c("incoming", "outgoing"),
-  normalize.chat = T,
+  normalize.chat = TRUE,
   normalization.method = "LogNormalize",
-  merge.chat = F
+  merge.chat = FALSE
 )
 }
 \arguments{
-\item{object.list}{A list of multiple SpatialCellChat objects.}
+\item{object.list}{A SpatialCellChat object or a named list of them.}
 
-\item{slot.name}{Which slot in SpatialCellChat used to merge.}
+\item{slot.name}{Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.}
 
-\item{pattern}{SpatialCellChat pattern used to merge. In detail, it comes from
-`centr.cell` in net or netP slot.
-If the `object.list` is a SpatialCellChat object, the functions will return a seurat
-object combining both "indeg" and "outdeg" in `centr.cell`.
-If the `object.list` is a SpatialCellChat object list, the functions will return a seurat
-object combining "indeg" or "outdeg" in `centr.cell` from objects respectively.}
+\item{pattern}{Which centrality direction to write.}
 
-\item{normalize.chat}{Whether to normalize SpatialCellChat pattern with \code{\link[Seurat]{NormalizeData.Seurat}}.}
+\item{normalize.chat}{Whether to run \code{\link[Seurat]{NormalizeData}}.}
 
-\item{normalization.method}{Inherit from \code{\link[Seurat]{NormalizeData.Seurat}}.}
+\item{normalization.method}{Passed to \code{\link[Seurat]{NormalizeData}}.}
 
-\item{merge.chat}{Use it when the `object.list` is a SpatialCellChat object, whether to
-merge both "indeg" and "outdeg" in `centr.cell` into only one assay data in seurat.}
+\item{merge.chat}{Combine both directions into one assay (\code{what = "merge"}).}
 }
 \value{
-SeuratObject.
+A Seurat object.
 }
 \description{
-Merge SpatialCellChat objects
+Deprecated: use \code{\link{asSeurat}} with \code{slot.name = "net"} or \code{"netP"} and
+\code{what = "incoming"}, \code{"outgoing"} or \code{"merge"}.
 }

@@ -101,219 +101,316 @@ savePlotWithCow <- function(
   )
 }
 
-#' Merge SpatialCellChat objects
+#' Convert a SpatialCellChat object into a Seurat object
 #'
-#' @param object.list  A list of multiple SpatialCellChat objects.
-#' @param slot.name Which slot in SpatialCellChat used to merge.
-#' @param pattern SpatialCellChat pattern used to merge. In detail, it comes from
-#' `centr.cell` in net or netP slot.
-#' If the `object.list` is a SpatialCellChat object, the functions will return a seurat
-#' object combining both "indeg" and "outdeg" in `centr.cell`.
-#' If the `object.list` is a SpatialCellChat object list, the functions will return a seurat
-#' object combining "indeg" or "outdeg" in `centr.cell` from objects respectively.
-#' @param normalize.chat Whether to normalize SpatialCellChat pattern with \code{\link[Seurat]{NormalizeData.Seurat}}.
-#' @param normalization.method Inherit from \code{\link[Seurat]{NormalizeData.Seurat}}.
-#' @param merge.chat Use it when the `object.list` is a SpatialCellChat object, whether to
-#' merge both "indeg" and "outdeg" in `centr.cell` into only one assay data in seurat.
+#' `slot.name` decides the feature space of the returned Seurat assay, and
+#' `what` decides which part of that slot is written.
 #'
-#' @importFrom methods slot new
+#' - `slot.name = "assay"`: the expression layers, mapped the way Seurat expects
+#'   them. `assay$raw` (or `assay$norm` when no raw counts were stored) becomes
+#'   `counts`, `assay$norm` becomes `data` and `assay$scale` becomes
+#'   `scale.data`. `assay$signaling` and `assay$smooth` are gene subsets with no
+#'   Seurat counterpart, so they are kept in `misc` of the new assay. `what` is
+#'   ignored.
+#' - `slot.name = "net"` or `"netP"`: the cell-level centrality written by
+#'   [netAnalysis_computeCentrality()] with `do.group = FALSE`. Features are the
+#'   ligand-receptor pairs (`net`) or the signaling pathways (`netP`), and the
+#'   values are the centrality scores.
 #'
-#' @return SeuratObject.
+#' `what` only applies to `net` / `netP`: `"incoming"` writes `indeg`,
+#' `"outgoing"` writes `outdeg`, and `"merge"` puts both into one assay with
+#' `-I` / `-O` feature suffixes.
+#'
+#' When `object` is a list, every element is converted and the results are
+#' merged into a single Seurat object carrying a `Condition` column.
+#'
+#' Seurat rewrites `_` to `-` in feature names, so a centrality feature such as
+#' `L1_R1` arrives as `L1-R1`. The original names stay available in the
+#' `features.info` metadata of the new assay (`orig.features`).
+#'
+#' @param object A SpatialCellChat object, or a named list of them.
+#' @param slot.name Source slot: `"assay"`, `"net"` or `"netP"`.
+#' @param what Centrality direction to write. Ignored when
+#'   `slot.name = "assay"`.
+#' @param counts Optional matrix used as the `counts` layer instead of
+#'   `assay$raw` / `assay$norm`. Ignored when `slot.name` is `"net"`/`"netP"`.
+#' @param normalize.chat Whether to run [Seurat::NormalizeData()] on the
+#'   centrality matrix. Only used when `slot.name` is `"net"`/`"netP"`.
+#' @param normalization.method Passed to [Seurat::NormalizeData()].
+#' @param assay.name Name of the assay in the returned Seurat object.
+#' @param group.by Metadata column used for `Idents()`. Defaults to
+#'   `group.cellchat`, which is built from `idents(object)`.
+#' @param check.object Whether to plot the converted object. Only used when
+#'   `slot.name = "assay"`.
+#'
+#' @return A Seurat object.
+#' @export
+asSeurat <- function(object,
+                     slot.name = c("assay", "net", "netP"),
+                     what = c("incoming", "outgoing", "merge"),
+                     counts = NULL,
+                     normalize.chat = TRUE,
+                     normalization.method = "LogNormalize",
+                     assay.name = "Spatial",
+                     group.by = NULL,
+                     check.object = FALSE) {
+  slot.name <- match.arg(slot.name)
+  if (identical(slot.name, "assay")) {
+    if (!missing(what))
+      warning("`what` only applies to slot.name = \"net\" or \"netP\"; ignored",
+              call. = FALSE)
+    what <- NA_character_
+  } else {
+    what <- match.arg(what)
+    if (!is.null(counts))
+      warning("`counts` only applies to slot.name = \"assay\"; ignored",
+              call. = FALSE)
+    counts <- NULL
+    if (isTRUE(check.object))
+      warning("`check.object` only applies to slot.name = \"assay\"; ignored",
+              call. = FALSE)
+  }
+  if (inherits(object, "list"))
+    return(.sc_as_seurat_list(object, slot.name, what, counts, normalize.chat,
+                              normalization.method, assay.name, group.by,
+                              check.object))
+  .sc_as_seurat_one(object, slot.name, what, counts, normalize.chat,
+                    normalization.method, assay.name, group.by, check.object)
+}
+
+#' Cell-level centrality of one direction as a features x cells matrix
+#' @noRd
+.sc_centrality_matrix <- function(centr.cell, direction) {
+  measure <- if (identical(direction, "outgoing")) "outdeg" else "indeg"
+  measures <- dimnames(centr.cell)[[1]]
+  if (is.null(measures) || !measure %in% measures)
+    stop("`centr.cell` carries no '", measure, "' measure; recompute the ",
+         "centrality with `degree.only = TRUE`", call. = FALSE)
+  Matrix::t(centr.cell[measure, , , drop = TRUE])
+}
+
+#' Keep a layer only when it can live next to `target` in the same Seurat assay
+#' @noRd
+.sc_same_space <- function(layer, target) {
+  if (is.null(layer) || sum(dim(layer)) == 0) return(NULL)
+  if (!identical(rownames(layer), rownames(target)) ||
+      !identical(colnames(layer), colnames(target))) return(NULL)
+  layer
+}
+
+#' Shared Seurat construction: metadata, image, idents, features.info
+#' @noRd
+.sc_seurat_assemble <- function(object, counts, data = NULL, scale = NULL,
+                                assay.name = "Spatial", group.by = NULL,
+                                features.info = NULL) {
+  meta.df <- meta(object)
+  meta.df$group.cellchat <- idents(object)
+  if (!identical(rownames(meta.df), colnames(counts))) {
+    cat("The cell barcodes in 'meta' is ", head(rownames(meta.df)), '\n')
+    warning("The cell barcodes in 'meta' is different from those in the used data matrix.
+              We now simply assign the colnames in the data matrix to the rownames of 'meta'!")
+    rownames(meta.df) <- colnames(counts)
+  }
+  seu <- Seurat::CreateSeuratObject(counts = counts, meta.data = meta.df,
+                                    assay = assay.name)
+  if (!is.null(data)) seu[[assay.name]]@data <- data
+  if (!is.null(scale)) seu[[assay.name]]@scale.data <- as.matrix(scale)
+  if (identical(assay.name, "Spatial")) {
+    coords <- images(object, "coordinates")
+    if (!is.null(coords)) {
+      # SlideSeq validates `coordinates` as a data.frame; the object stores a matrix.
+      seu@images$image <- new(Class = "SlideSeq", assay = "Spatial",
+                              key = "image_", coordinates = as.data.frame(coords))
+    }
+  }
+  Seurat::Idents(seu) <- if (is.null(group.by)) "group.cellchat" else group.by
+  seu[[assay.name]]@misc[["features.info"]] <- if (is.null(features.info)) {
+    data.frame(orig.features = rownames(counts), stringsAsFactors = FALSE)
+  } else {
+    features.info
+  }
+  seu
+}
+
+#' Optional visual check of a converted object
+#' @noRd
+.sc_seurat_check <- function(seu, assay.name) {
+  cat("Check the converted Seurat object by visualizing spatial clustering...")
+  color.use <- scPalette(nlevels(seu))
+  names(color.use) <- levels(seu)
+  if (identical(assay.name, "Spatial")) {
+    print(Seurat::SpatialDimPlot(seu, pt.size.factor = 3.5, cols = color.use,
+                                 label = FALSE) +
+            ggplot2::theme(legend.title = ggplot2::element_blank(),
+                           legend.text = ggplot2::element_text(size = 10),
+                           legend.key = ggplot2::element_blank()))
+  }
+  invisible(seu)
+}
+
+#' Convert one SpatialCellChat object
+#' @noRd
+.sc_as_seurat_one <- function(object, slot.name, what, counts, normalize.chat,
+                              normalization.method, assay.name, group.by,
+                              check.object) {
+  object <- .sc_assert_spatial_cell_chat(object)
+
+  if (identical(slot.name, "assay")) {
+    layers <- assay(object)
+    has.raw <- !is.null(layers$raw) && sum(dim(layers$raw)) > 0
+    counts.use <- if (!is.null(counts)) {
+      if (is.null(colnames(counts)) || is.null(rownames(counts)))
+        stop("Please check the dimnames of `counts`!", call. = FALSE)
+      counts
+    } else if (has.raw) {
+      layers$raw
+    } else {
+      layers$norm
+    }
+    if (is.null(counts.use) || sum(dim(counts.use)) == 0)
+      stop("assay$norm is empty; provide `counts` or run `normalizeData()` first",
+           call. = FALSE)
+    # The data layer only carries over when it shares the counts feature space;
+    # a user-supplied `counts` with other genes must not be mixed with norm.
+    data.use <- if (is.null(counts) && !has.raw) NULL else
+      .sc_same_space(layers$norm, counts.use)
+    scale.use <- .sc_same_space(layers$scale, counts.use)
+    seu <- .sc_seurat_assemble(object, counts = counts.use, data = data.use,
+                               scale = scale.use, assay.name = assay.name,
+                               group.by = group.by)
+    subsets <- Filter(Negate(is.null), layers[c("signaling", "smooth")])
+    if (length(subsets)) seu[[assay.name]]@misc[["subsets"]] <- subsets
+    Seurat::Misc(seu, slot = "Chat.info") <- "slot.name=assay"
+    if (isTRUE(check.object)) .sc_seurat_check(seu, assay.name)
+    return(seu)
+  }
+
+  centr.cell <- methods::slot(object, slot.name)[["centr.cell"]]
+  if (length(centr.cell) == 0)
+    stop("Please run `netAnalysis_computeCentrality` with `do.group = FALSE` ",
+         "to compute the network centrality scores!", call. = FALSE)
+
+  directions <- if (identical(what, "merge")) c("incoming", "outgoing") else what
+  mats <- lapply(directions, function(d) .sc_centrality_matrix(centr.cell, d))
+  layer.names <- dimnames(centr.cell)[[3]]
+  if (length(mats) > 1L) {
+    suffixes <- c(incoming = "-I", outgoing = "-O")
+    mats <- Map(function(m, d) {
+      rownames(m) <- paste0(rownames(m), suffixes[[d]])
+      m
+    }, mats, directions)
+    mat <- do.call(rbind, mats)
+  } else {
+    mat <- mats[[1]]
+  }
+
+  seu <- .sc_seurat_assemble(object, counts = mat, assay.name = assay.name,
+                             group.by = group.by)
+  # Seurat rewrites '_' in feature names to '-', so the substituted names are
+  # read back from the object and the untouched ones are kept in orig.features.
+  features.info <- data.frame(
+    orig.features = rep(layer.names, length(directions)),
+    srt.features  = rownames(seu),
+    feature.names = rownames(seu),
+    stringsAsFactors = FALSE
+  )
+  seu[[assay.name]]@misc[["features.info"]] <- features.info
+  if (isTRUE(normalize.chat))
+    seu <- Seurat::NormalizeData(seu, normalization.method = normalization.method,
+                                 verbose = FALSE)
+
+  # Annotate the features: LR pairs carry the ligand/receptor/pathway columns of
+  # the database, pathway features only carry their own name.
+  fi <- seu[[assay.name]]@misc[["features.info"]]
+  fi[["interaction_name"]] <- fi[["orig.features"]]
+  if (identical(slot.name, "net")) {
+    db <- object@DB$interaction
+    cols <- c("interaction_name", "pathway_name", "ligand", "receptor")
+    if (is.data.frame(db) && all(cols %in% colnames(db))) {
+      db <- db[!duplicated(db$interaction_name), cols, drop = FALSE]
+      fi <- dplyr::left_join(fi, db, by = "interaction_name")
+    }
+  } else {
+    fi[["pathway_name"]] <- fi[["orig.features"]]
+  }
+  seu[[assay.name]]@misc[["features.info"]] <- fi
+
+  Seurat::Misc(seu, slot = "Chat.info") <- paste0(
+    "slot.name=", slot.name, " ", "what=", what, " ",
+    "normalize.chat=", as.character(normalize.chat))
+  seu
+}
+
+#' Convert and merge a list of SpatialCellChat objects
+#' @noRd
+.sc_as_seurat_list <- function(object.list, slot.name, what, counts,
+                               normalize.chat, normalization.method,
+                               assay.name, group.by, check.object) {
+  if (!length(object.list))
+    stop("`object` is an empty list", call. = FALSE)
+  if (is.null(names(object.list)))
+    names(object.list) <- paste0("COND", seq_along(object.list))
+  nms <- names(object.list)
+  if (any(!nzchar(nms)) || anyDuplicated(nms))
+    stop("`object` must be a list of named SpatialCellChat objects with unique names",
+         call. = FALSE)
+
+  seu.list <- lapply(seq_along(object.list), function(i) {
+    seu <- .sc_as_seurat_one(object.list[[i]], slot.name, what, counts,
+                             normalize.chat, normalization.method, assay.name,
+                             group.by, check.object)
+    seu$Condition <- nms[[i]]
+    seu
+  })
+
+  # `merge()` only ever combined the first two elements before; pass the rest as
+  # the `y` list so every element reaches the result. `merge` is the base
+  # generic; Seurat registers `merge.Seurat` on load.
+  seu <- if (length(seu.list) == 1L) {
+    seu.list[[1]]
+  } else {
+    merge(x = seu.list[[1]], y = seu.list[-1], add.cell.ids = nms)
+  }
+  Seurat::DefaultAssay(seu) <- assay.name
+  seu$Condition <- factor(as.character(seu$Condition), levels = nms)
+  if (length(Seurat::Images(seu)) == length(nms)) names(seu@images) <- nms
+  Seurat::Misc(seu, slot = "Chat.info") <- paste0(
+    "slot.name=", slot.name, if (!is.na(what)) paste0(" what=", what) else "",
+    "; objects=", paste(nms, collapse = ","))
+  seu
+}
+
+#' Merge SpatialCellChat objects (deprecated)
+#'
+#' Deprecated: use [asSeurat()] with `slot.name = "net"` or `"netP"` and
+#' `what = "incoming"`, `"outgoing"` or `"merge"`.
+#'
+#' @inheritParams asSeurat
+#' @param object.list A SpatialCellChat object or a named list of them.
+#' @param pattern Which centrality direction to write.
+#' @param normalize.chat Whether to run [Seurat::NormalizeData()].
+#' @param normalization.method Passed to [Seurat::NormalizeData()].
+#' @param merge.chat Combine both directions into one assay (`what = "merge"`).
+#'
+#' @return A Seurat object.
 #' @export
 mergeChatIntoSeurat <- function(
     object.list,
     slot.name = "net",
     pattern = c("incoming","outgoing"),
-    normalize.chat = T,
+    normalize.chat = TRUE,
     normalization.method = "LogNormalize",
-    merge.chat = F
+    merge.chat = FALSE
 ){
-  if(inherits(x = object.list, what = c("SpatialCellChat"))){
-    object <- object.list
-    if(slot.name%in%c("net","netP")){
-      if (length(methods::slot(object, slot.name)[["centr.cell"]]) == 0) {
-        stop("Please run `netAnalysis_computeCentrality` with `do.group=F` to compute the network centrality scores! \n")
-      }
-      centr.cell <- methods::slot(object, slot.name)[["centr.cell"]]
-
-      seu.list <- lapply(
-        X = pattern,
-        FUN = function(i){
-          if (i == "outgoing") {
-            # data_sender is matrix of features-by-samples: nCells x nPathways(nLRs), same as previous nGroups x nPathways(nLRs)
-            data_sender <- centr.cell[c("outdeg"),,,drop=T]
-            data_sr <- Matrix::t(data_sender)
-            # use Seurat
-            seu_<- CellChat2Seurat(object,counts = data_sr,assay = "Spatial",check.object = F)
-            Seurat::DefaultAssay(seu_) <- "Spatial"
-            if(normalize.chat){
-              seu_ <- Seurat::NormalizeData(object = seu_,normalization.method = normalization.method, verbose = F)
-            }
-          } else if (i == "incoming") {
-            # data_receiver is matrix of features-by-samples: nCells x nPathways(nLRs), same as previous nGroups x nPathways(nLRs)
-            data_receiver <- centr.cell[c("indeg"),,,drop=T]
-            data_sr <- Matrix::t(data_receiver)
-            # use Seurat
-            seu_<- CellChat2Seurat(object,counts = data_sr,assay = "Spatial",check.object = F)
-            Seurat::DefaultAssay(seu_) <- "Spatial"
-            if(normalize.chat){
-              seu_ <- Seurat::NormalizeData(object = seu_,normalization.method = normalization.method, verbose = F)
-            }
-          }
-          return(seu_)
-        }
-      )
-      names(seu.list) <- pattern
-
-      if(merge.chat){
-        direction.keys <- c("outgoing"="-O","incoming"="-I")
-
-        Chat.data1 <- seu.list[[1]]@assays[["Spatial"]]$data
-        Chat.meta.features1 <- seu.list[[1]]@assays[["Spatial"]]@misc[["features.info"]]
-        Chat.meta.features1[["orig.features"]] <- dimnames(centr.cell)[[3]]
-        Chat.meta.features1[["srt.features"]] <- rownames(Chat.data1)
-        rownames(Chat.data1) <- paste0(rownames(Chat.data1),direction.keys[[pattern[[1]]]])
-
-        Chat.data2 <- seu.list[[2]]@assays[["Spatial"]]$data
-        Chat.meta.features2 <- seu.list[[2]]@assays[["Spatial"]]@misc[["features.info"]]
-        Chat.meta.features2[["orig.features"]] <- dimnames(centr.cell)[[3]]
-        Chat.meta.features2[["srt.features"]] <- rownames(Chat.data2)
-        rownames(Chat.data2) <- paste0(rownames(Chat.data2),direction.keys[[pattern[[2]]]])
-
-        Chat.data <- rbind(Chat.data1,Chat.data2)
-        Chat.meta.features <- rbind(Chat.meta.features1,Chat.meta.features2)
-
-        seu <- CellChat2Seurat(object,counts = Chat.data,assay = "Spatial",check.object = F)
-
-        seu@assays[["incoming"]] <- seu.list[["incoming"]]@assays[["Spatial"]]
-        seu@assays[["outgoing"]] <- seu.list[["outgoing"]]@assays[["Spatial"]]
-        Seurat::DefaultAssay(seu) <- "Spatial"
-        rownames(Chat.meta.features) <- rownames(seu)
-        Chat.meta.features[["feature.names"]] <- rownames(seu)
-        seu@assays[["Spatial"]]@misc[["features.info"]] <- Chat.meta.features
-
-        Seurat::Misc(seu,slot = "Chat.info") <-
-          paste0(
-            "slot.name=",
-            slot.name,
-            " ",
-            "pattern=",
-            stringr::str_c(pattern, collapse = ","),
-            " ",
-            "merge.chat=T",
-            " ",
-            "normalize.chat=",
-            as.character(normalize.chat)
-          )
-        # condition.keys <- c("outgoing"="Sender","incoming"="Receiver")
-        # seu.list[[1]]$Condition <- condition.keys[[pattern[[1]]]]
-        # seu.list[[2]]$Condition <- condition.keys[[pattern[[2]]]]
-        # seu <- merge(seu.list[[1]],seu.list[[2]], add.cell.ids = condition.keys)
-        # Seurat::DefaultAssay(seu) <- "Spatial"
-        # seu$Condition <- factor(seu$Condition, levels = unique(seu$Condition))
-        # names(seu@images) <- pattern
-      } else{
-        seu <- seu.list[["incoming"]]
-        seu@assays[["outgoing"]] <- seu.list[["outgoing"]]@assays[["Spatial"]]
-        seu@assays[["incoming"]] <- seu@assays[["Spatial"]]
-        Seurat::DefaultAssay(seu) <- "Spatial"
-        Seurat::Misc(seu,slot = "Chat.info") <-
-          paste0(
-            "slot.name=",
-            slot.name,
-            " ",
-            "pattern=",
-            stringr::str_c(pattern, collapse = ","),
-            " ",
-            "merge.chat=F",
-            " ",
-            "normalize.chat=",
-            as.character(normalize.chat)
-          )
-      }
-      tmp.meta.features <- seu@assays[[Seurat::DefaultAssay(seu)]]@misc[["features.info"]]
-      tmp.meta.features[["interaction_name"]] <- tmp.meta.features[["orig.features"]]
-      tmp.meta.features <-
-        dplyr::left_join(
-          tmp.meta.features,
-          object@DB$interaction[, c("interaction_name", "pathway_name", "ligand", "receptor")],
-          by = "interaction_name"
-        )
-      seu@assays[[Seurat::DefaultAssay(seu)]]@misc[["features.info"]] <- tmp.meta.features
-      return(seu)
-    } else{
-      stop("Wrong slot.name!")
-    }
-  } else if(inherits(x = object.list, what = c("list"))){
-    if(is.null(names(object.list))){
-      names(object.list) <- paste0("COND",seq_along(object.list))
-    }
-
-    if(slot.name%in%c("net","netP")){
-
-      pattern <- match.arg(pattern)
-
-      seu.list <- lapply(
-        X = seq_along(object.list),
-        FUN = function(i){
-          object <- object.list[[i]]
-          if (length(methods::slot(object, slot.name)[["centr.cell"]]) == 0) {
-            stop("Please run `netAnalysis_computeCentrality` with `do.group=F` to compute the network centrality scores! \n")
-          }
-          centr.cell <- methods::slot(object, slot.name)[["centr.cell"]]
-
-          if (pattern == "outgoing") {
-            # data_sender is matrix of features-by-samples: nCells x nPathways(nLRs), same as previous nGroups x nPathways(nLRs)
-            data_sender <- centr.cell[c("outdeg"),,,drop=T]
-            data_sr <- Matrix::t(data_sender)
-
-          } else if (pattern == "incoming") {
-            # data_receiver is matrix of features-by-samples: nCells x nPathways(nLRs), same as previous nGroups x nPathways(nLRs)
-            data_receiver <- centr.cell[c("indeg"),,,drop=T]
-            data_sr <- Matrix::t(data_receiver)
-
-          }
-
-          # use Seurat
-          seu_<- CellChat2Seurat(object,counts = data_sr,assay = "Spatial",check.object = F)
-          Seurat::DefaultAssay(seu_) <- "Spatial"
-          seu_$Condition <- names(object.list)[[i]]
-
-          return(seu_)
-        }
-      )
-      seu <- merge(seu.list[[1]],seu.list[[2]], add.cell.ids = names(object.list))
-      Seurat::DefaultAssay(seu) <- "Spatial"
-      seu$Condition <- factor(seu$Condition, levels = unique(seu$Condition))
-      names(seu@images) <- names(object.list)
-      Seurat::Misc(seu,slot = "Chat.info") <- paste0("slot.name=",slot.name," ","pattern=",pattern)
-
-    } else if (slot.name%in%c("data","data.signaling","data.scale","data.project","data.raw")){
-      seu.list <- lapply(
-        X = seq_along(object.list),
-        FUN = function(i){
-          object <- object.list[[i]]
-          if ( 0 %in% dim(methods::slot(object, slot.name)) ) {
-            stop("Please check your CellChat/SpatialCellChat objects. The slot input is an empty matrix. \n")
-          }
-          data.use <- methods::slot(object, slot.name)
-
-          # use Seurat
-          seu_<- CellChat2Seurat(object,counts = data.use,assay = "Spatial",check.object = F)
-          Seurat::DefaultAssay(seu_) <- "Spatial"
-          seu_$Condition <- names(object.list)[[i]]
-
-          return(seu_)
-        }
-      )
-      seu <- merge(seu.list[[1]],seu.list[[2]], add.cell.ids = names(object.list))
-      Seurat::DefaultAssay(seu) <- "Spatial"
-      seu$Condition <- factor(seu$Condition, levels = unique(seu$Condition))
-      names(seu@images) <- names(object.list)
-      Seurat::Misc(seu,slot = "Chat.info") <- paste0("slot.name=",slot.name)
-    }
-    return(seu)
-  }
+  .Deprecated("asSeurat")
+  slot.name <- match.arg(as.character(slot.name), c("net", "netP"))
+  pattern <- match.arg(pattern)
+  asSeurat(object.list,
+           slot.name = slot.name,
+           what = if (isTRUE(merge.chat)) "merge" else pattern,
+           normalize.chat = normalize.chat,
+           normalization.method = normalization.method,
+           check.object = FALSE)
 }
 
 
@@ -567,81 +664,20 @@ my_future_lapply <- function(X, FUN, ...,
   res_
 }
 
-#' Convert a CellChat object into a Seurat object
+#' Convert a CellChat object into a Seurat object (deprecated)
 #'
-#' Reads `assay$norm` (the default main matrix), `meta()`, `idents()` and, when
-#' `assay = "Spatial"`, `images(object, "coordinates")`.
+#' Deprecated: use [asSeurat()] with `slot.name = "assay"`, which also carries
+#' `assay$raw`, `assay$scale`, `assay$signaling` and `assay$smooth` over.
 #'
-#' @param object A SpatialCellChat object with a non-empty `assay$norm`.
-#' @param counts Optional user-supplied matrix used instead of `assay$norm`.
-#'   Must carry both rownames and colnames.
-#' @param group.by Name of one metadata columns to group (color) cells. Default is the defined cell groups in CellChat object
-#' @param assay Name of the initial assay. Default is "Spatial" when working on spatial imaging data
-#' @param check.object whether checking the converted Seurat object. Set check.object = FALSE when not visualizing spatial clustering
+#' @inheritParams asSeurat
+#' @param assay Name of the assay in the returned Seurat object.
 #'
 #' @return a Seurat object
 #' @export
-#'
 CellChat2Seurat <- function(object,counts = NULL, group.by = NULL, assay = "Spatial", check.object = TRUE) {
-  object <- .sc_assert_spatial_cell_chat(object)
-  # `assay` is this function's parameter (the target Seurat assay name), so the
-  # layer has to be read through a helper rather than the shadowed accessor.
-  norm <- .sc_assay_layer(object, "norm")
-  if (is.null(norm) || sum(dim(norm)) == 0)
-    stop("assay$norm is empty; provide `counts` or run `normalizeData()` first",
-         call. = FALSE)
-  meta.df <- meta(object)
-  meta.df$group.cellchat <- idents(object)
-  if (!identical(rownames(meta.df), colnames(norm))) {
-    cat("The cell barcodes in 'meta' is ", head(rownames(meta.df)),'\n')
-    warning("The cell barcodes in 'meta' is different from those in the used data matrix.
-              We now simply assign the colnames in the data matrix to the rownames of 'meta'!")
-    rownames(meta.df) <- colnames(norm)
-  }
-
-  if(is.null(counts)){
-    data.use <- norm
-  } else {
-    if(is.null(colnames(counts))|is.null(rownames(counts))){
-      stop("Please check the dimnames of `counts`!")
-    }
-    data.use <- counts
-  }
-
-  obj.new = Seurat::CreateSeuratObject(counts = data.use, meta.data = meta.df, assay = assay)
-  if (identical(assay, "Spatial")) {
-    spatial_locs <- images(object, "coordinates")
-    if (!is.null(spatial_locs)) {
-      # SlideSeq validates `coordinates` as a data.frame; the object stores a matrix.
-      obj.new@images$image =  new(
-        Class = 'SlideSeq',
-        assay = "Spatial",
-        key = "image_",
-        coordinates = as.data.frame(spatial_locs)
-      )
-    }
-  }
-  if (is.null(group.by)) {
-    group.by <- "group.cellchat"
-  }
-  Seurat::Idents(obj.new) <- group.by
-  obj.new@assays[[SeuratObject::DefaultAssay(obj.new)]]@misc[["features.info"]] <-
-    data.frame(
-      "orig.features"=rownames(data.use)
-    )
-
-  if (check.object == TRUE) {
-    cat("Check the converted Seurat object by visualizing spatial clustering...")
-    pt.size.factor <- 3.5
-    color.use <- scPalette(nlevels(obj.new))
-    names(color.use) <- levels(obj.new)
-    if (assay == "Spatial") {
-      print(Seurat::SpatialDimPlot(obj.new, pt.size.factor = pt.size.factor, cols = color.use, label = FALSE) +
-              theme(legend.title = element_blank(), legend.text = element_text(size = 10))+
-              theme(legend.key = element_blank()))
-    }
-  }
-  return(obj.new)
+  .Deprecated("asSeurat")
+  asSeurat(object, slot.name = "assay", counts = counts, assay.name = assay,
+           group.by = group.by, check.object = check.object)
 }
 
 #' @title preProcessing

@@ -2,7 +2,7 @@
 % Please edit documentation in R/utilities.R
 \name{CellChat2Seurat}
 \alias{CellChat2Seurat}
-\title{Convert a CellChat object into a Seurat object}
+\title{Convert a CellChat object into a Seurat object (deprecated)}
 \usage{
 CellChat2Seurat(
   object,
@@ -13,21 +13,23 @@ CellChat2Seurat(
 )
 }
 \arguments{
-\item{object}{A SpatialCellChat object with a non-empty \code{assay$norm}.}
+\item{object}{A SpatialCellChat object, or a named list of them.}
 
-\item{counts}{Optional user-supplied matrix used instead of \code{assay$norm}.
-Must carry both rownames and colnames.}
+\item{counts}{Optional matrix used as the \code{counts} layer instead of
+\code{assay$raw} / \code{assay$norm}. Ignored when \code{slot.name} is \code{"net"}/\code{"netP"}.}
 
-\item{group.by}{Name of one metadata columns to group (color) cells. Default is the defined cell groups in CellChat object}
+\item{group.by}{Metadata column used for \code{Idents()}. Defaults to
+\code{group.cellchat}, which is built from \code{idents(object)}.}
 
-\item{assay}{Name of the initial assay. Default is "Spatial" when working on spatial imaging data}
+\item{assay}{Name of the assay in the returned Seurat object.}
 
-\item{check.object}{whether checking the converted Seurat object. Set check.object = FALSE when not visualizing spatial clustering}
+\item{check.object}{Whether to plot the converted object. Only used when
+\code{slot.name = "assay"}.}
 }
 \value{
 a Seurat object
 }
 \description{
-Reads \code{assay$norm} (the default main matrix), \code{meta()}, \code{idents()} and, when
-\code{assay = "Spatial"}, \code{images(object, "coordinates")}.
+Deprecated: use \code{\link{asSeurat}} with \code{slot.name = "assay"}, which also carries
+\code{assay$raw}, \code{assay$scale}, \code{assay$signaling} and \code{assay$smooth} over.
 }

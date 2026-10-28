@@ -3502,7 +3502,7 @@ identifyCellTopics <- function(
 
   if(do.scale){
     # use Seurat to do scale
-    seu_<- CellChat2Seurat(object,data_sr,assay = "Spatial",check.object = F)
+    seu_<- asSeurat(object, slot.name = "assay", counts = data_sr)
     seu_ <- seu_ %>%
       # Seurat::NormalizeData(verbose = FALSE) %>%
       # Seurat::FindVariableFeatures(
@@ -3629,7 +3629,7 @@ identifyTopicCommunities <- function(
   }
 
   # use Seurat to find communication clusters
-  seu<- CellChat2Seurat(object,data_sr,check.object = F)
+  seu<- asSeurat(object, slot.name = "assay", counts = data_sr)
   seu@reductions[[topic.key.name]] <- Seurat::CreateDimReducObject(
     embeddings = H,
     loadings = W,
