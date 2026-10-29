@@ -208,15 +208,18 @@ check("Condition records the list names",
 check("Condition is per cell, not per object",
       identical(as.integer(table(seu.list$Condition)), rep(length(cells), 3L)))
 
-## ---- 8. deprecated wrappers -------------------------------------------------
-w <- warn_msg(seu.dep <- CellChat2Seurat(chat, check.object = FALSE))
-check("CellChat2Seurat is deprecated", grepl("deprecated", w, ignore.case = TRUE))
-check("CellChat2Seurat still converts", ncol(seu.dep) == length(cells))
+## ---- 8. legacy names are out of the package ---------------------------------
+check("CellChat2Seurat is not defined in R/",
+      !exists("CellChat2Seurat", mode = "function"))
+check("mergeChatIntoSeurat is not defined in R/",
+      !exists("mergeChatIntoSeurat", mode = "function"))
 
-w2 <- warn_msg(seu.dep2 <- mergeChatIntoSeurat(chat.net, slot.name = "net",
-                                               merge.chat = TRUE))
-check("mergeChatIntoSeurat is deprecated", grepl("deprecated", w2, ignore.case = TRUE))
-check("mergeChatIntoSeurat(merge.chat = TRUE) maps to what = 'merge'",
-      identical(rownames(seu.dep2), gsub("_", "-", c(paste0(lr, "-I"), paste0(lr, "-O")))))
+legacy_env <- new.env(parent = globalenv())
+sys.source("R/legacy/seurat-bridge.R", envir = legacy_env)
+check("legacy file still defines both bridges",
+      is.function(legacy_env$CellChat2Seurat) &&
+        is.function(legacy_env$mergeChatIntoSeurat))
+check("legacy CellChat2Seurat still delegates to asSeurat",
+      ncol(legacy_env$CellChat2Seurat(chat, check.object = FALSE)) == length(cells))
 
 cat("All Seurat bridge checks passed.\n")

@@ -380,38 +380,6 @@ asSeurat <- function(object,
   seu
 }
 
-#' Merge SpatialCellChat objects (deprecated)
-#'
-#' Deprecated: use [asSeurat()] with `slot.name = "net"` or `"netP"` and
-#' `what = "incoming"`, `"outgoing"` or `"merge"`.
-#'
-#' @inheritParams asSeurat
-#' @param object.list A SpatialCellChat object or a named list of them.
-#' @param pattern Which centrality direction to write.
-#' @param normalize.chat Whether to run [Seurat::NormalizeData()].
-#' @param normalization.method Passed to [Seurat::NormalizeData()].
-#' @param merge.chat Combine both directions into one assay (`what = "merge"`).
-#'
-#' @return A Seurat object.
-#' @export
-mergeChatIntoSeurat <- function(
-    object.list,
-    slot.name = "net",
-    pattern = c("incoming","outgoing"),
-    normalize.chat = TRUE,
-    normalization.method = "LogNormalize",
-    merge.chat = FALSE
-){
-  .Deprecated("asSeurat")
-  slot.name <- match.arg(as.character(slot.name), c("net", "netP"))
-  pattern <- match.arg(pattern)
-  asSeurat(object.list,
-           slot.name = slot.name,
-           what = if (isTRUE(merge.chat)) "merge" else pattern,
-           normalize.chat = normalize.chat,
-           normalization.method = normalization.method,
-           check.object = FALSE)
-}
 
 
 #' @title RunSeurat
@@ -664,21 +632,6 @@ my_future_lapply <- function(X, FUN, ...,
   res_
 }
 
-#' Convert a CellChat object into a Seurat object (deprecated)
-#'
-#' Deprecated: use [asSeurat()] with `slot.name = "assay"`, which also carries
-#' `assay$raw`, `assay$scale`, `assay$signaling` and `assay$smooth` over.
-#'
-#' @inheritParams asSeurat
-#' @param assay Name of the assay in the returned Seurat object.
-#'
-#' @return a Seurat object
-#' @export
-CellChat2Seurat <- function(object,counts = NULL, group.by = NULL, assay = "Spatial", check.object = TRUE) {
-  .Deprecated("asSeurat")
-  asSeurat(object, slot.name = "assay", counts = counts, assay.name = assay,
-           group.by = group.by, check.object = check.object)
-}
 
 #' @title preProcessing
 #' @description

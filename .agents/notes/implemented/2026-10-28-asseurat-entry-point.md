@@ -6,7 +6,7 @@ Date: 2026-10-28
 Decision type: api
 Scope: R/utilities.R (`asSeurat`, `.sc_as_seurat_*`, `.sc_seurat_assemble`, `CellChat2Seurat`, `mergeChatIntoSeurat`), R/analysis.R (topic/community call sites), NAMESPACE, man/, tests_dev/test-seurat-bridge.R
 Owner: maintainer
-Impact: medium (public API, one breaking behaviour change in a deprecated wrapper)
+Impact: high (two exported functions removed; `merge.chat = FALSE` behaviour narrowed)
 Supersedes: none
 Superseded by: none
 
@@ -90,11 +90,12 @@ features × cells matrix, and for `what = "merge"` stacks both with `-I` / `-O` 
 - **Breaking for `mergeChatIntoSeurat()` callers**: `merge.chat = FALSE` used to return an
   object carrying `Spatial` = incoming plus `incoming`/`outgoing` aliases; it now returns
   only the requested direction. `what = "merge"` gives both in one assay.
-- **`CellChat2Seurat()` default `check.object` stays `TRUE`** so existing calls behave the
-  same; `asSeurat()` defaults to `FALSE`.
-- Both old names remain exported as `.Deprecated()` wrappers for one release. The internal
-  callers in `identifyCellTopics()` / `identifyTopicCommunities()` were moved to
-  `asSeurat()` so package code never emits its own deprecation warning.
+- **`CellChat2Seurat()` kept `check.object = TRUE`** while it existed, so its callers
+  behaved the same; `asSeurat()` defaults to `FALSE`.
+- Both old names were first kept as `.Deprecated()` wrappers; they were archived one day
+  later (see the follow-up below). The internal callers in `identifyCellTopics()` /
+  `identifyTopicCommunities()` were moved to `asSeurat()` so package code never emits its
+  own deprecation warning.
 - Seurat rewrites `_` to `-` in feature names, so a centrality feature `L1_R1` arrives as
   `L1-R1`. `features.info$orig.features` keeps the untouched name; `srt.features` is now
   read back from the object, so it matches the actual rownames (it did not before).
@@ -107,8 +108,28 @@ features × cells matrix, and for `what = "merge"` stacks both with `-I` / `-O` 
 `scale`→`scale.data`, subsets→misc), SlideSeq image hand-off, counts override with other
 genes staying out of the data layer, argument gating warnings, `net` incoming/outgoing/
 merge with values checked against `indeg`/`outdeg`, `normalize.chat` both ways, `netP`
-feature and `pathway_name` mapping, three-object list merge (`Condition` per cell), and
-both deprecated wrappers still working.
+feature and `pathway_name` mapping, and three-object list merge (`Condition` per cell).
+
+## Follow-up (2026-10-29): the wrappers were archived
+
+The transition period was dropped by decision: only the consolidated entry point is used
+from now on, so both wrappers were moved out of the package instead of staying as
+deprecated aliases.
+
+- `R/legacy/seurat-bridge.R` holds them verbatim, under a header with the argument
+  mapping and the restore recipe. `R` only compiles top-level files, so they are no longer
+  part of the namespace.
+- `export(CellChat2Seurat)` and `export(mergeChatIntoSeurat)` are gone from `NAMESPACE`;
+  the two `.Rd` files moved to `man/legacy/`.
+- `.sc_assay_layer()` was deleted from `R/SpatialCellChat_class.R`. It existed only because
+  `CellChat2Seurat()`'s `assay` argument shadowed the `assay()` accessor — the reason
+  disappeared with the rename to `assay.name`.
+- `tests_dev/test_data/Slide-seq.R` L760 now calls `asSeurat()`. That script was the last
+  remaining caller outside the package.
+
+`tests_dev/test-seurat-bridge.R` section 8 now asserts the opposite of what it used to:
+both names must be absent from `R/`, and sourcing `R/legacy/seurat-bridge.R` into a scratch
+environment must still produce two working bridges. 41 checks, all green.
 
 Regression: projectData 19, computeCommunProb 61, computeAvgCommunProb 162,
 filterCommunication 22, normalizeData 9, pre-inference 15, class 22, accessors 22,
