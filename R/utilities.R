@@ -983,90 +983,235 @@ addMeta <- function(object, meta, meta.name = NULL) {
 
 
 #' Set the default identity of cells
-#' @param object CellChat object
-#' @param ident.use the name of the variable in object.meta;
-#' @param levels set the levels of factor
-#' @param display.warning whether display the warning message
-#' @return
-#' @export
 #'
-#' @examples
-setIdent <- function(object, ident.use = NULL, levels = NULL, display.warning = TRUE){
-  if (!is.null(ident.use)) {
-    object@idents <- as.factor(object@meta[[ident.use]])
-  }
+#' Changes `idents(object)` and keeps the object consistent with respect to the
+#' **cell-group axis**. Every group-indexed structure is either carried over or
+#' dropped, depending on whether the new labels describe the same partition of
+#' the cells as the old ones.
+#'
+#' @details
+#' Two outcomes are possible.
+#'
+#' **Same partition** — the new labels are a relabelling of the old ones (a
+#' permutation, a rename, or both at once): every old label maps to exactly one
+#' new label and every new label comes from exactly one old label, and the number
+#' of levels is unchanged. Then `net$group$prob`/`pval` (group x group x layer),
+#' `net$group$count`/`weight` (group x group matrices), `net$centr`
+#' (measure x group x layer) and the matching `netP` entries are reordered and
+#' relabelled in place. The values do not change, so downstream results stay
+#' valid.
+#'
+#' **Different partition** — groups were merged, split or reassigned. Group-level
+#' results cannot be carried over, so `net$group`, `netP$group`, `net$centr` and
+#' `netP$centr` are dropped and a message tells you what to re-run
+#' (`computeAvgCommunProb()` and everything downstream of it). The cell-level
+#' `net$cell$prob` is **kept**: it is indexed by cell pair, not by group, and is
+#' exactly what `computeAvgCommunProb()` consumes.
+#'
+#' `net$cell$prob`, `netP$cell$prob`, `net$tmp`, `misc`, `dr`, `LR` and `DB` are
+#' never touched.
+#'
+#' Levels with no cells in them cannot be matched by content; when the partition
+#' is otherwise unchanged they are paired with the unmatched new levels in
+#' ascending level order.
+#'
+#' @param object A SpatialCellChat object.
+#' @param ident.use Name of a metadata column to use as the new cell identity.
+#' @param levels New level order for the identity factor.
+#'
+#' @return An updated SpatialCellChat object, validated.
+#' @export
+setIdent <- function(object, ident.use = NULL, levels = NULL) {
+  object <- .sc_assert_spatial_cell_chat(object)
+  old.idents <- idents(object)
+  old.levels <- base::levels(old.idents)
 
+  if (!is.null(ident.use)) {
+    md <- meta(object)
+    if (length(ident.use) != 1L || !is.character(ident.use) ||
+        !ident.use %in% colnames(md))
+      stop("`ident.use` must name one column of `meta(object)`", call. = FALSE)
+    value <- as.factor(md[[ident.use]])
+    names(value) <- rownames(md)
+    object@idents <- value
+  }
   if (!is.null(levels)) {
     object@idents <- factor(object@idents, levels = levels)
   }
   if ("0" %in% as.character(object@idents)) {
-    stop("Cell labels cannot contain `0`! ")
+    stop("Cell labels cannot contain `0`! ", call. = FALSE)
   }
-  if (length(object@net) > 0) {
-    if (all(dimnames(object@net$prob)[[1]] %in% levels(object@idents) )) {
-      message("Reorder cell groups! ")
-      cat("The cell group order before reordering is ", dimnames(object@net$prob)[[1]],'\n')
-      # idx <- match(dimnames(object@net$prob)[[1]], levels(object@idents))
-      idx <- match(levels(object@idents), dimnames(object@net$prob)[[1]])
-      object@net$prob <- object@net$prob[idx, , ]
-      object@net$prob <- object@net$prob[, idx, ]
-      object@net$pval <- object@net$pval[idx, , ]
-      object@net$pval <- object@net$pval[, idx, ]
-      cat("The cell group order after reordering is ", dimnames(object@net$prob)[[1]],'\n')
+
+  new.levels <- base::levels(object@idents)
+  if (!identical(old.levels, new.levels) ||
+      !identical(as.character(old.idents), as.character(object@idents))) {
+    same.partition <- length(old.levels) == length(new.levels) &&
+      .sc_same_partition(old.idents, object@idents)
+    if (same.partition) {
+      object <- .sc_reindex_group_layers(object, old.idents, old.levels, new.levels)
     } else {
-      message("Rename cell groups but do not change the order! ")
-      cat("The cell group order before renaming is ", dimnames(object@net$prob)[[1]],'\n')
-      dimnames(object@net$prob) <- list(levels(object@idents), levels(object@idents), dimnames(object@net$prob)[[3]])
-      dimnames(object@net$pval) <- dimnames(object@net$prob)
-      cat("The cell group order after renaming is ", dimnames(object@net$prob)[[1]],'\n')
+      had.layers <- .sc_has_group_layers(object)
+      object <- .sc_drop_group_layers(object)
+      if (had.layers) {
+        message("The new cell grouping is not a relabelling of the old one, so the ",
+                "group-level results were dropped (net$group, netP$group, net$centr, ",
+                "netP$centr). `net$cell$prob` is kept. Re-run `computeAvgCommunProb()`, ",
+                "then `computeCommunProbPathway()`, `aggregateNet()` and ",
+                "`netAnalysis_computeCentrality(slot.name = \"netP\")`.")
+      }
     }
-    if (display.warning) {
-      warning("All the calculations after `computeCommunProb` should be re-run!!
-    These include but not limited to `computeCommunProbPathway`,`aggregateNet`, and `netAnalysis_computeCentrality`.")
-    }
-
-
   }
-  return(object)
+  methods::validObject(object)
+  object
 }
 
+#' Do two label vectors describe the same partition of the cells?
+#'
+#' TRUE when every old label maps to exactly one new label and every new label
+#' comes from exactly one old label, i.e. the pairing is a bijection on the
+#' observed labels. Merges, splits and genuine regrouping return FALSE.
+#' @noRd
+.sc_same_partition <- function(old, new) {
+  old <- as.character(old)
+  new <- as.character(new)
+  if (length(old) != length(new) || anyNA(old) || anyNA(new)) return(FALSE)
+  tab <- table(old, new) > 0
+  if (!nrow(tab) || !ncol(tab)) return(FALSE)
+  all(rowSums(tab) == 1L) && all(colSums(tab) == 1L)
+}
+
+#' Map every old level onto a new level
+#'
+#' Observed levels are matched by content; levels with no cells are paired with
+#' the leftover new levels in ascending level order.
+#' @noRd
+.sc_group_level_map <- function(old.idents, new.idents, old.levels, new.levels) {
+  tab <- table(as.character(old.idents), as.character(new.idents)) > 0
+  map <- rep(NA_character_, length(old.levels))
+  names(map) <- old.levels
+
+  observed <- intersect(rownames(tab), old.levels)
+  for (label in observed) {
+    hit <- colnames(tab)[tab[label, ]]
+    if (length(hit) != 1L) return(NULL)
+    map[[label]] <- hit
+  }
+  unmatched.old <- old.levels[is.na(map[old.levels])]
+  unmatched.new <- setdiff(new.levels, map[!is.na(map)])
+  if (length(unmatched.old) != length(unmatched.new)) return(NULL)
+  if (length(unmatched.old)) map[unmatched.old] <- unmatched.new
+  map
+}
+
+#' Reorder and relabel every group-indexed layer
+#' @noRd
+.sc_reindex_group_layers <- function(object, old.idents, old.levels, new.levels) {
+  map <- .sc_group_level_map(old.idents, idents(object), old.levels, new.levels)
+  if (is.null(map))
+    stop("could not match the old cell groups onto the new ones", call. = FALSE)
+  idx <- match(new.levels, unname(map))
+  if (anyNA(idx))
+    stop("could not match the old cell groups onto the new ones", call. = FALSE)
+
+  for (slot.name in c("net", "netP")) {
+    node <- methods::slot(object, slot.name)
+    if (!is.list(node)) next
+
+    group <- node$group
+    if (is.list(group)) {
+      for (measure in c("prob", "pval")) {
+        arr <- group[[measure]]
+        if (is.null(arr)) next
+        arr <- arr[idx, idx, ]
+        dimnames(arr) <- list(new.levels, new.levels, dimnames(arr)[[3]])
+        group[[measure]] <- arr
+      }
+      for (measure in c("count", "weight")) {
+        mat <- group[[measure]]
+        if (is.null(mat)) next
+        mat <- mat[idx, idx, drop = FALSE]
+        dimnames(mat) <- list(new.levels, new.levels)
+        group[[measure]] <- mat
+      }
+      node$group <- group
+    }
+
+    centr <- node[["centr"]]
+    if (!is.null(centr)) {
+      centr <- centr[, idx, , drop = FALSE]
+      dn <- dimnames(centr)
+      dn[[2]] <- new.levels
+      dimnames(centr) <- dn
+      node[["centr"]] <- centr
+    }
+    methods::slot(object, slot.name) <- node
+  }
+  object
+}
+
+#' Does the object still carry group-level results?
+#' @noRd
+.sc_has_group_layers <- function(object) {
+  !is.null(object@net[["group"]][["prob"]]) ||
+    !is.null(object@netP[["group"]][["prob"]]) ||
+    !is.null(object@net[["centr"]]) ||
+    !is.null(object@netP[["centr"]])
+}
+
+#' Drop every group-level result, keep the cell-level probabilities
+#' @noRd
+.sc_drop_group_layers <- function(object) {
+  object@net$group <- list()
+  object@netP$group <- list()
+  object@net$centr <- NULL
+  object@netP$centr <- NULL
+  object
+}
 
 #' Update and re-order the cell group names after running `computeCommunProb`
 #'
+#' Renames cell groups without changing how cells are partitioned, so the
+#' communication results are carried over as they are. The mapping must be
+#' one-to-one: merging or splitting groups changes the partition, and group-level
+#' results would have to be recomputed from `net$cell$prob` rather than renamed.
+#'
 #' @param object CellChat object
 #' @param old.cluster.name A vector defining old cell group labels in `object@idents`; Default = NULL, which will use `levels(object@idents)`
-#' @param new.cluster.name A vector defining new cell group labels to rename
+#' @param new.cluster.name A vector defining new cell group labels to rename, one-to-one with `old.cluster.name`
 #' @param new.order reset order of cell group labels
 #' @param new.cluster.metaname assign a name of the new labels, which will be the column name of new labels in `object@meta`
 #' @return An updated CellChat object
 #' @export
 #'
 updateClusterLabels <- function(object, old.cluster.name = NULL, new.cluster.name = NULL, new.order = NULL, new.cluster.metaname = "new.labels") {
+  object <- .sc_assert_spatial_cell_chat(object)
   if (is.null(old.cluster.name)) {
-    old.cluster.name <- levels(object@idents)
+    old.cluster.name <- levels(idents(object))
   }
-  if (new.cluster.metaname %in% colnames(object@meta)) {
+  if (new.cluster.metaname %in% colnames(meta(object))) {
     stop("Please define another `new.cluster.metaname` as it exists in `colnames(object@meta)`!")
   }
   if (!is.null(new.cluster.name)) {
-    labels.new <- plyr::mapvalues(object@idents, from = old.cluster.name, to = new.cluster.name)
+    if (length(new.cluster.name) != length(old.cluster.name) ||
+        anyDuplicated(new.cluster.name)) {
+      stop("`new.cluster.name` must map onto `old.cluster.name` one-to-one. ",
+           "Merging or splitting cell groups changes the partition; reassign ",
+           "`idents` with `setIdent()` and re-run `computeAvgCommunProb()` instead.",
+           call. = FALSE)
+    }
+    labels.new <- plyr::mapvalues(idents(object), from = old.cluster.name,
+                                  to = new.cluster.name)
     object@meta[[new.cluster.metaname]] <- labels.new
-    object <- setIdent(object, ident.use = new.cluster.metaname, display.warning = FALSE)
+    object <- setIdent(object, ident.use = new.cluster.metaname)
   } else {
     new.cluster.metaname <- NULL
-    cat("Only reorder cell groups but do not rename cell groups!")
+    message("Only reorder cell groups but do not rename cell groups")
   }
 
   if (!is.null(new.order)) {
-    object <- setIdent(object, ident.use = new.cluster.metaname, levels = new.order, display.warning = FALSE)
+    object <- setIdent(object, ident.use = new.cluster.metaname, levels = new.order)
   }
-  message("We now re-run computeCommunProbPathway`,`aggregateNet`, and `netAnalysis_computeCentrality`...")
-  object <- computeCommunProbPathway(object)
-  ## calculate the aggregated network by counting the number of links or summarizing the communication probability
-  object <- aggregateNet(object)
-  # network importance analysis
-  object <-netAnalysis_computeCentrality(object, slot.name = "netP")
-  return(object)
+  object
 }
 
 

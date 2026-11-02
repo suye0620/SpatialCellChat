@@ -1322,16 +1322,6 @@ idents <- function(chat) {
   chat
 }
 
-#' @export
-setIdent <- function(chat, ident.use = "ident") {
-  if (!ident.use %in% colnames(chat@meta))
-    stop("Column '", ident.use, "' not found in meta", call. = FALSE)
-  value <- factor(chat@meta[[ident.use]])
-  names(value) <- rownames(chat@meta)
-  chat@idents <- value
-  methods::validObject(chat)
-  chat
-}
 
 #' @export
 level.SpatialCellChat <- function(chat) {

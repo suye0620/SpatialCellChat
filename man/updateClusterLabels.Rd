@@ -15,17 +15,20 @@ updateClusterLabels(
 \arguments{
 \item{object}{CellChat object}
 
-\item{old.cluster.name}{A vector defining old cell group labels in `object@idents`; Default = NULL, which will use `levels(object@idents)`}
+\item{old.cluster.name}{A vector defining old cell group labels in \code{object@idents}; Default = NULL, which will use \code{levels(object@idents)}}
 
-\item{new.cluster.name}{A vector defining new cell group labels to rename}
+\item{new.cluster.name}{A vector defining new cell group labels to rename, one-to-one with \code{old.cluster.name}}
 
 \item{new.order}{reset order of cell group labels}
 
-\item{new.cluster.metaname}{assign a name of the new labels, which will be the column name of new labels in `object@meta`}
+\item{new.cluster.metaname}{assign a name of the new labels, which will be the column name of new labels in \code{object@meta}}
 }
 \value{
 An updated CellChat object
 }
 \description{
-Update and re-order the cell group names after running `computeCommunProb`
+Renames cell groups without changing how cells are partitioned, so the
+communication results are carried over as they are. The mapping must be
+one-to-one: merging or splitting groups changes the partition, and group-level
+results would have to be recomputed from \code{net$cell$prob} rather than renamed.
 }
