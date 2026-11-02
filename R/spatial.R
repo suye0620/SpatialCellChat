@@ -1,182 +1,279 @@
-#' Plot the cell-cell communication distance distribution
+#' Plot cell-to-cell distances behind the inferred communication
 #'
-#' @param object CellChat object
-#' @param signaling.type the type of signaling
-#' @param enriched.only whether to only show the communication distance distribution of the identified significant communication
-#' @param density.alpha the transparence of the density plot
+#' The single entry point for spatial distance distributions: `enriched.only`
+#' selects the records, `split.by` decides how they are cut into panels.
 #'
-#' @return
+#' @details
+#' `enriched.only` selects the records, `split.by` decides how they are cut into
+#' panels. The full 2 x 2 is:
+#'
+#' \tabular{lllll}{
+#'   # \tab split.by \tab enriched.only \tab panel 1 \tab panel 2 \cr
+#'   1 \tab "annotation" \tab TRUE  \tab diffusible signaling \tab contact-dependent signaling \cr
+#'   2 \tab "distance"   \tab TRUE  \tab all inferred records \tab those inside contact.range \cr
+#'   3 \tab "annotation" \tab FALSE \tab all cell pairs \tab contact-range pairs \cr
+#'   4 \tab "distance"   \tab FALSE \tab all cell pairs \tab contact-range pairs \cr
+#' }
+#'
+#' - Rows 1 and 2 are **disjoint** and **nested** respectively: the annotation
+#'   split assigns every record to exactly one panel, the distance split makes
+#'   panel 2 a subset of panel 1.
+#' - Rows 3 and 4 are **the same output**. Without the communication array there
+#'   are no layers to classify, so `split.by` is ignored and a warning is raised
+#'   when it was supplied explicitly.
+#' - Rows 1 and 2 count **(cell pair x active ligand-receptor layer) records**: a
+#'   pair with three non-zero layers contributes three rows, so the density is
+#'   weighted by how many interactions each pair carries. Rows 3 and 4 count
+#'   **cell pairs**, one row each.
+#'
+#' `enriched.only = TRUE` keeps only the non-zero entries of `net$cell$prob`. The
+#' test is **probability > 0, not statistical significance**:
+#' `computeCommunProb()` with `n = 1` produces no p-values at all, and
+#' thresholding is a later step (`filterProbability()` or `filterCommunication()`).
+#'
+#' In the annotation split, layers are classified one by one from
+#' `LR$LRsig$annotation` (not by the positional `nLR1` threshold of the old
+#' implementation). Unrecognised annotations, and records whose layer cannot be
+#' matched to `LR$LRsig`, fall into an "Other signaling" panel instead of being
+#' dropped silently.
+#'
+#' Distances come from `images(object, ".distance")`. With `enriched.only = TRUE`
+#' that cache must already exist (it is written by `computeCommunProb()`). With
+#' `enriched.only = FALSE` a missing or stale cache is recomputed from
+#' `images(object, "coordinates")` and `images(object, "spatial.factors")`, using
+#' `interaction.range`, `contact.range` and `tol` when supplied — so the geometric
+#' view works on an object that has never been through the inference. The x axis
+#' always ends at the cached `interaction.range` plus 10.
+#'
+#' Self-pairs (distance 0) are dropped from every panel.
+#'
+#' @param object A SpatialCellChat object.
+#' @param split.by How to cut the panels: `"annotation"` (diffusible vs
+#'   contact-dependent) or `"distance"` (all records vs contact-range records).
+#'   Ignored when `enriched.only = FALSE`.
+#' @param enriched.only `TRUE` uses only the cell pairs with a non-zero
+#'   communication probability. `FALSE` (default) uses every cell pair, which
+#'   gives the geometric background and needs no inference.
+#' @param density.alpha Transparency of the density fill.
+#' @param interaction.range,contact.range,tol Distance settings used only when a
+#'   cache has to be computed for `enriched.only = FALSE`. `NULL` falls back to
+#'   250, 10 and the object's `spatial.factors$tol`.
+#'
+#' @return A `patchwork` object with one panel per group.
 #' @export
-#'
-communicationDistPlot2 <-  function(
+spatialC2CDistPlot <- function(
     object,
-    signaling.type = c("All","Secreted","Contact"),
-    enriched.only = TRUE,
-    density.alpha=0.5
+    split.by = c("annotation", "distance"),
+    enriched.only = FALSE,
+    density.alpha = 0.5,
+    interaction.range = NULL,
+    contact.range = NULL,
+    tol = NULL
 ) {
-  signaling.type <- match.arg(signaling.type)
-  if (object@options$parameter[["all.contact.dependent"]] == TRUE) {
-    if (signaling.type != "Contact") {
-      message("All the signaling are the contact-dependent, and please set `signaling.type` as `Contact`! \n")
-    }
+  split.by.given <- !missing(split.by)
+  split.by <- match.arg(split.by)
+  if (split.by.given && !isTRUE(enriched.only)) {
+    warning("`split.by` only applies when `enriched.only = TRUE`; it is ignored here",
+            call. = FALSE)
   }
-  interaction.range <- object@options$parameter$interaction.range
-  res <- object@images$.distance
+  panels <- .sc_c2c_panels(object, split.by = split.by, enriched.only = enriched.only,
+                            density.alpha = density.alpha,
+                            interaction.range = interaction.range,
+                            contact.range = contact.range, tol = tol)
+  patchwork::wrap_plots(panels, nrow = length(panels), ncol = 1)
+}
 
-  # long-range distance
-  d.spatial <- res$d.spatial
-  # short-range distance adjacent matrix for contact-dependent and juxtacrine signaling
-  adj.contact <- d.spatial*res$adj.contact
+#' Distance cache for the enriched view: it must have been written by the inference
+#' @noRd
+.sc_c2c_inference_cache <- function(object) {
+  cache <- images(object, ".distance")
+  if (is.null(cache) || is.null(cache$d.spatial))
+    stop("`images(object, \".distance\")` is empty; run `computeCommunProb()` first, ",
+         "or use `enriched.only = FALSE` for the geometric view", call. = FALSE)
+  cache
+}
 
-  if (enriched.only) {
-    prob.cell <- object@net$prob.cell
-    #LRsig.use.idx <- object@net$tmp$LRsig.use.idx
-    d.spatial.all <- my_future_lapply(
-      X = seq_len(length(prob.cell$i)),
-      FUN = function(x){
-        c(d.spatial[prob.cell$i[x], prob.cell$j[x]], adj.contact[prob.cell$i[x], prob.cell$j[x]])
-      },
-      simplify = F
-    )
-    d.spatial.all <- do.call(rbind, d.spatial.all)
-    d.spatial.all[d.spatial.all == 0] <- NA
-    df.Secreted <- data.frame(x = d.spatial.all[,1])
-    #df.Secreted <- df.Secreted[df.Secreted$x > 0, , drop = FALSE]
-    df.Contact <- data.frame(x = d.spatial.all[,2])
-    #df.Contact <- df.Contact[df.Contact$x > 0, , drop = FALSE]
+#' Distance cache for the geometric view: reuse when valid, compute otherwise
+#' @noRd
+.sc_c2c_geometry_cache <- function(object, interaction.range = NULL,
+                                   contact.range = NULL, tol = NULL) {
+  coordinates <- images(object, "coordinates")
+  if (is.null(coordinates))
+    stop("`images(object, \"coordinates\")` is empty; the geometric view needs coordinates",
+         call. = FALSE)
+  factors <- images(object, "spatial.factors")
+  ratio <- if (is.list(factors)) factors$ratio else NULL
+  if (is.null(tol) && is.list(factors)) tol <- factors$tol
+  if (is.null(interaction.range)) interaction.range <- 250
+  if (is.null(contact.range)) contact.range <- 10
+
+  cache <- images(object, ".distance")
+  if (.spatial_distance_cache_matches(cache, interaction.range = interaction.range,
+                                      contact.range = contact.range, ratio = ratio,
+                                      tol = tol)) {
+    return(cache)
+  }
+  computeCellDistance(coordinates = coordinates, ratio = ratio,
+                      interaction.range = interaction.range,
+                      contact.range = contact.range, tol = tol)
+}
+
+#' X axis limit: the interaction range the distances were built with
+#' @noRd
+.sc_c2c_xmax <- function(cache) {
+  params <- cache[[".parameters"]]
+  range <- if (is.list(params)) params$interaction.range else NULL
+  if (is.null(range) || !is.finite(range)) range <- 250
+  range + 10
+}
+
+#' Non-zero (cell, cell, layer) triplets of a SparseChatArray
+#' @noRd
+.sc_cell_prob_triplets <- function(prob) {
+  layers <- unclass(prob)
+  out <- lapply(seq_along(layers), function(k) {
+    s <- summary(layers[[k]])          # dgCMatrix -> data.frame(i, j, x)
+    data.frame(i = s[["i"]], j = s[["j"]], k = rep(k, nrow(s)))
+  })
+  do.call(rbind, out)
+}
+
+#' Cell-pair distances behind the plots
+#'
+#' With `enriched.only = TRUE` there is one row per (source, target, active
+#' layer); otherwise one row per stored cell pair.
+#' @noRd
+.sc_comm_distance_frame <- function(object, enriched.only, cache) {
+  d.spatial <- cache$d.spatial
+  adj.contact <- d.spatial * cache$adj.contact
+
+  if (!isTRUE(enriched.only)) {
+    # `adj.contact` only stores the contact pattern, so its @x is shorter than
+    # d.spatial's; the contact distance has to be looked up per stored pair.
+    # dgCMatrix is column-compressed, so the row/column triplets come from
+    # @i plus the expanded @p pointer.
+    i <- d.spatial@i + 1L
+    j <- rep.int(seq_len(ncol(d.spatial)), diff(d.spatial@p))
+    contact <- as.numeric(adj.contact[cbind(i, j)])
+    return(data.frame(distance = d.spatial@x, contact = contact))
+  }
+
+  prob <- object@net$cell$prob
+  if (is.null(prob))
+    stop("`net$cell$prob` is empty (spill mode keeps the layers on disk); ",
+         "the enriched view needs the in-memory probability array", call. = FALSE)
+  tri <- .sc_cell_prob_triplets(prob)
+  idx <- cbind(tri$i, tri$j)
+  tri$distance <- as.numeric(d.spatial[idx])
+  tri$contact <- as.numeric(adj.contact[idx])
+  tri$layer <- dimnames(prob)[[3]][tri$k]
+  lr <- object@LR$LRsig
+  tri$annotation <- if (is.data.frame(lr) &&
+                        all(c("interaction_name", "annotation") %in% colnames(lr))) {
+    lr$annotation[match(tri$layer, lr$interaction_name)]
   } else {
-    df.Secreted <- data.frame(
-      x = d.spatial@x
-    )
-    df.Contact <- data.frame(
-      x = adj.contact@x
-    )
+    NA_character_
   }
+  tri[, c("i", "j", "k", "layer", "annotation", "distance", "contact")]
+}
 
-  my.theme <- theme_bw() +theme(
-    # axis.ticks = element_blank(),
-    # axis.text = element_blank(),
-    # plot.background = element_rect(linetype = "transparent")
-  ) +
-    theme(plot.title = element_text(size = 10, face = "bold", hjust = 0.5)) +
-    theme(text = element_text(size = 10))
+#' Ligand-receptor annotation class used by the annotation split
+#' @noRd
+.sc_comm_annotation_class <- function(annotation) {
+  diffusible <- c("Secreted Signaling", "ECM-Receptor", "Non-protein Signaling")
+  out <- rep("other", length(annotation))
+  out[!is.na(annotation) & annotation %in% diffusible] <- "diffusible"
+  out[!is.na(annotation) & annotation == "Cell-Cell Contact"] <- "contact"
+  out
+}
 
-  p.Secreted <- ggplot(df.Secreted) +
-    geom_density( aes(x = x, y = ..density..), fill="#69b3a2",alpha= density.alpha, na.rm = TRUE)+
-    scale_y_continuous(expand = expansion(c(0, 0)), breaks = NULL, labels = NULL) +
-    scale_x_continuous(limits = c(0, (interaction.range+10)),breaks = seq(0, (interaction.range+10), by = 20))+
-    labs(title = "Secreting-dependent signaling", x="Distance between cell pairs (um)", y = "Density") +my.theme
-
-  p.Contact <- ggplot(df.Contact) +
-    geom_density( aes(x = x, y = ..density..),fill= "#404080",alpha=density.alpha, na.rm = TRUE)+
-    scale_y_continuous(expand = expansion(c(0, 0)), breaks = NULL, labels = NULL) +
-    scale_x_continuous(limits = c(0, (interaction.range+10)),breaks = seq(0, (interaction.range+10), by = 20))+
-    labs(title = "Contact-dependent signaling", x="Distance between cell pairs (um)", y = "Density")+my.theme
-
-  if(signaling.type == "All"){
-    p <- patchwork::wrap_plots(p.Secreted,p.Contact,nrow = 2,ncol = 1)
-    return(p)
-  } else if(signaling.type == "Secreted"){
-    return(p.Secreted)
-  } else if(signaling.type == "Contact"){
-    return(p.Contact)
+#' One distance-density panel
+#' @noRd
+.sc_comm_dist_panel <- function(distance, title, fill, xmax, density.alpha) {
+  distance <- distance[!is.na(distance) & distance > 0]
+  plot <- ggplot2::ggplot(data.frame(distance = distance)) +
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(c(0, 0)),
+                                breaks = NULL, labels = NULL) +
+    ggplot2::scale_x_continuous(limits = c(0, xmax), breaks = seq(0, xmax, by = 20)) +
+    ggplot2::labs(title = title, x = "Distance between cell pairs (um)", y = "Density") +
+    ggplot2::theme_bw() +
+    ggplot2::theme(plot.title = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5),
+                   text = ggplot2::element_text(size = 10))
+  if (length(distance) >= 2L && any(is.finite(distance))) {
+    plot + ggplot2::geom_density(
+      ggplot2::aes(x = distance, y = ggplot2::after_stat(density)),
+      fill = fill, alpha = density.alpha, na.rm = TRUE)
+  } else {
+    plot + ggplot2::geom_blank()
   }
 }
 
-#' Plot the spatial distance distribution of inferred cell-cell communication
-#'
-#' @param object CellChat object
-#' @param enriched.only whether to only show the communication distance distribution of the identified significant communication
-#' @param density.alpha the transparence of the density plot
-#'
-#' @return
-#' @export
-#'
-communicationDistPlot <-  function(
-    object,
-    enriched.only = TRUE,
-    density.alpha=0.5
-) {
-  interaction.range <- object@options$parameter$interaction.range
-  res <- object@images$.distance
+#' Build the panels shared by every distance plot
+#' @noRd
+.sc_comm_dist_panels <- function(object, split.by, enriched.only, density.alpha, cache) {
+  df <- .sc_comm_distance_frame(object, enriched.only, cache)
+  xmax <- .sc_c2c_xmax(cache)
+  panels <- list()
+  contact.rows <- df$contact > 0
 
-  # long-range distance
-  d.spatial <- res$d.spatial
-  # short-range distance adjacent matrix for contact-dependent and juxtacrine signaling
-  adj.contact <- d.spatial*res$adj.contact
+  if (!isTRUE(enriched.only)) {
+    # Rows 3 and 4 of the contract: geometry only, split.by is irrelevant.
+    panels$all <- .sc_comm_dist_panel(df$distance, "All cell pairs",
+                                      "#69b3a2", xmax, density.alpha)
+    panels$contact.range <- .sc_comm_dist_panel(df$distance[contact.rows],
+                                                "Contact-range pairs",
+                                                "#404080", xmax, density.alpha)
+    return(panels)
+  }
 
-  df.spatial <- vector("list", 2)
-  if (enriched.only) {
-    prob.cell <- object@net$prob.cell
-    #LRsig.use.idx <- object@net$tmp$LRsig.use.idx
-    d.spatial.all <- my_future_lapply(
-      X = seq_len(length(prob.cell$i)),
-      FUN = function(x){
-        d.spatial[prob.cell$i[x], prob.cell$j[x]]
-      },
-      simplify = T
-    )
-
-    # d.spatial.all <- sapply(
-    #   X = 1:length(prob.cell$i),
-    #   FUN = function(x){
-    #     d.spatial[prob.cell$i[x], prob.cell$j[x]]
-    #   }
-    # )
-    d.spatial.all[d.spatial.all == 0] <- NA
-
-    if (object@options$parameter[["all.diffusible"]] == TRUE) {
-      cat(cli.symbol(),"All the signaling are diffusible! \n")
-      df.spatial[[1]] <- data.frame(x = d.spatial.all)
-    } else if (object@options$parameter[["all.contact.dependent"]] == TRUE) {
-      cat(cli.symbol(),"All the signaling are contact-dependent! \n")
-      df.spatial[[2]] <- data.frame(x = d.spatial.all)
-    } else {
-      cat(cli.symbol(),"The enriched signaling include both diffusible signaling and contact-dependent signaling!  \n")
-      pairLRsig <- object@LR$LRsig
-      nLR1 <- max(which(pairLRsig$annotation %in% c("Secreted Signaling", "ECM-Receptor", "Non-protein Signaling")))
-      df.spatial[[1]] <- data.frame(x = d.spatial.all[prob.cell$k %in% seq_len(nLR1)])
-      df.spatial[[2]] <- data.frame(x = d.spatial.all[prob.cell$k %in% seq(nLR1+1, nrow(pairLRsig))])
+  if (identical(split.by, "distance")) {
+    panels$all <- .sc_comm_dist_panel(df$distance, "All inferred pairs",
+                                      "#69b3a2", xmax, density.alpha)
+    if (any(contact.rows)) {
+      panels$contact.range <- .sc_comm_dist_panel(df$distance[contact.rows],
+                                                  "Contact-range pairs",
+                                                  "#404080", xmax, density.alpha)
     }
-
-  } else {
-    df.spatial[[1]] <- data.frame(
-      x = d.spatial@x
-    )
-    df.spatial[[2]] <- data.frame(
-      x = adj.contact@x
-    )
+    return(panels)
   }
 
-  my.theme <- theme_bw() +theme(
-    # axis.ticks = element_blank(),
-    # axis.text = element_blank(),
-    # plot.background = element_rect(linetype = "transparent")
-  ) +
-    theme(plot.title = element_text(size = 10, face = "bold", hjust = 0.5)) +
-    theme(text = element_text(size = 10))
-
-  gg <- list(NA, NA)
-  if (!is.null(df.spatial[[1]])) {
-    gg[[1]] <- ggplot(df.spatial[[1]]) +
-      geom_density( aes(x = x, y = ..density..), fill="#69b3a2",alpha= density.alpha, na.rm = TRUE)+
-      scale_y_continuous(expand = expansion(c(0, 0)), breaks = NULL, labels = NULL) +
-      scale_x_continuous(limits = c(0, (interaction.range+10)),breaks = seq(0, (interaction.range+10), by = 20))+
-      labs(title = "Diffusible signaling", x="Distance between cell pairs (um)", y = "Density") +my.theme
+  cls <- .sc_comm_annotation_class(df$annotation)
+  if (any(cls == "diffusible")) {
+    panels$diffusible <- .sc_comm_dist_panel(df$distance[cls == "diffusible"],
+                                             "Diffusible signaling",
+                                             "#69b3a2", xmax, density.alpha)
   }
-  if (!is.null(df.spatial[[2]]) ) {
-    gg[[2]] <- ggplot(df.spatial[[2]]) +
-      geom_density( aes(x = x, y = ..density..),fill= "#404080",alpha=density.alpha, na.rm = TRUE)+
-      scale_y_continuous(expand = expansion(c(0, 0)), breaks = NULL, labels = NULL) +
-      scale_x_continuous(limits = c(0, (interaction.range+10)),breaks = seq(0, (interaction.range+10), by = 20))+
-      labs(title = "Contact-dependent signaling", x="Distance between cell pairs (um)", y = "Density")+my.theme
+  if (any(cls == "contact")) {
+    panels$contact <- .sc_comm_dist_panel(df$distance[cls == "contact"],
+                                          "Contact-dependent signaling",
+                                          "#404080", xmax, density.alpha)
   }
-  gg <- gg[!is.na(gg)]
-  p <- patchwork::wrap_plots(gg, nrow = length(gg),ncol = 1)
-
-  return(p)
+  known <- any(cls %in% c("diffusible", "contact"))
+  if (known && any(cls == "other")) {
+    panels$other <- .sc_comm_dist_panel(df$distance[cls == "other"],
+                                        "Other signaling",
+                                        "#8c8c8c", xmax, density.alpha)
+  }
+  if (!length(panels)) {
+    panels$all <- .sc_comm_dist_panel(df$distance, "All inferred pairs",
+                                      "#69b3a2", xmax, density.alpha)
+  }
+  panels
 }
 
+#' Panels for a given mode (shared by the public function and the aliases)
+#' @noRd
+.sc_c2c_panels <- function(object, split.by, enriched.only, density.alpha,
+                           interaction.range = NULL, contact.range = NULL,
+                           tol = NULL) {
+  object <- .sc_assert_spatial_cell_chat(object)
+  cache <- if (isTRUE(enriched.only)) {
+    .sc_c2c_inference_cache(object)
+  } else {
+    .sc_c2c_geometry_cache(object, interaction.range, contact.range, tol)
+  }
+  .sc_comm_dist_panels(object, split.by, enriched.only, density.alpha, cache)
+}
 
 #' @title Internal grid-size and membership helpers
 #'

@@ -48,27 +48,26 @@ chat <- createSpatialCellChat(
 plain_plot <- spatialDimPlot(chat, image = FALSE)
 check("spatialDimPlot works without histology image", inherits(plain_plot, "ggplot"))
 
-distance_plot <- spatialCCCDistPlot(
-  chat, signaling.type = "Secreted",
+distance_plot <- spatialC2CDistPlot(
+  chat, enriched.only = FALSE,
   interaction.range = 100, contact.range = 30, tol = 0
 )
-check("spatialCCCDistPlot computes from canonical images", inherits(distance_plot, "ggplot"))
+check("spatialC2CDistPlot computes from canonical images", inherits(distance_plot, "patchwork"))
 chat@images$.distance <- computeCellDistance(
   chat@images$coordinates, interaction.range = 100,
   contact.range = 30, ratio = 1, tol = 0
 )
-cached_distance_plot <- spatialCCCDistPlot(
-  chat, signaling.type = "Contact",
+cached_distance_plot <- spatialC2CDistPlot(
+  chat, enriched.only = FALSE,
   interaction.range = 100, contact.range = 30, tol = 0
 )
-check("spatialCCCDistPlot consumes images$.distance", inherits(cached_distance_plot, "ggplot"))
-narrow_distance_plot <- spatialCCCDistPlot(
-  chat, signaling.type = "Secreted",
+check("spatialC2CDistPlot consumes images$.distance", inherits(cached_distance_plot, "patchwork"))
+narrow_panels <- .sc_c2c_panels(
+  chat, split.by = "annotation", enriched.only = FALSE, density.alpha = 0.5,
   interaction.range = 5, contact.range = 3, tol = 0
 )
-check("spatialCCCDistPlot recomputes for changed thresholds", inherits(
-  narrow_distance_plot, "ggplot"
-) && all(narrow_distance_plot$data$x <= 5))
+check("spatialC2CDistPlot recomputes for changed thresholds",
+      all(narrow_panels$all$data$distance <= 5))
 
 image_array <- array(0.8, dim = c(100L, 100L, 3L))
 image_coordinates <- data.frame(
