@@ -1661,51 +1661,61 @@ identifyOverExpressedGenes <- function(
 #'
 #' This function identifies the over-expressed ligands and (complex) receptors based on the identified signaling genes from 'identifyOverExpressedGenes'.
 #'
+#' Marker tables live in `misc$.var.features`: the input is
+#' `misc$.var.features[[paste0(features.name, ".info")]]`, and the result is
+#' written to `misc$.var.features[[paste0(features.name, ".LR")]]`. Genes that
+#' are subunits of a complex are reported under the complex name.
+#'
 #' @param object CellChat object
-#' @param features.name a char name used for storing the over-expressed ligands and receptors in `object@var.features[[paste0(features.name, ".LR")]]`
-#' @param features a vector of features to use. default use all over-expressed genes in `object@var.features[[features.name]]`
+#' @param features.name a char name used for storing the over-expressed ligands and receptors in `misc$.var.features[[paste0(features.name, ".LR")]]`
+#' @param features a vector of features to use. default use all over-expressed genes in `misc$.var.features[[paste0(features.name, ".info")]]`
 #' @param return.object whether returning a CellChat object. If FALSE, it will return a data frame containing over-expressed ligands and (complex) receptors associated with each cell group
 #' @importFrom future nbrOfWorkers
 #' @importFrom future.apply future_sapply
 #' @importFrom pbapply pbsapply
 #' @importFrom dplyr select
 #'
-#' @return A CellChat object or a data frame. If returning a CellChat object, a new element named paste0(features.name, ".LR") will be added into the list `object@var.features`
+#' @return A CellChat object or a data frame. If returning a CellChat object, a new element named paste0(features.name, ".LR") will be added into `misc$.var.features`
 #' @export
-#'
 identifyOverExpressedLigandReceptor <- function(object, features.name = "features", features = NULL, return.object = TRUE) {
+  object <- .sc_assert_spatial_cell_chat(object)
 
   features.name.LR <- paste0(features.name, ".LR")
   features.name <- paste0(features.name, ".info")
-  DB <- object@DB
-  interaction_input <- DB$interaction
-  complex_input <- DB$complex
-  pairLR <- select(interaction_input, ligand, receptor)
-  LR.use <- unique(c(pairLR$ligand, pairLR$receptor))
-  if (is.null(features)) {
-    if (is.list(object@var.features)) {
-      markers.all <- object@var.features[[features.name]] # use the updated CellChat object 12/2020
-    } else {
-      stop("Please update your CellChat object via `updateCellChat()`")
-    }
 
-  } else {
-    features.use <- features
-    rm(features)
-    markers.all <- subset(markers.all, subset = features %in% features.use)
+  interaction_input <- object@DB$interaction
+  if (!is.data.frame(interaction_input) ||
+      !all(c("ligand", "receptor") %in% colnames(interaction_input)))
+    stop("`object@DB$interaction` must contain ligand and receptor columns",
+         call. = FALSE)
+  complex_input <- object@DB$complex
+  if (is.null(complex_input)) complex_input <- data.frame()
+
+  markers.all <- object@misc$.var.features[[features.name]]
+  if (is.null(markers.all)) {
+    stop("`misc$.var.features[[\"", features.name, "\"]]` is empty; run ",
+         "`identifyOverExpressedGenes()` first", call. = FALSE)
+  }
+  if (!is.data.frame(markers.all) || !"features" %in% colnames(markers.all))
+    stop("`misc$.var.features[[\"", features.name,
+         "\"]]` must be a data frame with a `features` column", call. = FALSE)
+  if (!is.null(features)) {
+    markers.all <- markers.all[markers.all$features %in% features, , drop = FALSE]
   }
 
+  pairLR <- dplyr::select(interaction_input, ligand, receptor)
+  LR.use <- unique(c(pairLR$ligand, pairLR$receptor))
 
-  complexSubunits <- complex_input[, grepl("subunit" , colnames(complex_input))]
+  complexSubunits <- complex_input[, grepl("subunit", colnames(complex_input)), drop = FALSE]
 
   markers.all.new <- data.frame()
-  for (i in 1:nrow(markers.all)) {
+  for (i in seq_len(nrow(markers.all))) {
     if (markers.all$features[i] %in% LR.use) {
       markers.all.new <- rbind(markers.all.new, markers.all[i, , drop = FALSE])
     } else {
       index.sig <- unlist(
         x = my_future_lapply(
-          X = 1:nrow(complexSubunits),
+          X = seq_len(nrow(complexSubunits)),
           FUN = function(x) {
             complexsubunitsV <- unlist(complexSubunits[x,], use.names = F)
             complexsubunitsV <- complexsubunitsV[complexsubunitsV != ""]
@@ -1715,9 +1725,9 @@ identifyOverExpressedLigandReceptor <- function(object, features.name = "feature
           }
         )
       )
-      complexSubunits.sig <- rownames(complexSubunits[index.sig,])
+      complexSubunits.sig <- rownames(complexSubunits[index.sig, , drop = FALSE])
       markers.all.complex <- data.frame()
-      for (j in 1:length(complexSubunits.sig)) {
+      for (j in seq_along(complexSubunits.sig)) {
         markers.all.complex <- rbind(markers.all.complex, markers.all[i, , drop = FALSE])
       }
       markers.all.complex$features <- complexSubunits.sig
@@ -1725,7 +1735,8 @@ identifyOverExpressedLigandReceptor <- function(object, features.name = "feature
     }
   }
 
-  object@var.features[[features.name.LR]] <- markers.all.new
+  object@misc$.var.features[[features.name.LR]] <- markers.all.new
+  methods::validObject(object)
 
   if (return.object) {
     return(object)

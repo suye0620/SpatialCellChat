@@ -2249,9 +2249,16 @@ aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signali
 
 #' Compute averaged expression values for each cell group
 #'
+#' Averages expression per cell group over one assay layer. Layers follow the
+#' 11-slot schema: `"signaling"` is the `subsetData()` gene subset that the
+#' default inference consumes, `"smooth"` is the `projectData()` PPI projection
+#' used when `computeCommunProb(raw.use = FALSE)`, and `"norm"` is the full
+#' normalized matrix.
+#'
 #' @param object CellChat object
 #' @param features a char vector giving the used features. default use all features
-#' @param group.by cell group information; default is `object@idents` when input is a single object and `object@idents` when input is a merged object; otherwise it should be one of the column names of the meta slot
+#' @param group.by cell group information; default is `idents(object)`; otherwise
+#' it should be one of the column names of `meta(object)`
 #' @param type methods for computing the average gene expression per cell group.
 #'
 #' By default = "triMean", defined as a weighted average of the distribution's median and its two quartiles (https://en.wikipedia.org/wiki/Trimean);
@@ -2259,15 +2266,14 @@ aggregateNet <- function(object, sources.use = NULL, targets.use = NULL, signali
 #' When setting `type = "truncatedMean"`, a value should be assigned to 'trim'. See the function \code{\link[base]{mean}}.
 #'
 #' @param trim the fraction (0 to 0.25) of observations to be trimmed from each end of x before the mean is computed.
-#' @param slot.name the data in the slot.name to use
-#' @param data.use a customed data matrix. Default: data.use = NULL and the expression matrix in the 'slot.name' is used
+#' @param slot.name which assay layer to average: `"signaling"`, `"smooth"` or `"norm"`.
+#' @param data.use a customed data matrix. Default: data.use = NULL and the matrix of `slot.name` is used
 #'
 #' @return Returns a matrix with genes as rows, cell groups as columns.
-
 #' @export
-#'
 computeAveExpr <- function(object, features = NULL, group.by = NULL, type = c("triMean", "truncatedMean", "median"), trim = NULL,
-                           slot.name = c("data.signaling", "data"), data.use = NULL) {
+                           slot.name = c("signaling", "smooth", "norm"), data.use = NULL) {
+  object <- .sc_assert_spatial_cell_chat(object)
   type <- match.arg(type)
   slot.name <- match.arg(slot.name)
   FunMean <- switch(type,
@@ -2276,7 +2282,14 @@ computeAveExpr <- function(object, features = NULL, group.by = NULL, type = c("t
                     median = function(x) median(x, na.rm = TRUE))
 
   if (is.null(data.use)) {
-    data.use <- slot(object, slot.name)
+    data.use <- assay(object, slot.name)
+    if (is.null(data.use) || length(dim(data.use)) != 2L || any(dim(data.use) == 0L)) {
+      hint <- switch(slot.name,
+                     signaling = "; run `subsetData()` first",
+                     smooth = "; run `projectData()` first",
+                     "")
+      stop("assay$", slot.name, " is empty", hint, call. = FALSE)
+    }
   }
   if (is.null(features)) {
     features.use <- row.names(data.use)
@@ -2286,15 +2299,9 @@ computeAveExpr <- function(object, features = NULL, group.by = NULL, type = c("t
   data.use <- data.use[features.use, , drop = FALSE]
   data.use <- as.matrix(data.use)
 
-  if (is.null(group.by)) {
-    labels <- object@idents
-    if (!is.factor(labels)) {
-      message("Use the joint cell labels from the merged CellChat object")
-      labels <- object@idents
-    }
-  } else {
-    labels <- object@meta[[group.by]]
-  }
+  labels <- if (is.null(group.by)) idents(object) else meta(object)[[group.by]]
+  if (is.null(labels))
+    stop("`group.by` must name one column of `meta(object)`", call. = FALSE)
   if (!is.factor(labels)) {
     labels <- factor(labels)
   }

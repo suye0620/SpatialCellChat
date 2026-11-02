@@ -10,7 +10,7 @@ computeAveExpr(
   group.by = NULL,
   type = c("triMean", "truncatedMean", "median"),
   trim = NULL,
-  slot.name = c("data.signaling", "data"),
+  slot.name = c("signaling", "smooth", "norm"),
   data.use = NULL
 )
 }
@@ -19,23 +19,28 @@ computeAveExpr(
 
 \item{features}{a char vector giving the used features. default use all features}
 
-\item{group.by}{cell group information; default is `object@idents` when input is a single object and `object@idents$joint` when input is a merged object; otherwise it should be one of the column names of the meta slot}
+\item{group.by}{cell group information; default is \code{idents(object)}; otherwise
+it should be one of the column names of \code{meta(object)}}
 
 \item{type}{methods for computing the average gene expression per cell group.
 
 By default = "triMean", defined as a weighted average of the distribution's median and its two quartiles (https://en.wikipedia.org/wiki/Trimean);
 
-When setting `type = "truncatedMean"`, a value should be assigned to 'trim'. See the function \code{\link[base]{mean}}.}
+When setting \code{type = "truncatedMean"}, a value should be assigned to 'trim'. See the function \code{\link[base]{mean}}.}
 
 \item{trim}{the fraction (0 to 0.25) of observations to be trimmed from each end of x before the mean is computed.}
 
-\item{slot.name}{the data in the slot.name to use}
+\item{slot.name}{which assay layer to average: \code{"signaling"}, \code{"smooth"} or \code{"norm"}.}
 
-\item{data.use}{a customed data matrix. Default: data.use = NULL and the expression matrix in the 'slot.name' is used}
+\item{data.use}{a customed data matrix. Default: data.use = NULL and the matrix of \code{slot.name} is used}
 }
 \value{
 Returns a matrix with genes as rows, cell groups as columns.
 }
 \description{
-Compute averaged expression values for each cell group
+Averages expression per cell group over one assay layer. Layers follow the
+11-slot schema: \code{"signaling"} is the \code{subsetData()} gene subset that the
+default inference consumes, \code{"smooth"} is the \code{projectData()} PPI projection
+used when \code{computeCommunProb(raw.use = FALSE)}, and \code{"norm"} is the full
+normalized matrix.
 }
