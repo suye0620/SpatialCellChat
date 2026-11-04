@@ -36,7 +36,7 @@ Superseded by: none
 | 数据 | 来源 | 现状 |
 |---|---|---|
 | 模拟 | 现测试脚本内的合成 fixture（小网格 + 推理完成对象） | **缺固化 builder**，需抽成 `tests_dev/test_data/make_simulated_chat.R` |
-| Slide-seq | `MBM05Chat_pre_inference.rds`（29536 细胞） | 已验证：取质心 900 细胞窗口 + 120 LR + `scale.distance=9`，1.2s 出全链结果 |
+| Slide-seq | `MBM05Chat_pre_inference.rds`（**全量 29,536 细胞**，用户 2026-11-04 指示不取子集） | 首选 benchmark 产物 `new_postfilter_object.rds`（computeCommunProb→filterProbability 已就绪）→ 补 avg/pathway/aggregate/centrality；缓存 `slideseq_full_chat.rds`（1.5 GB，8 组、1563 层）。需 `future.globals.maxSize=20GB`。P0 基线：C2C enriched 1035s、geometry 28s、DimPlot 21s，3/3 PASS |
 | Visium | `visium_human_psoriasis_PP1_...RData` | 审计已验证：905 spot、1 raster、600×595×3 图像，`validateSpatialCellChat()` TRUE |
 
 ### 2.2 figure 输出底座

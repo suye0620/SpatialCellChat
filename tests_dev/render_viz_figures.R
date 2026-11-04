@@ -52,7 +52,7 @@ dir.create(FIG.root, showWarnings = FALSE, recursive = TRUE)
 load_chat <- function(dataset) {
   switch(dataset,
          simulated = make_simulated_chat(),
-         slideseq = make_slideseq_chat(),
+         slideseq = make_slideseq_chat(),   # full 29,536-cell puck
          visium = make_visium_chat(),
          stop("unknown dataset: ", dataset, call. = FALSE))
 }
