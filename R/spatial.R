@@ -127,23 +127,6 @@ spatialC2CDistPlot <- function(
   range + 10
 }
 
-#' Non-zero (cell, cell, layer) triplets of a SparseChatArray
-#'
-#' Reads the dgCMatrix internals directly: summary() was measured at the same
-#' wall time but allocates one data.frame per layer, and 0-row layers make
-#' data.frame() arguments disagree. @i is 0-based row indices; the column of
-#' each entry is recovered from the @p pointer with rep.int().
-#' @noRd
-.sc_cell_prob_triplets <- function(prob) {
-  layers <- unclass(prob)
-  out <- lapply(seq_along(layers), function(k) {
-    m <- layers[[k]]
-    data.frame(i = m@i + 1L, j = rep.int(seq_len(ncol(m)), diff(m@p)),
-               k = rep(k, length(m@x)))
-  })
-  do.call(rbind, out)
-}
-
 #' Cell-pair distances behind the plots
 #'
 #' With `enriched.only = TRUE` there is one row per (source, target, active
@@ -168,34 +151,59 @@ spatialC2CDistPlot <- function(
   if (is.null(prob))
     stop("`net$cell$prob` is empty (spill mode keeps the layers on disk); ",
          "the enriched view needs the in-memory probability array", call. = FALSE)
-  tri <- .sc_cell_prob_triplets(prob)
-  nC <- nrow(d.spatial)
 
-  # Flat lookups instead of [cbind(i, j)]: on the full MBM05 puck the triplet
-  # vector holds ~2.9e8 entries and the cbind matrix-subscript path was measured
-  # at 13 s per lookup (26 s for distance + contact); the flat table is 3.8 s
-  # per lookup. The table is nC^2 numeric (~6.5 GB at 29,536 cells), which is
-  # why it is built lazily and only in the enriched branch.
-  lut.dist <- .sc_flat_distance_table(d.spatial)
-  lin <- (tri$i - 1L) * nC + tri$j
-  tri$distance <- lut.dist[lin]
-
-  # the contact pattern is a small subset of the distance pattern: look up the
-  # contact pairs directly instead of materialising an adj.contact-sized table
-  s.adj <- summary(adj.contact)
-  lut.contact <- rep(0, nC * nC)
-  lut.contact[(s.adj$i - 1L) * nC + s.adj$j] <- s.adj$x
-  tri$contact <- lut.contact[lin]
-
-  tri$layer <- dimnames(prob)[[3]][tri$k]
+  layers <- unclass(prob)
+  layer.names <- dimnames(prob)[[3]]
   lr <- object@LR$LRsig
-  tri$annotation <- if (is.data.frame(lr) &&
-                        all(c("interaction_name", "annotation") %in% colnames(lr))) {
-    lr$annotation[match(tri$layer, lr$interaction_name)]
+  ann.per.layer <- if (is.data.frame(lr) &&
+                       all(c("interaction_name", "annotation") %in% colnames(lr))) {
+    lr$annotation[match(layer.names, lr$interaction_name)]
   } else {
-    NA_character_
+    rep(NA_character_, length(layers))
   }
-  tri[, c("i", "j", "k", "layer", "annotation", "distance", "contact")]
+  # annotation is a property of the layer, not of the record: resolve the class
+  # once per layer instead of carrying it on every one of ~2.9e8 rows. The
+  # (i, j) pair is only the lookup key for the distance; it is never stored.
+  class.per.layer <- .sc_comm_annotation_class(ann.per.layer)
+
+  nC <- nrow(d.spatial)
+  # flat lookups instead of [cbind(i, j)]: 3.8 s vs 13 s per 2.9e8-row lookup
+  # (measured on the full MBM05 puck). The contact table is logical (870 MB),
+  # not numeric (6.5 GB): the pattern is 0/1.
+  lut.dist <- .sc_flat_distance_table(d.spatial)
+  lut.contact <- logical(nC * nC)
+  s.adj <- summary(adj.contact)
+  lut.contact[(s.adj$i - 1L) * nC + s.adj$j] <- TRUE
+
+  # single-pass fill: per layer, expand the non-zero positions, look up
+  # distance/contact, tally into the class vectors, and discard the positions
+  total <- sum(vapply(layers, function(m) length(m@x), integer(1)))
+  distance <- numeric(total)
+  contact <- logical(total)
+  class.col <- character(total)
+  fill <- 0L
+
+  for (k in seq_along(layers)) {
+    m <- layers[[k]]
+    if (length(m@x) == 0L) next
+    i <- m@i + 1L
+    j <- rep.int(seq_len(ncol(m)), diff(m@p))
+    lin <- (i - 1L) * nC + j
+    dist <- lut.dist[lin]
+    keep <- !is.na(dist) & dist > 0
+    n <- sum(keep)
+    if (n == 0L) next
+    idx <- fill + seq_len(n)
+    distance[idx] <- dist[keep]
+    contact[idx] <- lut.contact[lin[keep]]
+    class.col[idx] <- class.per.layer[[k]]
+    fill <- fill + n
+  }
+
+  data.frame(distance = distance[seq_len(fill)],
+             contact = contact[seq_len(fill)],
+             class = class.col[seq_len(fill)],
+             stringsAsFactors = FALSE)
 }
 
 #' Flat (i + (j - 1) * nC) lookup table for a dgCMatrix
@@ -249,13 +257,12 @@ spatialC2CDistPlot <- function(
   df <- .sc_comm_distance_frame(object, enriched.only, cache)
   xmax <- .sc_c2c_xmax(cache)
   panels <- list()
-  contact.rows <- df$contact > 0
 
   if (!isTRUE(enriched.only)) {
     # Rows 3 and 4 of the contract: geometry only, split.by is irrelevant.
     panels$all <- .sc_comm_dist_panel(df$distance, "All cell pairs",
                                       "#69b3a2", xmax, density.alpha)
-    panels$contact.range <- .sc_comm_dist_panel(df$distance[contact.rows],
+    panels$contact.range <- .sc_comm_dist_panel(df$distance[df$contact],
                                                 "Contact-range pairs",
                                                 "#404080", xmax, density.alpha)
     return(panels)
@@ -264,28 +271,29 @@ spatialC2CDistPlot <- function(
   if (identical(split.by, "distance")) {
     panels$all <- .sc_comm_dist_panel(df$distance, "All inferred pairs",
                                       "#69b3a2", xmax, density.alpha)
-    if (any(contact.rows)) {
-      panels$contact.range <- .sc_comm_dist_panel(df$distance[contact.rows],
+    if (any(df$contact)) {
+      panels$contact.range <- .sc_comm_dist_panel(df$distance[df$contact],
                                                   "Contact-range pairs",
                                                   "#404080", xmax, density.alpha)
     }
     return(panels)
   }
 
-  cls <- .sc_comm_annotation_class(df$annotation)
-  if (any(cls == "diffusible")) {
-    panels$diffusible <- .sc_comm_dist_panel(df$distance[cls == "diffusible"],
+  # class was resolved once per layer during the build; here it only splits
+  has.diffusible <- any(df$class == "diffusible")
+  has.contact <- any(df$class == "contact")
+  if (has.diffusible) {
+    panels$diffusible <- .sc_comm_dist_panel(df$distance[df$class == "diffusible"],
                                              "Diffusible signaling",
                                              "#69b3a2", xmax, density.alpha)
   }
-  if (any(cls == "contact")) {
-    panels$contact <- .sc_comm_dist_panel(df$distance[cls == "contact"],
+  if (has.contact) {
+    panels$contact <- .sc_comm_dist_panel(df$distance[df$class == "contact"],
                                           "Contact-dependent signaling",
                                           "#404080", xmax, density.alpha)
   }
-  known <- any(cls %in% c("diffusible", "contact"))
-  if (known && any(cls == "other")) {
-    panels$other <- .sc_comm_dist_panel(df$distance[cls == "other"],
+  if ((has.diffusible || has.contact) && any(df$class == "other")) {
+    panels$other <- .sc_comm_dist_panel(df$distance[df$class == "other"],
                                         "Other signaling",
                                         "#8c8c8c", xmax, density.alpha)
   }

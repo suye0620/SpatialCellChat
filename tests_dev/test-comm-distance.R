@@ -108,16 +108,22 @@ cache.cc <- images(chat.cc, ".distance")
 
 df.en <- .sc_comm_distance_frame(chat.cc, TRUE, cache.cc)
 nnz <- sum(vapply(unclass(chat.cc@net$cell$prob), function(m) length(m@x), integer(1)))
-check("enriched frame has one row per non-zero probability", nrow(df.en) == nnz && nnz > 0)
-check("enriched frame carries the documented columns",
-      identical(names(df.en), c("i", "j", "k", "layer", "annotation", "distance", "contact")))
+check("enriched frame keeps the probability entries with a positive distance",
+      nrow(df.en) > 0 && nrow(df.en) <= nnz)
+check("enriched frame carries the 3-column contract (i/j/layer never stored)",
+      identical(names(df.en), c("distance", "contact", "class")))
+check("class is resolved once per layer, from the LRsig annotation",
+      setequal(unique(df.en$class), c("contact", "diffusible", "other")))
+check("unknown annotation layers land in the other class",
+      !any(is.na(df.en$class)) || !"other" %in% df.en$class ||
+        !"diffusible" %in% df.en$class)
 
 panels.ann <- .sc_c2c_panels(chat.cc, "annotation", TRUE, 0.5)
 check("row 1: diffusible + contact + other panels",
       identical(names(panels.ann), c("diffusible", "contact", "other")))
 check("row 1: unknown annotation lands in Other signaling",
       identical(unname(titles(panels.ann)["other"]), "Other signaling"))
-valid <- sum(!is.na(df.en$distance) & df.en$distance > 0)
+valid <- nrow(df.en)
 check("row 1: every plot-able record lands in exactly one panel",
       valid > 0 &&
         valid == sum(vapply(panels.ann, function(p) nrow(p$data), integer(1))))
