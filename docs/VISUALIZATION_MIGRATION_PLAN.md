@@ -1,0 +1,104 @@
+# SpatialCellChat 可视化层迁移总表（P0 产出）
+
+> 2026-11-04 · 由三个只读侦察 agent 的结论合并（visualization.R 全量 / widget+spatial.R / net 参数流与绘图包用法）。
+> 输入：docs/VISUALIZATION_AUDIT.md、docs/VISUALIZATION_SEMANTICS.md（V-001…V-018）。
+> 判定口径：**OK** = 11-slot 全新槽可跑；**partial** = 主路径新、分支旧；**broken** = 读已删字段；**helper** = 不直接碰对象。
+
+## 1. 规模
+
+| 文件 | 顶层函数 | broken | partial | OK/keep | helper |
+|---|---|---|---|---|---|
+| `visualization.R` | 61 | **18** | **3** | 11 | 29 |
+| `visualization_widget.R` | 9 | 0 | 0 | 9 | — |
+| `spatial.R` | 18 | 0 | 0 | 6 入口 | 12（共享基础设施 5 个，见 §5） |
+
+`analysis.R` 另有 **10 个** broken（上游，见 §3），其中若干被可视化直接依赖。
+
+## 2. broken / partial 清单（visualization.R，21 个）
+
+| 函数 | 行 | 状态 | 旧依赖 | 关联 | 批次 |
+|---|---|---|---|---|---|
+| `spatialFeaturePlot` | 350 | broken | `slot(data.signaling/data)`、`net$prob/pval/prob.cell`、`apply(prob>0,3,sum)` | V-001/003/004 | P1 |
+| `netVisual` | 964 | broken | `net$prob/pval`（4 布局总入口）；spatial 分支引用未定义 `labels` | V-001/006 | P2 |
+| `netVisual_aggregate` | 1353 | broken | `net$prob/pval`；`vertex.weight=="incoming"` 隐式接口 | V-001/002 | P2 |
+| `netVisual_individual` | 1517 | broken | 同上；spatial 分支 `labels=labels` 未定义 | V-001/006 | P2 |
+| `netVisual_diffInteraction` | 2485 | broken | `@net[[comparison]][[measure]]` 旧 merged 布局 | V-001/007 | P2 |
+| `netVisual_heatmap` | 2647 | broken | `@options$mode`、`net[[i]][[measure]]`、remove.isolate 重复删两次、cluster 参数错位 | V-001/007/008 | P2 |
+| `netVisual_barplot` | 2844 | broken | 旧 merged 检测与旧容器 | V-001 | P2 |
+| `netVisual_bubble` | 2992 | partial | 主路径走 `subsetCommunication`（已适配）；L3062 `prob.original` 裸变量 bug | V-001/009 | P2 |
+| `netVisual_chord_cell` | 3360 | broken | `net$prob/pval`；netP 分支实际实时聚合 | V-001/006 | P2 |
+| `netVisual_chord_gene` | 3651 | broken | `slot(object,"net")$prob`（slot.name 失效） | V-001 | P2 |
+| `netVisual_embedding` | 4250 | broken | similarity 新、点大小读旧 `netP$prob` | V-001/017 | P3 |
+| `netVisual_embeddingZoomIn` | 4344 | broken | 同上 | V-001/017 | P3 |
+| `netVisual_embeddingPairwise` | 4431 | broken | 旧 merged 嵌套 | V-001/017 | P3 |
+| `netVisual_embeddingPairwiseZoomIn` | 4546 | broken | 同上 | V-001/017 | P3 |
+| `netVisual_CommunField` | 5390 | broken | 旧 `slot$field` 路径（V-013） | V-013 | P3 |
+| `netVisual_CommunFieldZoomIn` | 6373 | broken | 随基础图失效，修 CommunField 后自动恢复 | V-013 | P3 |
+| `plotGeneExpression` | 6545 | broken | `@data.signaling` | V-003/005 | P3 |
+| `plotly_spatialLRpairPlot` | 7202 | broken | `@data` + `apply(prob>0,3,sum)` 稠密膨胀 | V-001/004 | P4 |
+| `plotly_spatialLRpairPlot_shiny` | 7831 | broken | 启动即崩 + observer 累积 | V-001 | P4 |
+| `netVisual_TopicComposition` | 4679 | partial | SCC meta 读 `@meta.data`（错）、remove.isolate 错轴 | V-014 | P3 |
+| `netVisual_TopicSignaling` | 4985 | partial | SCC 主路径可跑、Seurat 分支必崩 | V-015 | P3 |
+
+## 3. 上游报告（约束 5：本轮不擅改，需你裁定）
+
+`analysis.R` 有 **10 个 broken**，其中 4 个被可视化直接依赖：
+
+| 上游函数 | 破损点 | 谁依赖它 |
+|---|---|---|
+| `identifyCommunicationPatterns` | `slot$prob` + `apply(prob,c(1,3),sum)` | `netAnalysis_river`/`dot` 的数据源（P3） |
+| `extractEnrichedLR_internal` | 参数 `net` 直接接收旧槽位 | `spatialFeaturePlot` signaling 模式、`plotGeneExpression`（P1/P3） |
+| `netAnalysis_contribution` | `net$prob/prob.cell` | P2/P3 若使用 contribution 图 |
+| `rankNet` | single/comparison 两分支都读旧槽 | bubble 的 rankNet 模式 |
+
+**更严重**：`mergeCellChat` 在 `R/` 下**没有定义**，但 `analysis.R:2851/3015` 调用它——所有 comparison/merged 功能（diffInteraction、bubble comparison、embeddingPairwise、diff_signalingRole）即使迁移完也没有构建方。这需要单独决策：实现 `mergeCellChat()`，还是把 comparison 系列归档。
+
+另有两个确定性变量名 bug：`selectK:992`（`data_sr` 应为 `data`）、`netVisual_bubble:3062`（`prob.original` 应为 `df.net$prob.original`）。
+
+## 4. OK / keep 清单（回归基线，不重构主体）
+
+`spatialDimPlot`、`spatialDimPlotPoints`、`spatialC2CDistPlot`、`spatialVisual_scoring`、`spatialTopicPlot`、`netAnalysis_river`、`netAnalysis_dot`、`spatialLeePlot`、`netVisual_hierarchy1/2`（renderer）、`netVisual_circle`、`netVisual_spatial`、`netVisual_chord_cell_internal`、`netVisual_CommunFieldGrid`、`netVisual_CommunFlow`、`plotly_spatialDimPlot`、`netVisual_CommunFlowWidget`、`vizDimLoadings`、`dotPlot`、`StackedVlnPlot`、`modify_vlnplot`、`barPlot`、`visualizePie`、`plotStatistics_Lee/Gi`（helper）、`doHeatmap`（语法修复）、其余纯 helper 29 个。
+
+keep ≠ 不动：本批仍要做**包用法核查**（`element_line(size=)`、`aes_string`、`guides(colour=FALSE)`、`coord_fixed+aspect.ratio` 并存等，见 §6）与 `options(warn=-1)` 清理（8 处）。
+
+## 5. 共享基础设施（改动需谨慎）
+
+1. `computeCellDistance` — 推理核心 + Lee 图 + C2C 图三方消费；返回契约三 key；
+2. 缓存契约校验有 **3 处**：`.spatial_distance_cache_matches`（绘图）+ `modeling.R:272` 内联 all.equal（建模）——改缓存结构必须同步；
+3. `.sc_resolve_grid_size` / `.sc_grid_membership` — 跨 3 文件 4 个消费方（含 widget）；
+4. `makeGridSpatialCellChat` — 被 `identifyOverExpressedGenes(do.grid=TRUE)` 用作分析前处理；
+5. `computeColocalization` — 与可视化无关但被 `computeAvgCommunProb*` 调用；硬依赖未安装的 `raster::pointDistance`，建议换 base/terra。
+
+## 6. 绘图包用法偏离（合并 agent 3 的 14 类，映射批次）
+
+| 类别 | 位置 | 批次 |
+|---|---|---|
+| `aes_string` ×3 | barplot_internal、doHeatmap | P2 |
+| `ggplot_build` panel internals ×2 | dotPlot、doHeatmap | P2 |
+| `size=` → `linewidth=` ×12 行 | embedding×5、barPlot、signalingRole_scatter×3、selectK、river、modify_vlnplot、netVisual_spatial、visualizePie | P2/P3 |
+| `coord_fixed`+`aspect.ratio` 并存 ×8 行 | diffInteraction、plotFeatures、Lee/Gi helper | P2/P4 |
+| 重复内联 theme ×7 块 | spatialFeaturePlot×4、CommunFieldGrid/Flow/plotFeatures 的 scChat_theme_opts 局部定义 | P1/P2/P3/P4 统一收敛 |
+| ComplexHeatmap 手写 viewport 拼版 | identifyCommunicationPatterns（上游） | 上游报告 |
+| circlize 无 `circos.par`、自环未去、两版 chord 行为不一致 | chord_cell_internal、chord_gene | P2 |
+| plotly trace 硬编码 ×3、colorbar×3、无 WebGL×2、hover 未转义×2、observer×1 | plotFeatures、Gi 3d、shiny | P4 |
+
+## 7. 共享 helper 抽取清单（迁移时一次到位）
+
+1. `.sc_select_significant_layers(net, pairLR, thresh)` — 5 份"门控+筛层"逻辑（迁移到 `net$group$prob` + marginSums）；
+2. `.sc_prep_plot_coords()` — 10 处坐标交换 + `scale_y_reverse()`（含 raster 分支）；
+3. `.sc_make_colormap(palette, n, direction, zero.color)` — 7 份色图构造；
+4. `themeFeaturePlot()` 修复后统一接入 — 7 块内联 theme；
+5. `.sc_draw_chord()` — 两份 chordDiagram 全套；
+6. `.sc_plotly_colorbar()` / `.sc_plotly_hover()` — trace 后处理与转义；
+7. `.sc_gridded_field()` — FieldGrid/Flow 的 120 行重复插值段；
+8. netVisual 的 svg/png/pdf 三份绘制循环、rankNet 两分支归零块、enriched.only 过滤块。
+
+## 8. 批次划分（更新）
+
+- **P1 静态点图**：`spatialFeaturePlot`（migrate）+ 5 个 keep 函数的包核查与 helper 收敛；
+- **P2 网络图**：9 个 broken/partial + renderer keep + 语法修复（依赖：extractEnrichedLR 上游修复或绕过）；
+- **P3 场与分解**：CommunField×2（依赖 V-013 上游）、Topic×2（refactor）、embedding×4（migrate）、river/dot（依赖 identifyCommunicationPatterns 上游修复）；
+- **P4 交互**：plotly 3 个 + shiny + Gi 3d + 3D stack 生产化；
+- **P5 收尾**：全量 PDF 回归 + 文档刷新。
+
+依赖关系决定：**P1 可以独立开工**；P2 需要 `extractEnrichedLR` 上游决策；P3 需要 `identifyCommunicationPatterns` 与 V-013 决策；P4 的 comparison 功能需要 `mergeCellChat` 决策。
