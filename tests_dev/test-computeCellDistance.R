@@ -43,9 +43,31 @@ check("distance cache records normalized parameters", isTRUE(
     tol = 0
   ))
 ))
-check("distance cache matcher rejects changed thresholds", !.spatial_distance_cache_matches(
-  res, interaction.range = 4, contact.range = 3, ratio = NULL, tol = NULL
+check("distance cache matcher accepts its source coordinates", .spatial_distance_cache_matches(
+  res, coordinates = coords, interaction.range = 5, contact.range = 3,
+  ratio = NULL, tol = NULL
 ))
+check("distance cache matcher rejects changed thresholds", !.spatial_distance_cache_matches(
+  res, coordinates = coords, interaction.range = 4, contact.range = 3,
+  ratio = NULL, tol = NULL
+))
+coords.moved <- coords
+coords.moved[2L, ] <- c(100, 0)
+check("distance cache matcher rejects changed coordinate values", !.spatial_distance_cache_matches(
+  res, coordinates = coords.moved, interaction.range = 5, contact.range = 3,
+  ratio = NULL, tol = NULL
+))
+check("distance cache matcher rejects changed cell order", !.spatial_distance_cache_matches(
+  res, coordinates = coords[rev(seq_len(nrow(coords))), , drop = FALSE],
+  interaction.range = 5, contact.range = 3, ratio = NULL, tol = NULL
+))
+cache.legacy <- res
+cache.legacy$.coordinates <- NULL
+check("distance cache matcher rejects legacy caches without coordinates",
+      !.spatial_distance_cache_matches(
+        cache.legacy, coordinates = coords, interaction.range = 5,
+        contact.range = 3, ratio = NULL, tol = NULL
+      ))
 distance_expected <- matrix(
   c(0, 3, 4, 0,
     3, 0, 5, 0,

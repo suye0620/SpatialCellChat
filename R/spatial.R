@@ -1,35 +1,39 @@
 #' Plot cell-to-cell distances behind the inferred communication
 #'
-#' The single entry point for spatial distance distributions: `enriched.only`
+#' The single entry point for spatial distance distributions: `mode`
 #' selects the records, `split.by` decides how they are cut into panels.
 #'
 #' @details
-#' `enriched.only` selects the records, `split.by` decides how they are cut into
+#' `mode` selects the records, `split.by` decides how they are cut into
 #' panels. The full 2 x 2 is:
 #'
 #' \tabular{lllll}{
-#'   # \tab split.by \tab enriched.only \tab panel 1 \tab panel 2 \cr
-#'   1 \tab "annotation" \tab TRUE  \tab diffusible signaling \tab contact-dependent signaling \cr
-#'   2 \tab "distance"   \tab TRUE  \tab all inferred records \tab those inside contact.range \cr
-#'   3 \tab "annotation" \tab FALSE \tab all cell pairs \tab contact-range pairs \cr
-#'   4 \tab "distance"   \tab FALSE \tab all cell pairs \tab contact-range pairs \cr
+#'   # \tab split.by \tab mode \tab panel 1 \tab panel 2 \cr
+#'   1 \tab "annotation" \tab "communication" \tab diffusible signaling \tab contact-dependent signaling \cr
+#'   2 \tab "distance" \tab "communication" \tab all inferred cell pairs \tab those inside contact.range \cr
+#'   3 \tab "annotation" \tab "geometry" \tab all cell pairs \tab contact-range pairs \cr
+#'   4 \tab "distance" \tab "geometry" \tab all cell pairs \tab contact-range pairs \cr
 #' }
 #'
 #' - Rows 1 and 2 are **disjoint** and **nested** respectively: the annotation
 #'   split assigns every record to exactly one panel, the distance split makes
-#'   panel 2 a subset of panel 1.
+#'   panel 2 a subset of panel 1. The same cell pair may appear in more than one
+#'   annotation panel when it has positive LR layers in more than one class.
 #' - Rows 3 and 4 are **the same output**. Without the communication array there
 #'   are no layers to classify, so `split.by` is ignored and a warning is raised
 #'   when it was supplied explicitly.
-#' - Rows 1 and 2 count **(cell pair x active ligand-receptor layer) records**: a
-#'   pair with three non-zero layers contributes three rows, so the density is
-#'   weighted by how many interactions each pair carries. Rows 3 and 4 count
-#'   **cell pairs**, one row each.
+#' - Rows 1 and 2 count **undirected cell-pair observations**: a pair with
+#'   multiple positive LR layers contributes once per annotation panel. Rows 3
+#'   and 4 count each geometric pair once.
 #'
-#' `enriched.only = TRUE` keeps only the non-zero entries of `net$cell$prob`. The
-#' test is **probability > 0, not statistical significance**:
-#' `computeCommunProb()` with `n = 1` produces no p-values at all, and
+#' `mode = "communication"` uses positive values in the sparse
+#' `net$cell$prob` layers, without testing statistical significance. A pair is
+#' observed once per panel when either communication direction has at least one
+#' positive LR layer. In particular, `computeCommunProb()` with `n = 1` produces no p-values at all, and
 #' thresholding is a later step (`filterProbability()` or `filterCommunication()`).
+#' Both modes use the strict upper triangle and exclude diagonal entries, so a
+#' geometric pair is not counted twice and communication directions are merged
+#' into one undirected pair before plotting.
 #'
 #' In the annotation split, layers are classified one by one from
 #' `LR$LRsig$annotation` (not by the positional `nLR1` threshold of the old
@@ -37,9 +41,10 @@
 #' matched to `LR$LRsig`, fall into an "Other signaling" panel instead of being
 #' dropped silently.
 #'
-#' Distances come from `images(object, ".distance")`. With `enriched.only = TRUE`
-#' that cache must already exist (it is written by `computeCommunProb()`). With
-#' `enriched.only = FALSE` a missing or stale cache is recomputed from
+#' Distances come from `images(object, ".distance")`. With `mode = "communication"`
+#' that cache must already exist and match the coordinates and settings recorded
+#' by `computeCommunProb()`; rerun inference when they change. With
+#' `mode = "geometry"` a missing or stale cache is recomputed from
 #' `images(object, "coordinates")` and `images(object, "spatial.factors")`, using
 #' `interaction.range`, `contact.range` and `tol` when supplied — so the geometric
 #' view works on an object that has never been through the inference. The x axis
@@ -48,48 +53,70 @@
 #' Self-pairs (distance 0) are dropped from every panel.
 #'
 #' @param object A SpatialCellChat object.
+#' @param mode `"geometry"` (default) uses cell pairs from the distance cache;
+#'   `"communication"` uses cell pairs with at least one positive
+#'   ligand-receptor probability.
 #' @param split.by How to cut the panels: `"annotation"` (diffusible vs
 #'   contact-dependent) or `"distance"` (all records vs contact-range records).
-#'   Ignored when `enriched.only = FALSE`.
-#' @param enriched.only `TRUE` uses only the cell pairs with a non-zero
-#'   communication probability. `FALSE` (default) uses every cell pair, which
-#'   gives the geometric background and needs no inference.
+#'   Ignored when `mode = "geometry"`.
 #' @param density.alpha Transparency of the density fill.
 #' @param interaction.range,contact.range,tol Distance settings used only when a
-#'   cache has to be computed for `enriched.only = FALSE`. `NULL` falls back to
+#'   cache has to be computed for `mode = "geometry"`. `NULL` falls back to
 #'   250, 10 and the object's `spatial.factors$tol`.
 #'
 #' @return A `patchwork` object with one panel per group.
 #' @export
 spatialC2CDistPlot <- function(
     object,
+    mode = c("geometry", "communication"),
     split.by = c("annotation", "distance"),
-    enriched.only = FALSE,
     density.alpha = 0.5,
     interaction.range = NULL,
     contact.range = NULL,
     tol = NULL
 ) {
   split.by.given <- !missing(split.by)
+  mode <- match.arg(mode)
   split.by <- match.arg(split.by)
-  if (split.by.given && !isTRUE(enriched.only)) {
-    warning("`split.by` only applies when `enriched.only = TRUE`; it is ignored here",
+  if (split.by.given && identical(mode, "geometry")) {
+    warning("`split.by` only applies when `mode = \"communication\"`; it is ignored here",
             call. = FALSE)
   }
-  panels <- .sc_c2c_panels(object, split.by = split.by, enriched.only = enriched.only,
+  panels <- .sc_c2c_panels(object, split.by = split.by,
+                            mode = mode,
                             density.alpha = density.alpha,
                             interaction.range = interaction.range,
                             contact.range = contact.range, tol = tol)
   patchwork::wrap_plots(panels, nrow = length(panels), ncol = 1)
 }
 
-#' Distance cache for the enriched view: it must have been written by the inference
+#' Distance cache for the communication view: it must match the inference
 #' @noRd
 .sc_c2c_inference_cache <- function(object) {
   cache <- images(object, ".distance")
   if (is.null(cache) || is.null(cache$d.spatial))
     stop("`images(object, \".distance\")` is empty; run `computeCommunProb()` first, ",
-         "or use `enriched.only = FALSE` for the geometric view", call. = FALSE)
+         "or use `mode = \"geometry\"` for the geometric view", call. = FALSE)
+  inference <- object@misc$.param$communication
+  params <- inference[["distance.parameters"]]
+  coordinates <- images(object, "coordinates")
+  if (!is.list(inference) || !is.list(params) ||
+      is.null(inference[["distance.coordinates"]]) ||
+      !identical(inference[["distance.coordinates"]], cache[[".coordinates"]]) ||
+      !identical(inference[["distance.spatial.factors"]],
+                 images(object, "spatial.factors")) ||
+      !.spatial_distance_cache_matches(
+        cache,
+        coordinates = coordinates,
+        interaction.range = params[["interaction.range"]],
+        contact.range = params[["contact.range"]],
+        ratio = params[["ratio"]],
+        tol = params[["tol"]]
+      )) {
+    stop("The distance cache or inferred probabilities are stale for the current spatial data; ",
+         "rerun `computeCommunProb()` before using `mode = \"communication\"`",
+         call. = FALSE)
+  }
   cache
 }
 
@@ -108,7 +135,8 @@ spatialC2CDistPlot <- function(
   if (is.null(contact.range)) contact.range <- 10
 
   cache <- images(object, ".distance")
-  if (.spatial_distance_cache_matches(cache, interaction.range = interaction.range,
+  if (.spatial_distance_cache_matches(cache, coordinates = coordinates,
+                                      interaction.range = interaction.range,
                                       contact.range = contact.range, ratio = ratio,
                                       tol = tol)) {
     return(cache)
@@ -127,97 +155,92 @@ spatialC2CDistPlot <- function(
   range + 10
 }
 
+#' Build an upper-triangular distance frame from a pair mask
+#' @noRd
+.sc_pair_distance_frame <- function(pair.mask, cache, class = NULL) {
+  d.spatial <- cache$d.spatial
+  if (!identical(dim(pair.mask), dim(d.spatial)) ||
+      !identical(dimnames(pair.mask), dimnames(d.spatial))) {
+    stop("communication and distance matrices must have identical cell axes",
+         call. = FALSE)
+  }
+  pair.mask <- Matrix::triu(Matrix::drop0(pair.mask), k = 1L)
+  pair.distance <- Matrix::drop0(d.spatial * pair.mask)
+  if (!length(pair.distance@x)) {
+    out <- data.frame(distance = numeric(), contact = logical(),
+                      stringsAsFactors = FALSE)
+  } else {
+    s <- summary(pair.distance)
+    out <- data.frame(
+      distance = s$x,
+      contact = as.logical(cache$adj.contact[cbind(s$i, s$j)]),
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!is.null(class)) out$class <- rep.int(class, nrow(out))
+  out
+}
+
+#' Symmetric positive-probability mask for selected LR layers
+#' @noRd
+.sc_comm_pair_mask <- function(prob, layer.index = NULL) {
+  if (is.null(layer.index)) {
+    sums <- marginSums(prob, margin = 3L)
+  } else {
+    if (!length(layer.index)) return(NULL)
+    sums <- marginSums(prob[, , layer.index, drop = FALSE], margin = 3L)
+  }
+  positive <- Matrix::drop0(sums > 0)
+  Matrix::drop0(Matrix::triu(positive | Matrix::t(positive), k = 1L))
+}
+
 #' Cell-pair distances behind the plots
 #'
-#' With `enriched.only = TRUE` there is one row per (source, target, active
-#' layer); otherwise one row per stored cell pair.
+#' Geometry uses one strict-upper-triangle distance per spatial pair.
+#' Communication uses one row per undirected cell pair and annotation class.
 #' @noRd
-.sc_comm_distance_frame <- function(object, enriched.only, cache) {
-  d.spatial <- cache$d.spatial
-  adj.contact <- d.spatial * cache$adj.contact
-
-  if (!isTRUE(enriched.only)) {
-    # `adj.contact` only stores the contact pattern, so its @x is shorter than
-    # d.spatial's; the contact distance has to be looked up per stored pair.
-    # dgCMatrix is column-compressed, so the row/column triplets come from
-    # @i plus the expanded @p pointer.
-    i <- d.spatial@i + 1L
-    j <- rep.int(seq_len(ncol(d.spatial)), diff(d.spatial@p))
-    contact <- as.numeric(adj.contact[cbind(i, j)])
-    return(data.frame(distance = d.spatial@x, contact = contact))
+.sc_comm_distance_frame <- function(object, mode, cache, split.by = "distance") {
+  if (identical(mode, "geometry")) {
+    return(.sc_pair_distance_frame(
+      Matrix::triu(cache$d.spatial, k = 1L), cache
+    ))
   }
+  if (!identical(mode, "communication"))
+    stop("mode must be \"geometry\" or \"communication\"", call. = FALSE)
 
   prob <- object@net$cell$prob
   if (is.null(prob))
     stop("`net$cell$prob` is empty (spill mode keeps the layers on disk); ",
-         "the enriched view needs the in-memory probability array", call. = FALSE)
+         "the communication view needs the in-memory probability array", call. = FALSE)
 
-  layers <- unclass(prob)
   layer.names <- dimnames(prob)[[3]]
   lr <- object@LR$LRsig
   ann.per.layer <- if (is.data.frame(lr) &&
                        all(c("interaction_name", "annotation") %in% colnames(lr))) {
     lr$annotation[match(layer.names, lr$interaction_name)]
   } else {
-    rep(NA_character_, length(layers))
+    rep(NA_character_, length(layer.names))
   }
-  # annotation is a property of the layer, not of the record: resolve the class
-  # once per layer instead of carrying it on every one of ~2.9e8 rows. The
-  # (i, j) pair is only the lookup key for the distance; it is never stored.
   class.per.layer <- .sc_comm_annotation_class(ann.per.layer)
 
-  nC <- nrow(d.spatial)
-  # flat lookups instead of [cbind(i, j)]: 3.8 s vs 13 s per 2.9e8-row lookup
-  # (measured on the full MBM05 puck). The contact table is logical (870 MB),
-  # not numeric (6.5 GB): the pattern is 0/1.
-  lut.dist <- .sc_flat_distance_table(d.spatial)
-  lut.contact <- logical(nC * nC)
-  s.adj <- summary(adj.contact)
-  lut.contact[(s.adj$i - 1L) * nC + s.adj$j] <- TRUE
-
-  # single-pass fill: per layer, expand the non-zero positions, look up
-  # distance/contact, tally into the class vectors, and discard the positions
-  total <- sum(vapply(layers, function(m) length(m@x), integer(1)))
-  distance <- numeric(total)
-  contact <- logical(total)
-  class.col <- character(total)
-  fill <- 0L
-
-  for (k in seq_along(layers)) {
-    m <- layers[[k]]
-    if (length(m@x) == 0L) next
-    i <- m@i + 1L
-    j <- rep.int(seq_len(ncol(m)), diff(m@p))
-    lin <- (i - 1L) * nC + j
-    dist <- lut.dist[lin]
-    keep <- !is.na(dist) & dist > 0
-    n <- sum(keep)
-    if (n == 0L) next
-    idx <- fill + seq_len(n)
-    distance[idx] <- dist[keep]
-    contact[idx] <- lut.contact[lin[keep]]
-    class.col[idx] <- class.per.layer[[k]]
-    fill <- fill + n
+  if (identical(split.by, "distance")) {
+    return(.sc_pair_distance_frame(.sc_comm_pair_mask(prob), cache))
   }
 
-  data.frame(distance = distance[seq_len(fill)],
-             contact = contact[seq_len(fill)],
-             class = class.col[seq_len(fill)],
-             stringsAsFactors = FALSE)
-}
-
-#' Flat (i + (j - 1) * nC) lookup table for a dgCMatrix
-#'
-#' Indexing a dgCMatrix with a 2.9e8-row cbind matrix costs ~13 s per lookup on
-#' the full MBM05 puck; the flat vector is indexed by a single integer vector and
-#' was measured at 3.8 s. Memory: nC^2 doubles (6.5 GB at 29,536 cells), so this
-#' is only worth building for bulk lookups.
-#' @noRd
-.sc_flat_distance_table <- function(m) {
-  s <- summary(m)                      # i, j, x, all 1-based
-  lut <- rep(NA_real_, nrow(m) * ncol(m))
-  lut[(s$i - 1L) * ncol(m) + s$j] <- s$x
-  lut
+  class.order <- c("diffusible", "contact", "other")
+  frames <- lapply(class.order, function(class) {
+    idx <- which(class.per.layer == class)
+    if (!length(idx)) return(NULL)
+    .sc_pair_distance_frame(
+      .sc_comm_pair_mask(prob, idx), cache, class = class
+    )
+  })
+  frames <- Filter(Negate(is.null), frames)
+  if (!length(frames)) {
+    return(data.frame(distance = numeric(), contact = logical(),
+                      class = character(), stringsAsFactors = FALSE))
+  }
+  do.call(rbind, frames)
 }
 
 #' Ligand-receptor annotation class used by the annotation split
@@ -253,12 +276,12 @@ spatialC2CDistPlot <- function(
 
 #' Build the panels shared by every distance plot
 #' @noRd
-.sc_comm_dist_panels <- function(object, split.by, enriched.only, density.alpha, cache) {
-  df <- .sc_comm_distance_frame(object, enriched.only, cache)
+.sc_comm_dist_panels <- function(object, split.by, mode, density.alpha, cache) {
+  df <- .sc_comm_distance_frame(object, mode, cache, split.by = split.by)
   xmax <- .sc_c2c_xmax(cache)
   panels <- list()
 
-  if (!isTRUE(enriched.only)) {
+  if (identical(mode, "geometry")) {
     # Rows 3 and 4 of the contract: geometry only, split.by is irrelevant.
     panels$all <- .sc_comm_dist_panel(df$distance, "All cell pairs",
                                       "#69b3a2", xmax, density.alpha)
@@ -279,7 +302,7 @@ spatialC2CDistPlot <- function(
     return(panels)
   }
 
-  # class was resolved once per layer during the build; here it only splits
+  # Class-specific frames were deduplicated before this point; here we only split.
   has.diffusible <- any(df$class == "diffusible")
   has.contact <- any(df$class == "contact")
   if (has.diffusible) {
@@ -304,18 +327,19 @@ spatialC2CDistPlot <- function(
   panels
 }
 
-#' Panels for a given mode (shared by the public function and the aliases)
+#' Panels for a given mode
 #' @noRd
-.sc_c2c_panels <- function(object, split.by, enriched.only, density.alpha,
+.sc_c2c_panels <- function(object, split.by, mode, density.alpha,
                            interaction.range = NULL, contact.range = NULL,
                            tol = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
-  cache <- if (isTRUE(enriched.only)) {
+  mode <- match.arg(mode, c("geometry", "communication"))
+  cache <- if (identical(mode, "communication")) {
     .sc_c2c_inference_cache(object)
   } else {
     .sc_c2c_geometry_cache(object, interaction.range, contact.range, tol)
   }
-  .sc_comm_dist_panels(object, split.by, enriched.only, density.alpha, cache)
+  .sc_comm_dist_panels(object, split.by, mode, density.alpha, cache)
 }
 
 #' @title Internal grid-size and membership helpers
@@ -711,13 +735,35 @@ makeGridSpatialCellChat <- function(
 }
 
 
-.spatial_distance_cache_matches <- function(distance, interaction.range,
-                                            contact.range, ratio = NULL,
-                                            tol = NULL) {
+.spatial_distance_cache_matches <- function(distance, coordinates,
+                                            interaction.range, contact.range,
+                                            ratio = NULL, tol = NULL) {
   if (!is.list(distance) ||
-      !all(c("d.spatial", "adj.contact", ".parameters") %in% names(distance)) ||
+      !all(c("d.spatial", "adj.contact", ".parameters", ".coordinates") %in%
+           names(distance)) ||
       !is.list(distance[[".parameters"]]))
     return(FALSE)
+  coordinates <- tryCatch(as.matrix(coordinates), error = function(e) NULL)
+  if (is.null(coordinates) || !is.matrix(coordinates) ||
+      !is.numeric(coordinates) || any(!is.finite(coordinates)))
+    return(FALSE)
+  storage.mode(coordinates) <- "double"
+  cached.coordinates <- distance[[".coordinates"]]
+  if (!is.matrix(cached.coordinates) ||
+      !identical(cached.coordinates, coordinates))
+    return(FALSE)
+  n_cells <- nrow(coordinates)
+  for (name in c("d.spatial", "adj.contact")) {
+    matrix.value <- distance[[name]]
+    if (is.null(matrix.value) || !identical(dim(matrix.value), c(n_cells, n_cells)))
+      return(FALSE)
+    matrix.names <- dimnames(matrix.value)
+    coordinate.names <- rownames(coordinates)
+    if (!is.null(coordinate.names) &&
+        (!identical(matrix.names[[1L]], coordinate.names) ||
+         !identical(matrix.names[[2L]], coordinate.names)))
+      return(FALSE)
+  }
   params <- distance[[".parameters"]]
   expected <- list(
     interaction.range = interaction.range,
@@ -760,9 +806,10 @@ makeGridSpatialCellChat <- function(
 #' For 10X Visium, this is the theoretical spot size (65um) divided by the full-resolution spot diameter in pixels (`spot.size.fullres`).
 #'
 #' @return List. The `d.spatial` and `adj.contact` keys store the cell-cell
-#' distance and contact adjacency matrices. `.parameters` records the
-#' thresholds used to build the cache so downstream plots do not silently
-#' reuse a cache made with different ranges.
+#' distance and contact adjacency matrices. `.coordinates` records the exact
+#' coordinate matrix used to build them, while `.parameters` records the
+#' thresholds and scale used so downstream consumers do not silently reuse a
+#' cache made from different coordinates or distance settings.
 #'
 #' @examples
 computeCellDistance <- function (
@@ -780,6 +827,7 @@ computeCellDistance <- function (
     stop("coordinates must be a numeric matrix with two or three columns", call. = FALSE)
   if (!is.numeric(coordinates) || any(!is.finite(coordinates)))
     stop("coordinates must contain finite numeric values", call. = FALSE)
+  storage.mode(coordinates) <- "double"
   n_cells <- nrow(coordinates)
   if (n_cells < 1L)
     stop("coordinates must contain at least one row", call. = FALSE)
@@ -849,6 +897,7 @@ computeCellDistance <- function (
   list(
     d.spatial = d.spatial,
     adj.contact = adj.contact,
+    .coordinates = coordinates,
     .parameters = list(
       interaction.range = interaction.range,
       contact.range = contact.range,

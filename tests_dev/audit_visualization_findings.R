@@ -98,7 +98,7 @@ ok("plotly_spatialDimPlot 3d [as-is]", function() {
 
 
 ok("spatialC2CDistPlot [final schema]", function() {
-  env$spatialC2CDistPlot(chat, enriched.only = FALSE,
+  env$spatialC2CDistPlot(chat, mode = "geometry",
                          interaction.range = 10, contact.range = 5, tol = 0)
 })
 ok("spatialFeaturePlot [final schema]", function() {

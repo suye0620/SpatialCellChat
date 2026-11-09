@@ -9,7 +9,7 @@ spatialFeaturePlot(
   features = NULL,
   signaling = NULL,
   pairLR.use = NULL,
-  slot.name = c("data.signaling", "data"),
+  slot.name = c("signaling", "norm", "data.signaling", "data"),
   enriched.only = TRUE,
   thresh = 0.05,
   do.group = TRUE,
@@ -38,11 +38,12 @@ spatialFeaturePlot(
 
 \item{pairLR.use}{a data frame consisting of one column named "interaction_name", defining the L-R pairs of interest}
 
-\item{slot.name}{Character. "data.signaling" or "data". By default slot.name = "data.signaling".}
+\item{slot.name}{Expression layer: "signaling" (default) or "norm". The
+legacy values "data.signaling" and "data" map to these layers respectively.}
 
 \item{enriched.only}{whether only return the identified enriched signaling genes in the database. Default = TRUE, returning the significantly enriched signaling interactions}
 
-\item{thresh}{threshold of the p-value for determining significant interaction when visualizing links at the level of ligands/receptors;}
+\item{thresh}{group p-value threshold for explicit LR pairs when p-values are available.}
 
 \item{do.group}{set `do.group = TRUE` when only showing enriched signaling based on cell group-level communication; set `do.group = FALSE` when only showing enriched signaling based on individual cell-level communication}
 
@@ -72,4 +73,8 @@ spatialFeaturePlot(
 }
 \description{
 This function takes a CellChat object as input, and then plot gene expression distribution.
+For explicit LR pairs with \code{enriched.only = TRUE}, a pair is kept when it
+has a positive communication value. Group values with p-values above \code{thresh}
+are excluded when p-values are available; without p-values no p-value filter
+is applied. Pathway selection uses the existing \code{extractEnrichedLR} cache.
 }

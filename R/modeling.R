@@ -269,12 +269,11 @@ computeCommunProb <- function(
                             .type = "text", .verbose = 2L)
   data.spatial <- as.matrix(object@images$coordinates)
   cache.d <- object@images$.distance
-  expected <- list(interaction.range = interaction.range,
-                   contact.range = contact.range, ratio = ratio, tol = tol)
-  valid.cache <- is.list(cache.d) &&
-    all(c("d.spatial", "adj.contact", ".parameters") %in% names(cache.d)) &&
-    isTRUE(all.equal(cache.d$.parameters, expected)) &&
-    ncol(cache.d$d.spatial) == nC
+  valid.cache <- .spatial_distance_cache_matches(
+    cache.d, coordinates = data.spatial,
+    interaction.range = interaction.range,
+    contact.range = contact.range, ratio = ratio, tol = tol
+  )
   if (!valid.cache) {
     if (isTRUE(verbose)) .cli("Distance cache absent or stale; recomputing with `computeCellDistance()`.",
                               .type = "text", .verbose = 2L)
@@ -464,6 +463,9 @@ computeCommunProb <- function(
     scale.distance = scale.distance, use.AGAN = use.AGAN,
     distance.use = distance.use, interaction.range = interaction.range,
     contact.range = contact.range, contact.dependent = contact.dependent,
+    distance.coordinates = cache.d$.coordinates,
+    distance.parameters = cache.d$.parameters,
+    distance.spatial.factors = object@images$spatial.factors,
     contact.dependent.forced = contact.dependent.forced,
     all.contact.dependent = all.contact.dependent, all.diffusible = all.diffusible,
     spill.dir = if (is.null(spill.dir)) NULL else normalizePath(spill.dir),
@@ -2334,7 +2336,7 @@ computeExpr_complex <- function(complex_input, data.use, complex) {
       RsubunitsV <- unlist(Rsubunits[x,], use.names = F)
       RsubunitsV <- RsubunitsV[RsubunitsV != ""]
       return(geometricMean(data.use[RsubunitsV,,drop=F]))
-    },
+    }
   )
   data.complex <- t(data.complex)
   return(data.complex)

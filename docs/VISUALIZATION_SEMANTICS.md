@@ -36,12 +36,12 @@
 依据：[选择与连续表达](../R/visualization.R#L437-L579)、[二值表达](../R/visualization.R#L580-L694)、[复合物表达](../R/modeling.R#L2531-L2543)、[缓存 LR 选择](../R/analysis.R#L913-L946)。
 
 1. **科学问题**：选定基因、LR 对或 pathway 相关基因在组织哪里表达；binary 模式检查同一 spot 的 ligand/receptor 表达组合，不检查两个细胞间的通讯边。
-2. **输入单位与轴**：`features/signaling/pairLR.use` 三选一。连续模式从旧 `data.signaling/data` 取 gene × cell 值，或整体改从 metadata 列取值；点始终是 cell/spot。`do.group` 只控制 LR 富集筛选来源，不把表达图点变成群。坐标要求两列，交换后反转 y。
-3. **计算定义**：连续模式 pathway 经 `extractEnrichedLR()` 取基因；显式 LR 的 enriched group 分支清除 `p>thresh` 后要求该层存在正边，cell 分支只检查已有正边。连续模式展开 complex 为亚基；binary 模式用 `computeExpr_LR()`，complex 用亚基几何均值，再按严格 `> cutoff` 分为 ligand、receptor、Both、None。连续模式 `<= cutoff` 置 NA。
+2. **输入单位与轴**：`features/signaling/pairLR.use` 三选一。连续模式从 `assay$signaling` 或 `assay$norm` 取 gene × cell 值，或整体改从 metadata 列取值；旧参数值 `data.signaling/data` 分别映射到这两层。坐标和 metadata 按表达矩阵的 cell name 对齐；点始终是 cell/spot。`do.group` 只控制 LR 筛选来源，不把表达图点变成群。坐标要求两列，交换后反转 y。
+3. **计算定义**：连续模式 pathway 经 `extractEnrichedLR()` 取基因；显式 LR 的 enriched group 分支在有 p 值时清除 `p>thresh` 后要求该层存在正边，没有 p 值时只检查正边；cell 分支只检查已有正边。连续模式展开 complex 为亚基；binary 模式用 `computeExpr_LR()`，complex 用亚基几何均值，再按严格 `> cutoff` 分为 ligand、receptor、Both、None。连续模式 `<= cutoff` 置 NA。
 4. **视觉编码**：连续图每 feature 一面板、颜色为该 feature 表达/metadata 值，NA 灰色；binary 颜色是上述四类，点大小不是通讯量。每面板自有连续色域；`show.legend.combined` 不是共享数值范围。Both 表示同一位置两者过表达阈值，不表示检验通过。
-5. **信息损失**：丢失 sender→receiver 配对、网络权重和 p 值；binary 再丢失表达幅度。展开亚基图与复合物几何均值图不是同一测量。按行绑定也不修复名称错位。
-6. **统计边界**：不做表达差异或通讯新检验。pathway 选择最终依赖缓存 `LR.sig`，本次 `thresh` 不一定改变返回 LR；显式 LR 分支才按本次 prob 检查。无 LR 交集但仍返回基因的 helper 行为列为缺陷，不能解读为显著信号（V-003）。
-7. **前置计算及返回**：需要表达、坐标、注释；LR/pathway 模式还需 DB/LR，enriched 路径需相应网络或缓存。返回 ggplot 或 patchwork；源码 `ncol<=1` 时只取 `gg[[1]]`，即使有多个 feature 也不是完整多图列表（V-004）。旧表达槽读取是迁移门禁。
+5. **信息损失**：丢失 sender→receiver 配对、网络权重和 p 值；binary 再丢失表达幅度。展开亚基图与复合物几何均值图不是同一测量。
+6. **统计边界**：不做表达差异或通讯新检验。pathway 选择最终依赖缓存 `LR.sig`，本次 `thresh` 不重新筛选；显式 LR 分支按本次 prob 和可用的 group p 值检查。缓存未命中现在返回空 LR 和空基因；两种选择仍不是同一口径（V-003）。
+7. **前置计算及返回**：需要表达、坐标、注释；LR/pathway 模式还需 DB/LR，enriched 路径需相应网络或缓存。返回单个 ggplot 或多面板 patchwork，`ncol=1` 时也保留所有面板。
 8. **判别反例（未执行）**：保持所有细胞表达不变，只把远距离通讯边置零，表达图不应被解释为通讯仍存在；令某复合物一个亚基为零、另一个为正，单亚基连续图可明亮而复合物表达为零，binary 分类不应将该复合物判为阳性。缓存阈值 0.05、本次 0.01 与显式 LR 分支应分别核对。
 
 ### 1.2 `plotly_spatialLRpairPlot` 与显示 helper `plotFeatures`
@@ -64,13 +64,13 @@
 依据：[wrapper](../R/visualization.R#L6632-L6669)、[dot](../R/visualization.R#L6703-L6732)、[violin](../R/visualization.R#L6760-L6799)、[bar](../R/visualization.R#L6885-L6942)。
 
 1. **科学问题**：LR/pathway 相关基因在各细胞群中的表达分布、表达比例或汇总表达；它为通讯推断提供表达背景，不给出通讯网络验证。
-2. **输入单位与轴**：旧 `data.signaling` 被交给 `Seurat::CreateSeuratObject(counts=...)`；meta 与 idents 定义分组。gene × group 是 dot/bar 的显示轴，violin 保留组内单细胞分布。若 features 与 signaling 同给，源码警告并优先 features。
+2. **输入单位与轴**：`assay$signaling` 被交给 `Seurat::CreateSeuratObject(counts=...)`；meta 与 idents 按 cell name 对齐后定义分组。gene × group 是 dot/bar 的显示轴，violin 保留组内单细胞分布。若 features 与 signaling 同给，源码警告并优先 features。
 3. **计算定义**：pathway 基因来自 `extractEnrichedLR()` 缓存选择。violin 经 Seurat VlnPlot helper；dot 经 Seurat DotPlot，默认 `scale=TRUE`、截断范围 `[-2.5,2.5]`；bar 按 `truncatedMean/triMean/median` 汇总 Seurat 的 data 层，默认截尾均值 `trim=0.1`。wrapper 没有执行新的表达归一化，实际取哪一 assay 层及版本行为须随迁移确认。
 4. **视觉编码**：violin 宽度/形状展示分布，颜色为组/条件；dot 点大小为表达细胞比例、颜色为 Seurat 返回的平均/缩放表达，默认可翻转轴；bar 条高是选定表达汇总。它们的颜色/大小均不是通讯 p 值或边权。
 5. **信息损失**：dot/bar 丢失组内异质性及空间位置；dot 的按基因缩放不保留跨基因绝对量，bar 不能区分少数极高表达与更多低表达的全部差异。
 6. **统计边界**：默认没有独立生物学重复的差异检验；`barplot_internal` 的可选统计不能把已汇总 group 数值变成重复样本。缓存 enrichment 仍受 V-003 约束。
-7. **前置计算及返回**：需可构建的 Seurat 对象和相应 assay 层、meta、features；返回 dot 的 ggplot，或 violin/bar 的 patchwork。meta 名称不一致时当前只覆盖行名而不重排；bar 无 split 的 matrix `$gene` 赋值及最后 feature 复用 `df.use` 是静态风险（V-005），不保证该分支能完成。
-8. **判别反例（未执行）**：一组 10% 细胞高表达、另一组 100% 低表达，令平均相等，dot 大小应不同、violin 分布不同；独立置换 meta 行顺序可暴露“改名代替对齐”。至少两基因检验 bar 最后一面板是否真正来自最后基因。
+7. **前置计算及返回**：需非空 `assay$signaling`、meta、idents 和可绘制 features；返回 dot 的 ggplot，或 violin/bar 的 patchwork。wrapper 按 cell name 重排 meta/idents；bar 无 split 的 matrix `$gene` 赋值及最后 feature 复用 `df.use` 仍是静态风险（V-005），不保证该分支能完成。
+8. **判别反例（部分已执行）**：一组 10% 细胞高表达、另一组 100% 低表达，令平均相等，dot 大小应不同、violin 分布不同；wrapper 的回归测试已反转 signaling 列顺序并确认按 cell name 对齐后 dot 数据不变。至少两基因仍需检验 bar 最后一面板是否真正来自最后基因。
 
 ## 2. LR 网络与布局
 
@@ -365,9 +365,9 @@ V-* 是本页稳定引用标识，不表示已修复，也不是已批准的新�
 |---|---|---|---|---|
 | V-001 | [表达旧槽](../R/visualization.R#L452-L454)、[aggregate 旧 prob](../R/visualization.R#L1459-L1472)、[heatmap 旧 options/mode 与 dataset](../R/visualization.R#L2764-L2793)、[pairwise 旧列表](../R/visualization.R#L4527-L4534)。读取路径混合新旧结构，不代表 final schema 可直接运行。 | 表达、aggregate/individual、bubble、heatmap、diff、embedding、部分 topic。 | 每批按三个独立轴迁移所有读取与名称逻辑；复用当前访问器/稀疏结果，不加旧槽 shim。 | dataset 存档与 joint 入口、可选 p 值、稀疏输出逐项核定；中心性实际落点不能擅自改成 group$centr。 |
 | V-002 | [aggregate `p>`](../R/visualization.R#L1469-L1476)、[pathway `p>=`](../R/modeling.R#L1691-L1698)、[bubble table `p>=`](../R/analysis.R#L2431-L2445)。实时 LR、生产缓存和表过滤不同。 | aggregate/individual、heatmap、bubble、所有 pathway 图。 | 明示筛选时点及阈值等号，做同输入数值/图形对照。 | 统一阈值属于科学语义更正；本轮不预先选择保留 `>` 还是 `>=`，也不批准 aggregate 改读 netP。 |
-| V-003 | [extractEnrichedLR_internal](../R/analysis.R#L913-L946) 的 gated prob 不决定最终 LR.sig 交集；空交集也未清空后续取基因的 pairLR。 | spatialFeaturePlot 的 signaling、plotGeneExpression 及 LR 选择消费链。 | 分开“缓存富集选择”和“本次实时筛选”，裁定空 LR 与 geneLR 返回一致性。 | 修改缓存/阈值语义与修复空结果要分开归因；不把空 LR 非空基因当作正确富集证据。 |
-| V-004 | [连续/二值 complex 差异](../R/visualization.R#L518-L523)、[binary complex](../R/visualization.R#L621-L627)、[plotly 直接匹配](../R/visualization.R#L7367-L7387)、[ncol=1 仅首图](../R/visualization.R#L574-L577)、[plotly 固定 trace 下标](../R/visualization.R#L7878-L7893)。 | spatialFeaturePlot、plotly_spatialLRpairPlot、plotFeatures、Shiny adapter。 | 明确“亚基表达/complex 量/缺 partner”三者，确保 feature 面板完整、trace 与 cell id 一致。 | 缺 complex 应报错、展开还是计算复合物需选择；修复不能悄悄把表达换成通讯量。实际浏览器核对全/空高亮。 |
-| V-005 | [meta 改名不重排](../R/visualization.R#L6640-L6647)、[bar matrix 与最后 df.use](../R/visualization.R#L6918-L6936)。[INFERENCE] 可能错配分组或展示前一个基因/失败。 | plotGeneExpression、barPlot 及相关教程。 | 以名称对齐为不变量，明确 assay 层及多基因返回内容。 | 先确认来源矩阵是否归一化和 Seurat 版本层行为；不是借文档更换表达统计量。 |
+| V-003 | `extractEnrichedLR_internal` 按 `LR.sig` 缓存选 pathway，`spatialFeaturePlot` 的显式 LR 则按当前 prob 和可用 p 值选择；前者不重新按 `thresh` 筛选。空交集返回空 LR 和空基因已修复。 | spatialFeaturePlot 的 signaling、plotGeneExpression 及 LR 选择消费链。 | 维持现有定义并在文档中区分两种来源。 | 暂不改变缓存/阈值语义；不同入口的筛选结果可能不同。 |
+| V-004 | 连续图展开 complex 亚基，binary 图计算 complex 几何均值；plotly 直接匹配基因且依赖固定 trace 下标。`spatialFeaturePlot(ncol=1)` 丢失后续面板已修复。 | spatialFeaturePlot、plotly_spatialLRpairPlot、plotFeatures、Shiny adapter。 | 明确“亚基表达/complex 量/缺 partner”三者，继续核对 plotly trace 与 cell id。 | 修复不能悄悄把表达换成通讯量。plotly 仍需实际浏览器核对全/空高亮。 |
+| V-005 | wrapper 的 meta 改名不重排问题已在 [plotGeneExpression](../R/visualization.R#L6545-L6588) 中改为按 cell name 对齐并有回归测试；[bar matrix 与最后 df.use](../R/visualization.R#L6918-L6936) 风险仍在。[INFERENCE] 后者可能展示前一个基因或失败。 | barPlot 及相关教程；plotGeneExpression 的 bar 分支。 | 分别验证 assay 层和 bar 多基因结果；不回退 cell-name 对齐。 | 先确认来源矩阵是否归一化和 Seurat 版本层行为；不是借文档更换表达统计量。 |
 | V-006 | [individual spatial 未定义 labels/idents.use](../R/visualization.R#L1714-L1719)、[hierarchy2 外部 object](../R/visualization.R#L2004-L2024)、[spatial weight 条件](../R/visualization.R#L1516-L1528)；chord 与其他 renderer 不共享 top 过滤。 | aggregate/individual 四布局及直接 renderer。 | 逐布局确认局部参数来源、过滤时点、返回类及向量权重处理，不靠调用者全局变量。 | 是否统一 top 支持、返回 list 与组合图是 API 决定；群中位数路线解释必须保留其摘要性质。 |
 | V-007 | [diff 孤立判定](../R/visualization.R#L2616-L2624)、[heatmap 零总和拒绝](../R/visualization.R#L2891-L2897)。有符号边缘和/全局和可抵消。 | diffInteraction、比较 heatmap。 | 区分“没有非零边”和“净变化为零”，名称对齐后再比较。 | 修复空网络判定不能变成新的差异显著性检验；正确断言需包含正负相抵但非空矩阵。 |
 | V-008 | [heatmap 重复删点](../R/visualization.R#L2834-L2843)、[按列构建行注释](../R/visualization.R#L2880-L2889)、[列聚类用错参数](../R/visualization.R#L2898-L2901)。 | netVisual_heatmap 子集、remove.isolate、cluster.cols。 | 独立行列名称和索引，修复重复删除与参数失效。 | 非方形子集、单行/单列与全零场景都需实际 draw；侧栏的绝对变化和文案需核定。 |

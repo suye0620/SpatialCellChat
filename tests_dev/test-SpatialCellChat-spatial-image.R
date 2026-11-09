@@ -49,7 +49,7 @@ plain_plot <- spatialDimPlot(chat, image = FALSE)
 check("spatialDimPlot works without histology image", inherits(plain_plot, "ggplot"))
 
 distance_plot <- spatialC2CDistPlot(
-  chat, enriched.only = FALSE,
+  chat, mode = "geometry",
   interaction.range = 100, contact.range = 30, tol = 0
 )
 check("spatialC2CDistPlot computes from canonical images", inherits(distance_plot, "patchwork"))
@@ -58,12 +58,12 @@ chat@images$.distance <- computeCellDistance(
   contact.range = 30, ratio = 1, tol = 0
 )
 cached_distance_plot <- spatialC2CDistPlot(
-  chat, enriched.only = FALSE,
+  chat, mode = "geometry",
   interaction.range = 100, contact.range = 30, tol = 0
 )
 check("spatialC2CDistPlot consumes images$.distance", inherits(cached_distance_plot, "patchwork"))
 narrow_panels <- .sc_c2c_panels(
-  chat, split.by = "annotation", enriched.only = FALSE, density.alpha = 0.5,
+  chat, split.by = "annotation", mode = "geometry", density.alpha = 0.5,
   interaction.range = 5, contact.range = 3, tol = 0
 )
 check("spatialC2CDistPlot recomputes for changed thresholds",

@@ -34,9 +34,10 @@ If the cell/spot size is not known, `tol` can be set to zero while `contact.rang
 }
 \value{
 List. The `d.spatial` and `adj.contact` keys store the cell-cell
-distance and contact adjacency matrices. `.parameters` records the
-thresholds used to build the cache so downstream plots do not silently
-reuse a cache made with different ranges.
+distance and contact adjacency matrices. `.coordinates` records the exact
+coordinate matrix used to build them, while `.parameters` records the
+thresholds and scale used so downstream consumers do not silently reuse a
+cache made from different coordinates or distance settings.
 }
 \description{
 Compute cell-cell distance based on the spatial coordinates and

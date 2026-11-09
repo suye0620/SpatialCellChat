@@ -6,8 +6,8 @@
 \usage{
 spatialC2CDistPlot(
   object,
+  mode = c("geometry", "communication"),
   split.by = c("annotation", "distance"),
-  enriched.only = FALSE,
   density.alpha = 0.5,
   interaction.range = NULL,
   contact.range = NULL,
@@ -17,56 +17,61 @@ spatialC2CDistPlot(
 \arguments{
 \item{object}{A SpatialCellChat object.}
 
+\item{mode}{\code{"geometry"} (default) uses cell pairs from the distance cache;
+\code{"communication"} uses cell pairs with at least one positive
+ligand-receptor probability.}
+
 \item{split.by}{How to cut the panels: \code{"annotation"} (diffusible vs
 contact-dependent) or \code{"distance"} (all records vs contact-range records).
-Ignored when \code{enriched.only = FALSE}.}
-
-\item{enriched.only}{\code{TRUE} uses only the cell pairs with a non-zero
-communication probability. \code{FALSE} (default) uses every cell pair, which
-gives the geometric background and needs no inference.}
+Ignored when \code{mode = "geometry"}.}
 
 \item{density.alpha}{Transparency of the density fill.}
 
 \item{interaction.range, contact.range, tol}{Distance settings used only when a
-cache has to be computed for \code{enriched.only = FALSE}. \code{NULL} falls back to
+cache has to be computed for \code{mode = "geometry"}. \code{NULL} falls back to
 250, 10 and the object's \code{spatial.factors$tol}.}
 }
 \value{
 A \code{patchwork} object with one panel per group.
 }
 \description{
-The single entry point for spatial distance distributions: \code{enriched.only}
+The single entry point for spatial distance distributions: \code{mode}
 selects the records, \code{split.by} decides how they are cut into panels.
 }
 \details{
-\code{enriched.only} selects the records, \code{split.by} decides how they are cut into
+\code{mode} selects the records, \code{split.by} decides how they are cut into
 panels. The full 2 x 2 is:
 
 \tabular{lllll}{
-  \emph{#} \tab \emph{split.by} \tab \emph{enriched.only} \tab \emph{panel 1} \tab \emph{panel 2} \cr
-  1 \tab "annotation" \tab TRUE \tab diffusible signaling \tab contact-dependent signaling \cr
-  2 \tab "distance" \tab TRUE \tab all inferred records \tab those inside contact.range \cr
-  3 \tab "annotation" \tab FALSE \tab all cell pairs \tab contact-range pairs \cr
-  4 \tab "distance" \tab FALSE \tab all cell pairs \tab contact-range pairs
+  \emph{#} \tab \emph{split.by} \tab \emph{mode} \tab \emph{panel 1} \tab \emph{panel 2} \cr
+  1 \tab "annotation" \tab "communication" \tab diffusible signaling \tab contact-dependent signaling \cr
+  2 \tab "distance" \tab "communication" \tab all inferred cell pairs \tab those inside contact.range \cr
+  3 \tab "annotation" \tab "geometry" \tab all cell pairs \tab contact-range pairs \cr
+  4 \tab "distance" \tab "geometry" \tab all cell pairs \tab contact-range pairs
 }
 
 \itemize{
 \item Rows 1 and 2 are \strong{disjoint} and \strong{nested} respectively: the annotation
 split assigns every record to exactly one panel, the distance split makes
-panel 2 a subset of panel 1.
+panel 2 a subset of panel 1. The same cell pair may appear in more than one
+annotation panel when it has positive LR layers in more than one class.
 \item Rows 3 and 4 are \strong{the same output}. Without the communication array there
 are no layers to classify, so \code{split.by} is ignored and a warning is raised
 when it was supplied explicitly.
-\item Rows 1 and 2 count \strong{(cell pair x active ligand-receptor layer) records}: a
-pair with three non-zero layers contributes three rows, so the density is
-weighted by how many interactions each pair carries. Rows 3 and 4 count
-\strong{cell pairs}, one row each.
+\item Rows 1 and 2 count \strong{undirected cell-pair observations}: a pair with
+multiple positive LR layers contributes once per annotation panel. Rows 3 and 4
+count each geometric pair once.
 }
 
-\code{enriched.only = TRUE} keeps only the non-zero entries of \code{net$cell$prob}. The
-test is \strong{probability > 0, not statistical significance}:
+\code{mode = "communication"} uses positive values in the sparse
+\code{net$cell$prob} layers, without testing statistical significance. A pair is
+observed once per panel when either communication direction has at least one
+positive LR layer. In particular,
 \code{computeCommunProb()} with \code{n = 1} produces no p-values at all, and
 thresholding is a later step (\code{filterProbability()} or \code{filterCommunication()}).
+Both modes use the strict upper triangle and exclude diagonal entries, so a
+geometric pair is not counted twice and communication directions are merged
+into one undirected pair before plotting.
 
 In the annotation split, layers are classified one by one from
 \code{LR$LRsig$annotation} (not by the positional \code{nLR1} threshold of the old
@@ -74,9 +79,10 @@ implementation). Unrecognised annotations, and records whose layer cannot be
 matched to \code{LR$LRsig}, fall into an "Other signaling" panel instead of being
 dropped silently.
 
-Distances come from \code{images(object, ".distance")}. With \code{enriched.only = TRUE}
-that cache must already exist (it is written by \code{computeCommunProb()}). With
-\code{enriched.only = FALSE} a missing or stale cache is recomputed from
+Distances come from \code{images(object, ".distance")}. With \code{mode = "communication"}
+that cache must already exist and match the coordinates and settings recorded
+by \code{computeCommunProb()}; rerun inference when they change. With
+\code{mode = "geometry"} a missing or stale cache is recomputed from
 \code{images(object, "coordinates")} and \code{images(object, "spatial.factors")}, using
 \code{interaction.range}, \code{contact.range} and \code{tol} when supplied -- so the geometric
 view works on an object that has never been through the inference. The x axis

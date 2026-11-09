@@ -1,5 +1,5 @@
 # spatialC2CDistPlot(): the single distance-plot entry point.
-# Covers the 2 x 2 contract of split.by x enriched.only, the geometric mode that
+# Covers the 2 x 2 contract of split.by x mode, the geometric mode that
 # needs no inference, the cache self-compute path and the three deprecated aliases.
 setwd(local({ a <- commandArgs(FALSE); f <- sub("^--file=", "", grep("^--file=", a, value = TRUE)); if (length(f)) dirname(dirname(normalizePath(f))) else getwd() }))
 Sys.setenv(RENV_PATHS_LIBRARY = "renv/library")
@@ -66,9 +66,9 @@ rownames(chat@LR$LRsig) <- chat@LR$LRsig$interaction_name
 assay(chat, "signaling") <- assay(chat, "norm")
 
 ## ---- 1. geometric mode needs no inference ----------------------------------
-geo <- spatialC2CDistPlot(chat)                      # defaults: enriched.only = FALSE
+geo <- spatialC2CDistPlot(chat)                      # defaults: mode = "geometry"
 check("default call works on a never-inferred object", inherits(geo, "patchwork"))
-geo.panels <- .sc_c2c_panels(chat, "annotation", FALSE, 0.5)
+geo.panels <- .sc_c2c_panels(chat, "annotation", "geometry", 0.5)
 check("geometric mode always yields the two geometry panels",
       identical(names(geo.panels), c("all", "contact.range")))
 check("geometric panel titles", identical(unname(titles(geo.panels)),
@@ -76,41 +76,118 @@ check("geometric panel titles", identical(unname(titles(geo.panels)),
 check("x axis ends at the cached interaction.range + 10",
       identical(geo.panels[[1]]$scales$scales[[2]]$limits, c(0, 260)))
 
-## ---- 2. rows 3 and 4 are the same output ------------------------------------
-p3 <- .sc_c2c_panels(chat, "annotation", FALSE, 0.5)
-p4 <- .sc_c2c_panels(chat, "distance", FALSE, 0.5)
-check("annotation + FALSE equals distance + FALSE (names)", identical(names(p3), names(p4)))
-check("annotation + FALSE equals distance + FALSE (titles)", identical(titles(p3), titles(p4)))
+## ---- 2. geometry ignores split.by --------------------------------------------
+p3 <- .sc_c2c_panels(chat, "annotation", "geometry", 0.5)
+p4 <- .sc_c2c_panels(chat, "distance", "geometry", 0.5)
+check("geometry annotation equals distance split (names)", identical(names(p3), names(p4)))
+check("geometry annotation equals distance split (titles)", identical(titles(p3), titles(p4)))
 
 w.ignored <- warn_msg(spatialC2CDistPlot(chat, split.by = "distance"))
-check("supplying split.by with enriched.only = FALSE warns",
+check("supplying split.by in geometry mode warns",
       !is.null(w.ignored) && grepl("ignored", w.ignored))
 check("no warning when split.by is left to its default",
       is.null(warn_msg(spatialC2CDistPlot(chat))))
+check("explicit geometry mode works",
+      inherits(spatialC2CDistPlot(chat, mode = "geometry"), "patchwork"))
+check("invalid mode is rejected", !is.na(err_msg(spatialC2CDistPlot(chat, mode = "bad"))))
+check("old enriched.only argument is rejected",
+      grepl("unused argument", err_msg(spatialC2CDistPlot(chat, enriched.only = FALSE))))
 
 ## ---- 3. cache self-compute path --------------------------------------------
 check("no usable distance cache before anything runs",
       !.spatial_distance_cache_matches(images(chat, ".distance"),
+                                       coordinates = images(chat, "coordinates"),
                                        interaction.range = 250, contact.range = 10,
                                        ratio = 1, tol = 5))
 cache <- .sc_c2c_geometry_cache(chat)
 check("geometry cache is built on demand",
-      is.list(cache) && all(c("d.spatial", "adj.contact", ".parameters") %in% names(cache)))
+      is.list(cache) && all(c("d.spatial", "adj.contact", ".parameters", ".coordinates") %in% names(cache)))
 check("built cache records the default interaction range",
       identical(cache$.parameters$interaction.range, 250))
+check("built cache records the coordinates it was computed from",
+      identical(cache$.coordinates, images(chat, "coordinates")))
+geo.frame <- .sc_comm_distance_frame(chat, "geometry", cache)
+geo.matrix <- as.matrix(cache$d.spatial)
+expected.geo <- sum(upper.tri(geo.matrix) & geo.matrix > 0)
+check("geometry frame keeps one observation per unordered cell pair",
+      nrow(geo.frame) == expected.geo)
+check("geometry frame uses logical contact flags",
+      is.logical(geo.frame$contact) && !anyNA(geo.frame$contact))
+check("geometry contact panel contains the contact distances",
+      identical(geo.panels$contact.range$data$distance,
+                geo.frame$distance[geo.frame$contact]))
 cache.wide <- .sc_c2c_geometry_cache(chat, interaction.range = 400)
 check("explicit interaction.range reaches computeCellDistance",
       identical(cache.wide$.parameters$interaction.range, 400))
+
+chat.moved <- chat
+images(chat.moved, ".distance") <- cache
+coords.moved <- images(chat.moved, "coordinates")
+coords.moved[2L, "x"] <- coords.moved[2L, "x"] + 1000
+images(chat.moved, "coordinates") <- coords.moved
+check("changing coordinates through images<- clears the distance cache",
+      identical(images(chat.moved, ".distance"), list()))
+cache.moved <- .sc_c2c_geometry_cache(chat.moved)
+check("geometry cache recomputes after coordinates change",
+      cache.moved$d.spatial["c1", "c2"] == 0 &&
+        identical(cache.moved$.coordinates, coords.moved))
+chat.factor <- chat
+images(chat.factor, ".distance") <- cache
+factors.changed <- images(chat.factor, "spatial.factors")
+factors.changed$ratio <- 0.5
+images(chat.factor, "spatial.factors") <- factors.changed
+check("changing spatial factors through images<- clears the distance cache",
+      identical(images(chat.factor, ".distance"), list()))
 
 ## ---- 4. inference + enriched modes -----------------------------------------
 chat.cc <- computeCommunProb(chat, scale.distance = 9, n = 1, nthreads = 1L, verbose = FALSE)
 cache.cc <- images(chat.cc, ".distance")
 
-df.en <- .sc_comm_distance_frame(chat.cc, TRUE, cache.cc)
-nnz <- sum(vapply(unclass(chat.cc@net$cell$prob), function(m) length(m@x), integer(1)))
-check("enriched frame keeps the probability entries with a positive distance",
-      nrow(df.en) > 0 && nrow(df.en) <= nnz)
-check("enriched frame carries the 3-column contract (i/j/layer never stored)",
+## ---- 4a. explicit pair-level deduplication contract -------------------------
+dedup <- chat
+dedup.layers <- list(
+  Matrix::sparseMatrix(i = c(1L, 2L, 1L), j = c(2L, 1L, 3L),
+                       x = c(0.2, 0.4, 0.5), dims = c(15L, 15L), repr = "C"),
+  Matrix::sparseMatrix(i = 1L, j = 2L, x = 0.7,
+                       dims = c(15L, 15L), repr = "C"),
+  Matrix::sparseMatrix(i = 1L, j = 2L, x = 0.3,
+                       dims = c(15L, 15L), repr = "C"),
+  Matrix::sparseMatrix(i = 1L, j = 3L, x = 0,
+                       dims = c(15L, 15L), repr = "C")
+)
+dedup@net$cell$prob <- SparseChatArray(
+  dedup.layers,
+  dimnames = list(cells, cells, c("L1-R1", "L2-R2", "L3-R3", "zero"))
+)
+dedup@LR$LRsig <- rbind(
+  chat@LR$LRsig,
+  data.frame(ligand = "L0", receptor = "R0", agonist = "", antagonist = "",
+             co_A_receptor = "", co_I_receptor = "", annotation = "Custom Signaling",
+             interaction_name = "zero", pathway_name = "P0",
+             stringsAsFactors = FALSE)
+)
+rownames(dedup@LR$LRsig) <- dedup@LR$LRsig$interaction_name
+dedup.frame.ann <- .sc_comm_distance_frame(
+  dedup, "communication", cache, "annotation"
+)
+dedup.frame.dist <- .sc_comm_distance_frame(
+  dedup, "communication", cache, "distance"
+)
+check("annotation frame deduplicates repeated LR layers and reverse directions",
+      nrow(dedup.frame.ann) == 4L)
+check("annotation frame excludes explicit zero-only communication",
+      !any(dedup.frame.ann$distance == cache$d.spatial[1L, 3L] &
+           dedup.frame.ann$class == "other"))
+check("distance frame merges directions and deduplicates across classes",
+      nrow(dedup.frame.dist) == 2L)
+check("distance frame keeps the expected unordered-pair distances",
+      setequal(dedup.frame.dist$distance,
+               c(cache$d.spatial[1L, 2L], cache$d.spatial[1L, 3L])))
+
+df.en <- .sc_comm_distance_frame(chat.cc, "communication", cache.cc, "annotation")
+check("communication frame keeps one row per pair and annotation class",
+      nrow(df.en) > 0)
+check("communication frame carries the 3-column contract (i/j/layer never stored)",
       identical(names(df.en), c("distance", "contact", "class")))
 check("class is resolved once per layer, from the LRsig annotation",
       setequal(unique(df.en$class), c("contact", "diffusible", "other")))
@@ -118,28 +195,57 @@ check("unknown annotation layers land in the other class",
       !any(is.na(df.en$class)) || !"other" %in% df.en$class ||
         !"diffusible" %in% df.en$class)
 
-panels.ann <- .sc_c2c_panels(chat.cc, "annotation", TRUE, 0.5)
+panels.ann <- .sc_c2c_panels(chat.cc, "annotation", "communication", 0.5)
 check("row 1: diffusible + contact + other panels",
       identical(names(panels.ann), c("diffusible", "contact", "other")))
 check("row 1: unknown annotation lands in Other signaling",
       identical(unname(titles(panels.ann)["other"]), "Other signaling"))
 valid <- nrow(df.en)
-check("row 1: every plot-able record lands in exactly one panel",
+check("row 1: every pair observation lands in exactly one panel",
       valid > 0 &&
         valid == sum(vapply(panels.ann, function(p) nrow(p$data), integer(1))))
 
-panels.dist <- .sc_c2c_panels(chat.cc, "distance", TRUE, 0.5)
+panels.dist <- .sc_c2c_panels(chat.cc, "distance", "communication", 0.5)
 check("row 2: all inferred + contact-range panels",
       identical(names(panels.dist), c("all", "contact.range")))
 check("row 2: the second panel is a subset of the first",
       nrow(panels.dist[[2]]$data) <= nrow(panels.dist[[1]]$data))
 
 check("row 1 returns a patchwork through the public function",
-      inherits(spatialC2CDistPlot(chat.cc, split.by = "annotation", enriched.only = TRUE),
+      inherits(spatialC2CDistPlot(chat.cc, split.by = "annotation", mode = "communication"),
+               "patchwork"))
+check("distance split returns a patchwork through the public function",
+      inherits(spatialC2CDistPlot(chat.cc, mode = "communication", split.by = "distance"),
                "patchwork"))
 check("enriched mode without a cache is rejected with a hint",
       grepl("computeCommunProb",
-            err_msg(spatialC2CDistPlot(chat, enriched.only = TRUE, split.by = "distance"))))
+            err_msg(spatialC2CDistPlot(chat, mode = "communication", split.by = "distance"))))
+
+chat.cc.moved <- chat.cc
+coords.cc.moved <- images(chat.cc.moved, "coordinates")
+coords.cc.moved[2L, "x"] <- coords.cc.moved[2L, "x"] + 1000
+chat.cc.moved@images$coordinates <- coords.cc.moved
+check("direct coordinate changes leave an old cache detectable",
+      !.spatial_distance_cache_matches(
+        images(chat.cc.moved, ".distance"), coordinates = coords.cc.moved,
+        interaction.range = 250, contact.range = 10, ratio = 1, tol = 5
+      ))
+check("geometry rejects a stale cache after direct coordinate changes",
+      .sc_c2c_geometry_cache(chat.cc.moved)$d.spatial["c1", "c2"] == 0)
+check("enriched distance plot rejects probabilities from old coordinates",
+      grepl("computeCommunProb",
+            err_msg(spatialC2CDistPlot(chat.cc.moved, mode = "communication"))))
+images(chat.cc.moved, ".distance") <- computeCellDistance(
+  coords.cc.moved, interaction.range = 250, contact.range = 10, ratio = 1, tol = 5
+)
+check("a new distance cache cannot validate probabilities from old coordinates",
+      grepl("computeCommunProb",
+            err_msg(spatialC2CDistPlot(chat.cc.moved, mode = "communication"))))
+chat.cc.moved@images$.distance <- cache.cc
+chat.cc.moved <- computeCommunProb(chat.cc.moved, scale.distance = 9, n = 1,
+                                   nthreads = 1L, verbose = FALSE)
+check("computeCommunProb rebuilds a cache for the current coordinates",
+      identical(images(chat.cc.moved, ".distance")$.coordinates, coords.cc.moved))
 
 ## ---- 5. only one name is left ------------------------------------------------
 check("spatialCommDistPlot no longer exists",

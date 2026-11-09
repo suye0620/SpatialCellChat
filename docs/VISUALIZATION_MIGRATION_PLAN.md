@@ -18,7 +18,7 @@
 
 | 函数 | 行 | 状态 | 旧依赖 | 关联 | 批次 |
 |---|---|---|---|---|---|
-| `spatialFeaturePlot` | 350 | broken | `slot(data.signaling/data)`、`net$prob/pval/prob.cell`、`apply(prob>0,3,sum)` | V-001/003/004 | P1 |
+| `spatialFeaturePlot` | 350 | migrated | 读取 `assay` 与 `net$group/cell`，显式 LR 稀疏逐层筛选，坐标按 cell name 对齐；保留旧 `slot.name` 值映射 | V-001/003/004 | P1 |
 | `netVisual` | 964 | broken | `net$prob/pval`（4 布局总入口）；spatial 分支引用未定义 `labels` | V-001/006 | P2 |
 | `netVisual_aggregate` | 1353 | broken | `net$prob/pval`；`vertex.weight=="incoming"` 隐式接口 | V-001/002 | P2 |
 | `netVisual_individual` | 1517 | broken | 同上；spatial 分支 `labels=labels` 未定义 | V-001/006 | P2 |

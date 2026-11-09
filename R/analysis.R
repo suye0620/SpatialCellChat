@@ -855,6 +855,7 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
 #'
 extractEnrichedLR <- function(object, signaling, geneLR.return = FALSE, enriched.only = TRUE, thresh = 0.05, do.group = TRUE,
                               geneInfo = NULL, complex_input = NULL) {
+  object <- .sc_assert_spatial_cell_chat(object)
   DB <- object@DB
   if (is.null(geneInfo)) {
     geneInfo = DB$geneInfo
@@ -868,27 +869,36 @@ extractEnrichedLR <- function(object, signaling, geneLR.return = FALSE, enriched
   }
   pairLR.all <- c()
   geneLR.all <- c()
-  net0 <- slot(object, "net")
-  for (ii in 1:length(signaling)) {
+  mode <- object@misc$.mode %||% "single"
+  if (!mode %in% c("single", "merged"))
+    stop("object@misc$.mode must be 'single' or 'merged'", call. = FALSE)
+  datasets <- if (identical(mode, "single")) list(object@net) else object@misc$.datasets
+  if (!length(datasets))
+    stop("merged object has no datasets in object@misc$.datasets", call. = FALSE)
+
+  for (ii in seq_along(signaling)) {
     signaling.i <- signaling[ii]
-    if (object@options$mode == "single") {
-      net <- net0
-      LR <- object@LR
-      res <- extractEnrichedLR_internal(net, LR, DB, signaling = signaling.i, enriched.only = enriched.only, thresh = thresh, do.group = do.group)
+    if (identical(mode, "single")) {
+      res <- extractEnrichedLR_internal(datasets[[1L]], object@LR, DB,
+                                        signaling = signaling.i,
+                                        enriched.only = enriched.only,
+                                        thresh = thresh, do.group = do.group)
+      geneLR.i <- res[[1L]]
+      pairLR.i <- res[[2L]]
     } else {
-      geneLR.t <- c()
-      pairLR.t <- c()
-      for (i in 1:length(net0)) {
-        net <- net0[[i]]
-        LR <- object@LR[[i]]
-        res.t <- extractEnrichedLR_internal(net, LR, DB, signaling = signaling.i, enriched.only = enriched.only, thresh = thresh, do.group = do.group)
-        geneLR.t <- BiocGenerics::union(geneLR.t, as.character(res.t[[1]]))
-        pairLR.t <- BiocGenerics::union(pairLR.t, as.character(res.t[[2]]))
+      geneLR.i <- character()
+      pairLR.i <- character()
+      for (dataset in datasets) {
+        res <- extractEnrichedLR_internal(dataset$net, object@LR, DB,
+                                          signaling = signaling.i,
+                                          enriched.only = enriched.only,
+                                          thresh = thresh, do.group = do.group)
+        geneLR.i <- BiocGenerics::union(geneLR.i, as.character(res[[1L]]))
+        pairLR.i <- BiocGenerics::union(pairLR.i, as.character(res[[2L]]))
       }
-      res <- list(geneLR.t, pairLR.t)
     }
-    geneLR.all <- c(geneLR.all, as.character(res[[1]]))
-    pairLR.all <- c(pairLR.all, as.character(res[[2]]))
+    geneLR.all <- c(geneLR.all, as.character(geneLR.i))
+    pairLR.all <- c(pairLR.all, as.character(pairLR.i))
   }
   pairLR.all <- data.frame(interaction_name = pairLR.all, stringsAsFactors = FALSE)
 
@@ -911,39 +921,33 @@ extractEnrichedLR <- function(object, signaling, geneLR.return = FALSE, enriched
 #'
 #' @return a list: list(geneLR, pairLR.name.use)
 extractEnrichedLR_internal <- function(net, LR, DB, signaling, enriched.only = TRUE, thresh = 0.05, do.group = TRUE){
-  pairLR <- searchPair(signaling = signaling, pairLR.use = LR$LRsig, key = "pathway_name", matching.exact = T, pair.only = T)
-  pairLR.name.use = dplyr::select(DB$interaction[rownames(pairLR),],"interaction_name")
-  if (enriched.only) {
-    if (do.group) {
-      pairLR.use.name <- dimnames(net$prob)[[3]]
-      pairLR.name <- intersect(rownames(pairLR), pairLR.use.name)
-      pairLR <- pairLR[pairLR.name, ]
-      prob <- net$prob
-      pval <- net$pval
-      prob[pval > thresh] <- 0
-      if ("LR.sig" %in% names(net) == FALSE) stop("Please run the `aggregateNet` function!", '\n')
-      LR.sig <- net$LR.sig
-    } else {
-      pairLR.use.name <- dimnames(net$prob.cell)[[3]]
-      pairLR.name <- intersect(rownames(pairLR), pairLR.use.name)
-      pairLR <- pairLR[pairLR.name, ]
-      prob <- net$prob.cell
-      if ("LR.sig.cell" %in% names(net) == FALSE) stop("Please run the `aggregateNet` function!", '\n')
-      LR.sig <- net$LR.sig.cell
-    }
-    pairLR.name.use <- intersect(pairLR.name, LR.sig)
-    if (length(pairLR.name.use) == 0) {
+  pairLR.candidate <- searchPair(signaling = signaling, pairLR.use = LR$LRsig, key = "pathway_name", matching.exact = TRUE, pair.only = TRUE)
+  pairLR.name <- as.character(pairLR.candidate$interaction_name)
+
+  if (isTRUE(enriched.only)) {
+    resolution <- if (isTRUE(do.group)) "group" else "cell"
+    branch <- net[[resolution]]
+    if (is.null(branch) || is.null(branch$prob))
+      stop("Please run computeCommunProb() first!", call. = FALSE)
+    if (!"LR.sig" %in% names(branch))
+      stop("Please run the `aggregateNet` function!", call. = FALSE)
+    prob.names <- dimnames(branch$prob)[[3L]]
+    if (is.null(prob.names))
+      stop("The communication probability array has no LR layer names", call. = FALSE)
+
+    pairLR.name <- intersect(pairLR.name, intersect(prob.names, as.character(branch$LR.sig)))
+    if (!length(pairLR.name))
       message(paste0('There is no significant communication of ', signaling))
-    } else {
-      pairLR <- pairLR[pairLR.name.use,]
-    }
   }
-  geneL <- unique(pairLR$ligand)
-  geneR <- unique(pairLR$receptor)
-  geneL <- extractGeneSubset(geneL, DB$complex, DB$geneInfo)
-  geneR <- extractGeneSubset(geneR, DB$complex, DB$geneInfo)
-  geneLR <- c(geneL, geneR)
-  return(list(geneLR, pairLR.name.use))
+
+  pairLR <- LR$LRsig[match(pairLR.name, as.character(LR$LRsig$interaction_name)), , drop = FALSE]
+  geneLR <- character()
+  if (nrow(pairLR)) {
+    geneL <- extractGeneSubset(unique(as.character(pairLR$ligand)), DB$complex, DB$geneInfo)
+    geneR <- extractGeneSubset(unique(as.character(pairLR$receptor)), DB$complex, DB$geneInfo)
+    geneLR <- unique(c(geneL, geneR))
+  }
+  return(list(geneLR, pairLR.name))
 }
 
 

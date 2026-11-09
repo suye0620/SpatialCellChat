@@ -1410,12 +1410,18 @@ images <- function(object, key = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
   if (is.null(key)) {
     if (!is.list(value)) stop("images must be a list", call. = FALSE)
+    invalidate.distance <- !identical(object@images$coordinates, value$coordinates) ||
+      !identical(object@images$spatial.factors, value$spatial.factors)
     object@images <- value
   } else {
     if (length(key) != 1L || !is.character(key))
       stop("key must be a single character name", call. = FALSE)
+    previous.value <- object@images[[key]]
     object@images[[key]] <- value
+    invalidate.distance <- key %in% c("coordinates", "spatial.factors") &&
+      !identical(previous.value, value)
   }
+  if (invalidate.distance) object@images$.distance <- list()
   .sc_validate_after_update(object)
 }
 

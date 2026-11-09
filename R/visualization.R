@@ -320,18 +320,53 @@ spatialDimPlot <- function(object, color.use = NULL, group.by = NULL,
 }
 
 
+.sc_spatial_feature_active_lr <- function(object, pair.names, do.group, thresh) {
+  resolution <- if (isTRUE(do.group)) "group" else "cell"
+  branch <- object@net[[resolution]]
+  prob <- branch$prob
+  if (!inherits(prob, "SparseChatArray"))
+    stop("net$", resolution, "$prob is missing; compute communication first", call. = FALSE)
+  layer.names <- dimnames(prob)[[3L]]
+  if (is.null(layer.names))
+    stop("communication probability layers must have LR names", call. = FALSE)
+  pval <- if (isTRUE(do.group)) branch$pval else NULL
+  if (!is.null(pval) && (!inherits(pval, "SparseChatArray") ||
+                        !identical(dimnames(prob), dimnames(pval))))
+    stop("group probability and p-value layers must have matching names and dimensions", call. = FALSE)
+  layers <- unclass(prob)
+  p.layers <- if (!is.null(pval)) unclass(pval) else NULL
+  candidates <- unique(pair.names[pair.names %in% layer.names])
+  active <- vapply(candidates, function(name) {
+    k <- match(name, layer.names)
+    m <- layers[[k]]
+    positive <- which(!is.na(m@x) & m@x > 0)
+    if (!length(positive)) return(FALSE)
+    if (is.null(p.layers)) return(TRUE)
+    columns <- rep.int(seq_len(ncol(m)), diff(m@p))[positive]
+    indices <- cbind(m@i[positive] + 1L, columns)
+    p <- p.layers[[k]][indices]
+    any(!is.na(p) & p <= thresh)
+  }, logical(1L))
+  pair.names[pair.names %in% candidates[active]]
+}
+
 #' A spatially feature plots
 #'
 #' This function takes a CellChat object as input, and then plot gene expression distribution.
+#' For explicit LR pairs with `enriched.only = TRUE`, a pair is kept when it
+#' has a positive communication value. Group values with p-values above `thresh`
+#' are excluded when p-values are available; without p-values no p-value filter
+#' is applied. Pathway selection uses the existing `extractEnrichedLR` cache.
 #'
 #' @param object cellchat object
 #' @param features a char vector containing features to visualize. `features` can be genes or column names of `object@meta`.
 #' @param signaling signalling names to visualize
 #' @param pairLR.use a data frame consisting of one column named "interaction_name", defining the L-R pairs of interest
-#' @param slot.name Character. "data.signaling" or "data". By default slot.name = "data.signaling".
+#' @param slot.name Expression layer: "signaling" (default) or "norm". The
+#'   legacy values "data.signaling" and "data" map to these layers respectively.
 #' @param enriched.only  whether only return the identified enriched signaling genes in the database. Default = TRUE, returning the significantly enriched signaling interactions
 #' @param do.group set `do.group = TRUE` when only showing enriched signaling based on cell group-level communication; set `do.group = FALSE` when only showing enriched signaling based on individual cell-level communication
-#' @param thresh threshold of the p-value for determining significant interaction when visualizing links at the level of ligands/receptors;
+#' @param thresh group p-value threshold for explicit LR pairs when p-values are available.
 #' @param color.heatmap A character string or vector indicating the colormap option to use. It can be the avaibale color palette in brewer.pal() or viridis_pal() (e.g., "Spectral","viridis")
 #' @param n.colors,direction n.colors: number of basic colors to generate from color palette; direction: Sets the order of colors in the scale. If 1, the default colors are used. If -1, the order of colors is reversed.
 #' @param do.binary,cutoff whether binarizing the expression using a given cutoff
@@ -347,14 +382,28 @@ spatialDimPlot <- function(object, color.use = NULL, group.by = NULL,
 #' @return
 #' @export
 #'
-spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR.use = NULL,slot.name=c("data.signaling","data"),
+spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR.use = NULL,slot.name=c("signaling", "norm", "data.signaling", "data"),
                                enriched.only = TRUE,thresh = 0.05, do.group = TRUE,
                                color.heatmap = NULL, n.colors = 8, direction = -1,
                                do.binary = FALSE, cutoff = NULL, color.use = NULL, alpha = 1,
                                point.size = 1, legend.size = 3, legend.text.size = 8, shape.by = 16, ncol = NULL,
                                show.legend = TRUE, show.legend.combined = FALSE){
+  object <- .sc_assert_spatial_cell_chat(object)
+  slot.name <- match.arg(slot.name)
+  layer <- switch(slot.name, data.signaling = "signaling", data = "norm", slot.name)
+  if (!layer %in% names(object@assay) || is.null(object@assay[[layer]])) {
+    hint <- if (identical(layer, "signaling")) "; run subsetData() first" else ""
+    stop("assay$", layer, " is empty", hint, call. = FALSE)
+  }
+  data <- assay(object, layer)
   coords <- object@images$coordinates
-  if (ncol(coords) == 2) {
+  if (!is.null(coords) && length(dim(coords)) == 2L && ncol(coords) == 2L) {
+    cells <- colnames(data)
+    if (is.null(cells) || anyDuplicated(cells) || is.null(rownames(coords)) ||
+        anyDuplicated(rownames(coords)) || !setequal(rownames(coords), cells) ||
+        anyDuplicated(rownames(object@meta)) || !setequal(rownames(object@meta), cells))
+      stop("expression, coordinates and metadata must have the same unique cell names", call. = FALSE)
+    coords <- coords[cells, , drop = FALSE]
     colnames(coords) <- c("x_cent","y_cent")
     temp_coord = coords
     coords[,1] = temp_coord[,2]
@@ -362,9 +411,7 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
   } else {
     stop("Please check the input 'coordinates' and make sure it is a two column matrix.")
   }
-  slot.name <- match.arg(slot.name)
-  data <- methods::slot(object,slot.name)
-  meta <- object@meta
+  meta <- object@meta[cells, , drop = FALSE]
 
   if (is.null(color.heatmap)) {
     colormap <- grDevices::colorRampPalette(c("#FFFFEF","#FFFF3E", "#FF9F00", "#FF1A00", "#930000","#050000"))(64)
@@ -398,37 +445,29 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
     stop("Please don't input signaling or pairLR.use simultaneously.")
   }
 
+  if (!is.null(pairLR.use)) {
+    if (is.character(pairLR.use))
+      pairLR.use <- data.frame(interaction_name = pairLR.use)
+    if (!is.data.frame(pairLR.use) || !"interaction_name" %in% names(pairLR.use))
+      stop("pairLR.use must be a character vector or a data frame with interaction_name", call. = FALSE)
+    pair.names <- as.character(pairLR.use$interaction_name)
+    if (enriched.only)
+      pair.names <- .sc_spatial_feature_active_lr(object, pair.names, do.group, thresh)
+    if (!length(pair.names))
+      stop("There is no communication related to `pairLR.use` after filtering.", call. = FALSE)
+    index <- match(pair.names, as.character(object@LR$LRsig$interaction_name))
+    if (anyNA(index))
+      stop("Unknown interaction_name in `pairLR.use`: ", paste(unique(pair.names[is.na(index)]), collapse = ", "), call. = FALSE)
+    LR.pair <- object@LR$LRsig[index, , drop = FALSE]
+    rownames(LR.pair) <- make.unique(pair.names)
+  }
+
   df <- data.frame(x = coords[, 1], y = coords[, 2])
   if (!do.binary) {
     if (!is.null(signaling)) {
       res <- extractEnrichedLR(object, signaling = signaling, geneLR.return = TRUE, enriched.only = enriched.only, thresh = thresh, do.group = do.group)
       feature.use <- res$geneLR
     } else if (!is.null(pairLR.use)) {
-      if (is.character(pairLR.use)) {
-        pairLR.use <- data.frame(interaction_name = pairLR.use)
-      }
-      if (enriched.only) {
-        if (do.group) {
-          object@net$prob[object@net$pval > thresh] <- 0
-          pairLR.use.name <- pairLR.use$interaction_name[pairLR.use$interaction_name %in% dimnames(object@net$prob)[[3]]]
-          prob <- object@net$prob[,,pairLR.use.name, drop = FALSE]
-          prob.sum <- apply(prob > 0, 3, sum)
-          names(prob.sum) <- pairLR.use.name
-          signaling.includes <- names(prob.sum)[prob.sum > 0]
-          pairLR.use <- pairLR.use[pairLR.use$interaction_name %in% signaling.includes, , drop = FALSE]
-        } else {
-          pairLR.use.name <- pairLR.use$interaction_name[pairLR.use$interaction_name %in% dimnames(object@net$prob.cell)[[3]]]
-          prob.cell <- object@net$prob.cell[,,pairLR.use.name, drop = FALSE]
-          prob.sum <- apply(prob.cell > 0, 3, sum)
-          names(prob.sum) <- pairLR.use.name
-          signaling.includes <- names(prob.sum)[prob.sum > 0]
-          pairLR.use <- pairLR.use[pairLR.use$interaction_name %in% signaling.includes, , drop = FALSE]
-        }
-        if (length(pairLR.use$interaction_name) == 0) {
-          stop(paste0('There is no significant communication related with the input `pairLR.use`. Set `enriched.only = FALSE` to show non-significant signaling.'))
-        }
-      }
-      LR.pair <- object@LR$LRsig[pairLR.use$interaction_name, c("ligand","receptor")]
       geneL <- unique(LR.pair$ligand)
       geneR <- unique(LR.pair$receptor)
       geneL <- extractGeneSubset(geneL, object@DB$complex, object@DB$geneInfo)
@@ -484,7 +523,7 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
       }
       gg[[i]] <- g
     }
-    if (ncol > 1) {
+    if (numFeature > 1) {
       gg <- patchwork::wrap_plots(gg, ncol = ncol)
     } else {
       gg <- gg[[1]]
@@ -499,38 +538,15 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
     color.use1 = color.use
     if (!is.null(signaling)) {
       res <- extractEnrichedLR(object, signaling = signaling, enriched.only = enriched.only, thresh = thresh, do.group = do.group)
-      # gene.pair = searchPair(signaling = signaling, pairLR.use = object@LR$LRsig, key = "pathway_name", matching.exact = T, pair.only = T)
-      # LR.pair <- gene.pair[res$interaction_name, c("ligand","receptor")]
-      LR.pair <- object@LR$LRsig[res$interaction_name, c("ligand","receptor")]
+      LR.pair <- object@LR$LRsig[match(res$interaction_name, as.character(object@LR$LRsig$interaction_name)), , drop = FALSE]
+      rownames(LR.pair) <- make.unique(as.character(res$interaction_name))
     } else if (!is.null(pairLR.use)) {
-      if (is.character(pairLR.use)) {
-        pairLR.use <- data.frame(interaction_name = pairLR.use)
-      }
-      if (enriched.only) {
-        if (do.group) {
-          object@net$prob[object@net$pval > thresh] <- 0
-          pairLR.use.name <- pairLR.use$interaction_name[pairLR.use$interaction_name %in% dimnames(object@net$prob)[[3]]]
-          prob <- object@net$prob[,,pairLR.use.name, drop = FALSE]
-          prob.sum <- apply(prob > 0, 3, sum)
-          names(prob.sum) <- pairLR.use.name
-          signaling.includes <- names(prob.sum)[prob.sum > 0]
-          pairLR.use <- pairLR.use[pairLR.use$interaction_name %in% signaling.includes, , drop = FALSE]
-        } else {
-          pairLR.use.name <- pairLR.use$interaction_name[pairLR.use$interaction_name %in% dimnames(object@net$prob.cell)[[3]]]
-          prob.cell <- object@net$prob.cell[,,pairLR.use.name, drop = FALSE]
-          prob.sum <- apply(prob.cell > 0, 3, sum)
-          names(prob.sum) <- pairLR.use.name
-          signaling.includes <- names(prob.sum)[prob.sum > 0]
-          pairLR.use <- pairLR.use[pairLR.use$interaction_name %in% signaling.includes, , drop = FALSE]
-        }
-        if (length(pairLR.use$interaction_name) == 0) {
-          stop(paste0('There is no significant communication related with the input `pairLR.use`. Set `enriched.only = FALSE` to show non-significant signaling.'))
-        }
-      }
-      LR.pair <- object@LR$LRsig[pairLR.use$interaction_name, c("ligand","receptor")]
+      # LR.pair was resolved above for both plotting modes.
     } else {
       stop("Please input either `pairLR.use` or `signaling` for `binary` mode!")
     }
+    if (!nrow(LR.pair))
+      stop("No LR pairs are available to plot.", call. = FALSE)
     geneL <- as.character(LR.pair$ligand)
     geneR <- as.character(LR.pair$receptor)
     # compute the expression of ligand or receptor
@@ -596,7 +612,7 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
       }
       gg[[i]] <- g
     }
-    if (ncol > 1) {
+    if (numFeature > 1) {
       gg <- patchwork::wrap_plots(gg, ncol = ncol)
     } else {
       gg <- gg[[1]]
@@ -6543,21 +6559,24 @@ pieChart <- function(df, label.size = 2.5, color.use = NULL, title = "") {
 #' @examples
 
 plotGeneExpression <- function(object, features = NULL, signaling = NULL, enriched.only = TRUE, type = c("violin", "dot","bar"), color.use = NULL, group.by = NULL, ...) {
+  object <- .sc_assert_spatial_cell_chat(object)
   type <- match.arg(type)
-  meta <- object@meta
-  if (is.list(object@idents)) {
-    meta$group.cellchat <- object@idents
-  } else {
-    meta$group.cellchat <- object@idents
-  }
-  if (!identical(rownames(meta), colnames(object@data.signaling))) {
-    cat("The cell barcodes in 'meta' is ", head(rownames(meta)),'\n')
-    warning("The cell barcodes in 'meta' is different from those in the used data matrix.
-              We now simply assign the colnames in the data matrix to the rownames of 'mata'!")
-    rownames(meta) <- colnames(object@data.signaling)
-  }
+  if (!"signaling" %in% names(object@assay) || is.null(object@assay$signaling))
+    stop("assay$signaling is empty; run subsetData() first", call. = FALSE)
+  data.signaling <- assay(object, "signaling")
+  if (is.null(features) && is.null(signaling))
+    stop("provide either `features` or `signaling`", call. = FALSE)
 
-  w10x <- Seurat::CreateSeuratObject(counts = object@data.signaling, meta.data = meta)
+  meta <- object@meta
+  cell.names <- colnames(data.signaling)
+  if (is.null(cell.names) || anyDuplicated(cell.names) ||
+      !setequal(rownames(meta), cell.names) ||
+      !setequal(names(object@idents), cell.names))
+    stop("assay$signaling cells must match metadata and idents cell names", call. = FALSE)
+  meta <- meta[cell.names, , drop = FALSE]
+  meta$group.cellchat <- object@idents[cell.names]
+
+  w10x <- Seurat::CreateSeuratObject(counts = data.signaling, meta.data = meta)
   if (is.null(group.by)) {
     group.by <- "group.cellchat"
   }
@@ -6571,6 +6590,10 @@ plotGeneExpression <- function(object, features = NULL, signaling = NULL, enrich
     res <- extractEnrichedLR(object, signaling = signaling, geneLR.return = TRUE, enriched.only = enriched.only)
     feature.use <- res$geneLR
   }
+  if (!length(feature.use))
+    stop("no genes were selected for plotting", call. = FALSE)
+  if (identical(type, "dot") && is.null(color.use))
+    color.use <- c("#F8766D", "#00BFC4")
   if (type == "violin") {
     gg <- StackedVlnPlot(w10x, features = feature.use, color.use = color.use, ...)
   } else if (type == "dot") {
@@ -8309,6 +8332,7 @@ spatialLeePlot <- function(
 ){
   # get coordinates
   coords <- object@images$coordinates
+  distance.coordinates <- coords
   # check coordinates
   if (ncol(coords) == 2) {
     colnames(coords) <- c("x_cent", "y_cent")
@@ -8375,6 +8399,7 @@ spatialLeePlot <- function(
       tol.distance <- if (is.list(factors)) factors$tol else NULL
       has_distance <- .spatial_distance_cache_matches(
         resCellDistance,
+        coordinates = distance.coordinates,
         interaction.range = interaction.range,
         contact.range = contact.range,
         ratio = ratio,
@@ -8382,7 +8407,7 @@ spatialLeePlot <- function(
       )
       if (!has_distance) {
         resCellDistance <- SpatialCellChat::computeCellDistance(
-          coordinates = coords,
+          coordinates = distance.coordinates,
           interaction.range = interaction.range,
           contact.range = contact.range,
           ratio = ratio,

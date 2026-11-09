@@ -61,19 +61,19 @@ DATASETS <- c("simulated", "slideseq", "visium")
 # figure registry: phase, dataset, figure name, expression (evaluated with `chat` bound)
 FIGURES <- list(
   list(phase = "P0", dataset = "simulated", name = "spatialC2CDistPlot",
-       expr = quote(spatialC2CDistPlot(chat, split.by = "annotation", enriched.only = TRUE))),
+       expr = quote(spatialC2CDistPlot(chat, split.by = "annotation", mode = "communication"))),
   list(phase = "P0", dataset = "simulated", name = "spatialC2CDistPlot-geometry",
-       expr = quote(spatialC2CDistPlot(chat, enriched.only = FALSE))),
+       expr = quote(spatialC2CDistPlot(chat, mode = "geometry"))),
   list(phase = "P0", dataset = "simulated", name = "spatialDimPlot",
        expr = quote(spatialDimPlot(chat, image = FALSE))),
   list(phase = "P0", dataset = "slideseq", name = "spatialC2CDistPlot",
-       expr = quote(spatialC2CDistPlot(chat, split.by = "annotation", enriched.only = TRUE))),
+       expr = quote(spatialC2CDistPlot(chat, split.by = "annotation", mode = "communication"))),
   list(phase = "P0", dataset = "slideseq", name = "spatialC2CDistPlot-geometry",
-       expr = quote(spatialC2CDistPlot(chat, enriched.only = FALSE))),
+       expr = quote(spatialC2CDistPlot(chat, mode = "geometry"))),
   list(phase = "P0", dataset = "slideseq", name = "spatialDimPlot",
        expr = quote(spatialDimPlot(chat, image = FALSE))),
   list(phase = "P0", dataset = "visium", name = "spatialC2CDistPlot",
-       expr = quote(spatialC2CDistPlot(chat, split.by = "annotation", enriched.only = TRUE))),
+       expr = quote(spatialC2CDistPlot(chat, split.by = "annotation", mode = "communication"))),
   list(phase = "P0", dataset = "visium", name = "spatialDimPlot",
        expr = quote(spatialDimPlot(chat)))
 )
