@@ -1,0 +1,2 @@
+install_exit=0
+library_path=temporary R library (path intentionally omitted)

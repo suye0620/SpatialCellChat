@@ -32,3 +32,9 @@
 - P2 Visium 高密度 chord、P3 Slide-seq Grid 与 Flow 的显示效果仍需复核；所有其他 `PASS` 图同样需要按用户要求进行视觉及生物学验收。
 - merged 真实独立样本比较仍缺满足共同基因轴和可解释群注释的输入；真实 Visium 自身对照不是独立样本。旧的统计阈值与方向变化语义按既定要求暂不修改。
 - 旧对象、依赖恢复、其他参数组合及完整包的独立环境验收不因本轮重绘而自动通过。独立对象和可视化产物的历史记录保留。
+
+## 2026-11-11 安装包门禁
+
+当前源码以 `R CMD INSTALL --no-multiarch --with-keep.source` 安装到临时库后，`test-streamline-installed.R` 通过了公开 `netVisual_CommunFlow()` 的非零对角场、全零场、箭头倍率、序列化和新 R 进程重载检查。新增的 `test-installed-visualization-smoke.R` 使用已安装命名空间读取真实模拟对象，并成功生成 geometry 距离图、heatmap、表达图和 `plotly_spatialStackPlot()` HTML；结果在 `tests_dev/figures/recheck-449c181/installed-smoke/`。
+
+安装测试曾先暴露测试脚本使用未导出的 `assay()` 泛型；测试已改用对象的公开数据结构重新执行通过。该发现不要求修改生产包 API，但说明源码直载测试不能替代安装命名空间测试。安装日志、安装后流线日志和 smoke 日志均保存在复测目录。该门禁仍使用当前机器的 renv 依赖，尚未证明在全新机器上 `renv::restore()` 后无需额外依赖安装。

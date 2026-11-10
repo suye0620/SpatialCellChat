@@ -140,6 +140,29 @@ def main():
                 if asset.name in ('plotly-latest.min.js', 'typedarray.min.js'):
                     add(asset.parent / 'LICENSE', rel(asset), 'LICENSE', 'license')
 
+    installed_summary = recheck / 'installed-smoke' / 'summary.csv'
+    if not installed_summary.is_file():
+        errors.append(f'missing installed smoke summary: {rel(installed_summary)}')
+    else:
+        for row in rows(installed_summary):
+            if row.get('status') != 'PASS':
+                errors.append(f'{rel(installed_summary)}: {row.get("file")} has status {row.get("status")}')
+                continue
+            path = recheck / 'installed-smoke' / row['file']
+            kind = 'html' if path.suffix.lower() == '.html' else 'pdf'
+            add(path, rel(installed_summary), 'INSTALLED-SMOKE', kind)
+            if kind == 'html' and path.is_file():
+                html = AssetParser()
+                html.feed(path.read_text(encoding='utf-8'))
+                for url in html.assets:
+                    parsed = urlsplit(url)
+                    if parsed.scheme or parsed.netloc or url.startswith('#'):
+                        continue
+                    asset = path.parent / unquote(parsed.path)
+                    add(asset, rel(path), 'LOCAL-ASSET', 'asset')
+                    if asset.name in ('plotly-latest.min.js', 'typedarray.min.js'):
+                        add(asset.parent / 'LICENSE', rel(asset), 'LICENSE', 'license')
+
     browser = recheck / 'P4' / 'browser-summary-2026-11-10.csv'
     if not browser.is_file():
         errors.append(f'missing P4 browser summary: {rel(browser)}')

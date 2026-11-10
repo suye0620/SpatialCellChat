@@ -1,0 +1,48 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+
+-- createSpatialCellChat --
+
+i Input: "norm" expression layer, "spatial" mode
+v Object created: 1 genes x 25 cells; 1 groups
+
+-- Communication flow grid -----------------------------------------------------
+Cellsize source: "user-supplied"; effective=1 and 1; resolution=1
+Calibration: ratio=1; physical cellsize=1 and 1
+Grid: "square"/"polygons"; generated=16; occupied=16; empty=0
+v Assignment: 25 assigned; 0 unassigned; 21 multi-grid points
+Flow rendering: length=2; min.length=0; seeds per axis=4
+Warning message:
+st_centroid assumes attributes are constant over geometries
+
+-- Communication flow grid -----------------------------------------------------
+Cellsize source: "user-supplied"; effective=1 and 1; resolution=1
+Calibration: ratio=1; physical cellsize=1 and 1
+Grid: "square"/"polygons"; generated=16; occupied=16; empty=0
+v Assignment: 25 assigned; 0 unassigned; 21 multi-grid points
+Flow rendering: length=2; min.length=0; seeds per axis=4
+
+-- Communication field grid ----------------------------------------------------
+Cellsize source: "user-supplied"; effective=1 and 1; resolution=1
+Calibration: ratio=1; physical cellsize=1 and 1
+Grid: "square"/"polygons"; generated=16; occupied=16; empty=0
+v Assignment: 25 assigned; 0 unassigned; 21 multi-grid points
+Arrow sampling: skip=0 interpolated locations between displayed arrows
+
+-- Communication field grid ----------------------------------------------------
+Cellsize source: "user-supplied"; effective=1 and 1; resolution=1
+Calibration: ratio=1; physical cellsize=1 and 1
+Grid: "square"/"polygons"; generated=16; occupied=16; empty=0
+v Assignment: 25 assigned; 0 unassigned; 21 multi-grid points
+Arrow sampling: skip=0 interpolated locations between displayed arrows
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Installed namespace and fresh-process serialization checks passed.
