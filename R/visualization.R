@@ -1812,11 +1812,22 @@ netVisual_hierarchy1 <- function(net, vertex.receiver, color.use = NULL, title.n
   net[is.na(net)] <- 0
 
   if (remove.isolate) {
-    idx1 <- which(Matrix::rowSums(net) == 0)
-    idx2 <- which(Matrix::colSums(net) == 0)
-    idx <- intersect(idx1, idx2)
-    net <- net[-idx, ]
-    net <- net[, -idx]
+    n.groups <- nrow(net)
+    idx <- intersect(which(Matrix::rowSums(net != 0) == 0),
+                     which(Matrix::colSums(net != 0) == 0))
+    keep <- setdiff(seq_len(n.groups), idx)
+    if (!length(keep)) stop("No nonzero interactions remain after removing isolated groups.", call. = FALSE)
+    if (is.null(color.use)) color.use <- scPalette(n.groups)
+    if (is.null(vertex.weight.max)) vertex.weight.max <- max(vertex.weight)
+    if (length(idx)) {
+      net <- net[keep, keep, drop = FALSE]
+      if (length(color.use) == n.groups) color.use <- color.use[keep]
+      if (length(vertex.weight) == n.groups) vertex.weight <- vertex.weight[keep]
+      if (length(vertex.label.color) == n.groups) vertex.label.color <- vertex.label.color[keep]
+      if (length(vertex.label.cex) == n.groups) vertex.label.cex <- vertex.label.cex[keep]
+      vertex.receiver <- match(vertex.receiver, keep, nomatch = 0L)
+      vertex.receiver <- vertex.receiver[vertex.receiver > 0L]
+    }
   }
 
   if (is.null(color.use)) {
@@ -1828,10 +1839,13 @@ netVisual_hierarchy1 <- function(net, vertex.receiver, color.use = NULL, title.n
   }
   vertex.weight <- vertex.weight/vertex.weight.max*vertex.size.max+6
 
+  if (!length(vertex.receiver)) {
+    stop("No selected receiver groups remain in the interaction network.", call. = FALSE)
+  }
   m <- length(vertex.receiver)
   net2 <- net
   reorder.row <- c(vertex.receiver, setdiff(1:nrow(net),vertex.receiver))
-  net2 <- net2[reorder.row,vertex.receiver]
+  net2 <- net2[reorder.row, vertex.receiver, drop = FALSE]
   # Expand out to symmetric (M+N)x(M+N) matrix
   m1 <- nrow(net2); n1 <- ncol(net2)
   net3 <- rbind(cbind(matrix(0, m1, m1), net2), matrix(0, n1, m1+n1))
@@ -1844,6 +1858,8 @@ netVisual_hierarchy1 <- function(net, vertex.receiver, color.use = NULL, title.n
   if (length(vertex.weight) != 1) {
     vertex.weight = c(vertex.weight[vertex.receiver], vertex.weight[setdiff(1:m1,vertex.receiver)],vertex.weight[vertex.receiver])
   }
+  if (length(vertex.label.color) == m1) vertex.label.color <- c(vertex.label.color[reorder.row], vertex.label.color[vertex.receiver])
+  if (length(vertex.label.cex) == m1) vertex.label.cex <- c(vertex.label.cex[reorder.row], vertex.label.cex[vertex.receiver])
   if (is.null(shape)) {
     shape <- c(rep("circle",m), rep("circle", m1-m), rep("circle",m))
   }
@@ -1851,8 +1867,13 @@ netVisual_hierarchy1 <- function(net, vertex.receiver, color.use = NULL, title.n
   g <- graph_from_adjacency_matrix(net3, mode = "directed", weighted = T)
   edge.start <- ends(g, es=E(g), names=FALSE)
   coords <- matrix(NA, nrow(net3), 2)
-  coords[1:m,1] <- 0; coords[(m+1):m1,1] <- space.h; coords[(m1+1):nrow(net3),1] <- space.h/2;
-  coords[1:m,2] <- seq(space.v, 0, by = -space.v/(m-1)); coords[(m+1):m1,2] <- seq(space.v, 0, by = -space.v/(m1-m-1));coords[(m1+1):nrow(net3),2] <- seq(space.v, 0, by = -space.v/(n1-1));
+  receiver.rows <- seq_len(m)
+  other.rows <- m + seq_len(m1 - m)
+  target.rows <- m1 + seq_len(n1)
+  coords[receiver.rows, 1] <- 0; coords[other.rows, 1] <- space.h; coords[target.rows, 1] <- space.h / 2
+  coords[receiver.rows, 2] <- seq(space.v, 0, length.out = length(receiver.rows))
+  coords[other.rows, 2] <- seq(space.v, 0, length.out = length(other.rows))
+  coords[target.rows, 2] <- seq(space.v, 0, length.out = length(target.rows))
   coords_scale<-coords
 
   igraph::V(g)$size<-vertex.weight
@@ -1878,7 +1899,7 @@ netVisual_hierarchy1 <- function(net, vertex.receiver, color.use = NULL, title.n
   E(g)$arrow.size<-arrow.size
   E(g)$label.color<-edge.label.color
   E(g)$label.cex<-edge.label.cex
-  E(g)$color<-adjustcolor(igraph::V(g)$color[edge.start[,1]],alpha.edge)
+  if (igraph::ecount(g)) E(g)$color <- adjustcolor(igraph::V(g)$color[edge.start[,1]], alpha.edge)
 
   label.dist <- c(rep(space.h*label.dist,m), rep(space.h*label.dist, m1-m),rep(0, nrow(net3)-m1))
   label.locs <- c(rep(-pi, m), rep(0, m1-m),rep(-pi, nrow(net3)-m1))
@@ -1976,23 +1997,23 @@ netVisual_hierarchy2 <-function(net, vertex.receiver, color.use = NULL, title.na
   thresh <- stats::quantile(net, probs = 1-top)
   net[net < thresh] <- 0
 
+  cells.level <- rownames(net)
   if ((!is.null(sources.use)) | (!is.null(targets.use))) {
     df.net <- reshape2::melt(net, value.name = "value")
     colnames(df.net)[1:2] <- c("source","target")
     # keep the interactions associated with sources and targets of interest
     if (!is.null(sources.use)){
       if (is.numeric(sources.use)) {
-        sources.use <- levels(object@idents)[sources.use]
+        sources.use <- cells.level[sources.use]
       }
       df.net <- subset(df.net, source %in% sources.use)
     }
     if (!is.null(targets.use)){
       if (is.numeric(targets.use)) {
-        targets.use <- levels(object@idents)[targets.use]
+        targets.use <- cells.level[targets.use]
       }
       df.net <- subset(df.net, target %in% targets.use)
     }
-    cells.level <- levels(object@idents)
     df.net$source <- factor(df.net$source, levels = cells.level)
     df.net$target <- factor(df.net$target, levels = cells.level)
     df.net$value[is.na(df.net$value)] <- 0
@@ -2001,11 +2022,22 @@ netVisual_hierarchy2 <-function(net, vertex.receiver, color.use = NULL, title.na
   net[is.na(net)] <- 0
 
   if (remove.isolate) {
-    idx1 <- which(Matrix::rowSums(net) == 0)
-    idx2 <- which(Matrix::colSums(net) == 0)
-    idx <- intersect(idx1, idx2)
-    net <- net[-idx, ]
-    net <- net[, -idx]
+    n.groups <- nrow(net)
+    idx <- intersect(which(Matrix::rowSums(net != 0) == 0),
+                     which(Matrix::colSums(net != 0) == 0))
+    keep <- setdiff(seq_len(n.groups), idx)
+    if (!length(keep)) stop("No nonzero interactions remain after removing isolated groups.", call. = FALSE)
+    if (is.null(color.use)) color.use <- scPalette(n.groups)
+    if (is.null(vertex.weight.max)) vertex.weight.max <- max(vertex.weight)
+    if (length(idx)) {
+      net <- net[keep, keep, drop = FALSE]
+      if (length(color.use) == n.groups) color.use <- color.use[keep]
+      if (length(vertex.weight) == n.groups) vertex.weight <- vertex.weight[keep]
+      if (length(vertex.label.color) == n.groups) vertex.label.color <- vertex.label.color[keep]
+      if (length(vertex.label.cex) == n.groups) vertex.label.cex <- vertex.label.cex[keep]
+      vertex.receiver <- match(vertex.receiver, keep, nomatch = 0L)
+      vertex.receiver <- vertex.receiver[vertex.receiver > 0L]
+    }
   }
 
 
@@ -2018,11 +2050,14 @@ netVisual_hierarchy2 <-function(net, vertex.receiver, color.use = NULL, title.na
   }
   vertex.weight <- vertex.weight/vertex.weight.max*vertex.size.max+6
 
+  if (!length(vertex.receiver)) {
+    stop("No selected receiver groups remain in the interaction network.", call. = FALSE)
+  }
   m <- length(vertex.receiver)
   m0 <- nrow(net)-length(vertex.receiver)
   net2 <- net
   reorder.row <- c(setdiff(1:nrow(net),vertex.receiver), vertex.receiver)
-  net2 <- net2[reorder.row,vertex.receiver]
+  net2 <- net2[reorder.row, vertex.receiver, drop = FALSE]
   # Expand out to symmetric (M+N)x(M+N) matrix
   m1 <- nrow(net2); n1 <- ncol(net2)
   net3 <- rbind(cbind(matrix(0, m1, m1), net2), matrix(0, n1, m1+n1))
@@ -2035,6 +2070,8 @@ netVisual_hierarchy2 <-function(net, vertex.receiver, color.use = NULL, title.na
   if (length(vertex.weight) != 1) {
     vertex.weight = c(vertex.weight[setdiff(1:m1,vertex.receiver)], vertex.weight[vertex.receiver], vertex.weight[vertex.receiver])
   }
+  if (length(vertex.label.color) == m1) vertex.label.color <- c(vertex.label.color[reorder.row], vertex.label.color[vertex.receiver])
+  if (length(vertex.label.cex) == m1) vertex.label.cex <- c(vertex.label.cex[reorder.row], vertex.label.cex[vertex.receiver])
   if (is.null(shape)) {
     shape <- rep("circle",nrow(net3))
   }
@@ -2042,8 +2079,13 @@ netVisual_hierarchy2 <-function(net, vertex.receiver, color.use = NULL, title.na
   g <- graph_from_adjacency_matrix(net3, mode = "directed", weighted = T)
   edge.start <- ends(g, es=igraph::E(g), names=FALSE)
   coords <- matrix(NA, nrow(net3), 2)
-  coords[1:m0,1] <- 0; coords[(m0+1):m1,1] <- space.h; coords[(m1+1):nrow(net3),1] <- space.h/2;
-  coords[1:m0,2] <- seq(space.v, 0, by = -space.v/(m0-1)); coords[(m0+1):m1,2] <- seq(space.v, 0, by = -space.v/(m1-m0-1));coords[(m1+1):nrow(net3),2] <- seq(space.v, 0, by = -space.v/(n1-1));
+  other.rows <- seq_len(m0)
+  receiver.rows <- m0 + seq_len(m1 - m0)
+  target.rows <- m1 + seq_len(n1)
+  coords[other.rows, 1] <- 0; coords[receiver.rows, 1] <- space.h; coords[target.rows, 1] <- space.h / 2
+  coords[other.rows, 2] <- seq(space.v, 0, length.out = length(other.rows))
+  coords[receiver.rows, 2] <- seq(space.v, 0, length.out = length(receiver.rows))
+  coords[target.rows, 2] <- seq(space.v, 0, length.out = length(target.rows))
   coords_scale<-coords
 
   igraph::V(g)$size<-vertex.weight
@@ -2068,7 +2110,7 @@ netVisual_hierarchy2 <-function(net, vertex.receiver, color.use = NULL, title.na
   igraph::E(g)$arrow.size<-arrow.size
   igraph::E(g)$label.color<-edge.label.color
   igraph::E(g)$label.cex<-edge.label.cex
-  igraph::E(g)$color<-adjustcolor(igraph::V(g)$color[edge.start[,1]],alpha.edge)
+  if (igraph::ecount(g)) igraph::E(g)$color <- adjustcolor(igraph::V(g)$color[edge.start[,1]], alpha.edge)
 
   label.dist <- c(rep(space.h*label.dist,m), rep(space.h*label.dist, m1-m),rep(0, nrow(net3)-m1))
   label.locs <- c(rep(-pi, m0), rep(0, m1-m0),rep(-pi, nrow(net3)-m1))
@@ -2201,11 +2243,21 @@ netVisual_circle <-function(net, color.use = NULL,title.name = NULL, sources.use
 
 
   if (remove.isolate) {
-    idx1 <- which(Matrix::rowSums(net) == 0)
-    idx2 <- which(Matrix::colSums(net) == 0)
-    idx <- intersect(idx1, idx2)
-    net <- net[-idx, ]
-    net <- net[, -idx]
+    n.groups <- nrow(net)
+    idx <- intersect(which(Matrix::rowSums(net != 0) == 0),
+                     which(Matrix::colSums(net != 0) == 0))
+    keep <- setdiff(seq_len(n.groups), idx)
+    if (!length(keep)) stop("No nonzero interactions remain after removing isolated groups.", call. = FALSE)
+    if (is.null(color.use)) color.use <- scPalette(n.groups)
+    if (is.null(vertex.weight.max)) vertex.weight.max <- max(vertex.weight)
+    if (length(idx)) {
+      net <- net[keep, keep, drop = FALSE]
+      if (length(color.use) == n.groups) color.use <- color.use[keep]
+      if (length(vertex.weight) == n.groups) vertex.weight <- vertex.weight[keep]
+      if (length(vertex.label.color) == n.groups) vertex.label.color <- vertex.label.color[keep]
+      if (length(vertex.label.cex) == n.groups) vertex.label.cex <- vertex.label.cex[keep]
+      if (length(shape) == n.groups) shape <- shape[keep]
+    }
   }
 
   g <- graph_from_adjacency_matrix(net, mode = "directed", weighted = T)
@@ -2244,7 +2296,7 @@ netVisual_circle <-function(net, color.use = NULL,title.name = NULL, sources.use
     igraph::E(g)$width<-0.3+edge.width.max*igraph::E(g)$weight
   }
 
-  igraph::E(g)$arrow.width<-arrow.width
+  if (length(arrow.width) != 1L) igraph::E(g)$arrow.width <- arrow.width
   igraph::E(g)$arrow.size<-arrow.size
   igraph::E(g)$label.color<-edge.label.color
   igraph::E(g)$label.cex<-edge.label.cex
@@ -2261,6 +2313,7 @@ netVisual_circle <-function(net, color.use = NULL,title.name = NULL, sources.use
   label.locs <- radian.rescale(x=1:length(igraph::V(g)), direction=-1, start=0)
   label.dist <- vertex.weight/max(vertex.weight)+2
   plot(g,edge.curved=edge.curved,vertex.shape=shape,layout=coords_scale,margin=margin, vertex.label.dist=label.dist,
+       edge.arrow.width = if (length(arrow.width) == 1L) arrow.width else igraph::E(g)$arrow.width,
        vertex.label.degree=label.locs, vertex.label.family="Helvetica", edge.label.family="Helvetica") # "sans"
   if (!is.null(title.name)) {
     text(0,1.5,title.name, cex = 1.1)
@@ -2417,14 +2470,24 @@ netVisual_spatial <-function(net, coordinates, labels, color.use = NULL,title.na
   if (remove.loop) {
     diag(net) <- 0
   }
+  background.color.use <- NULL
   if (remove.isolate) {
-    idx1 <- which(Matrix::rowSums(net) == 0)
-    idx2 <- which(Matrix::colSums(net) == 0)
-    idx <- intersect(idx1, idx2)
-    net <- net[-idx, ]
-    net <- net[, -idx]
-    node_coords <- node_coords[-idx, ]
-    cells.level <- cells.level[-idx]
+    n.groups <- nrow(net)
+    idx <- intersect(which(Matrix::rowSums(net != 0) == 0),
+                     which(Matrix::colSums(net != 0) == 0))
+    keep <- setdiff(seq_len(n.groups), idx)
+    if (!length(keep)) stop("No nonzero interactions remain after removing isolated groups.", call. = FALSE)
+    if (is.null(color.use)) color.use <- scPalette(n.groups)
+    if (length(color.use) == n.groups) names(color.use) <- cells.level
+    background.color.use <- color.use
+    if (is.null(vertex.weight.max)) vertex.weight.max <- max(vertex.weight)
+    if (length(idx)) {
+      net <- net[keep, keep, drop = FALSE]
+      node_coords <- node_coords[keep, , drop = FALSE]
+      cells.level <- cells.level[keep]
+      if (length(color.use) == n.groups) color.use <- color.use[keep]
+      if (length(vertex.weight) == n.groups) vertex.weight <- vertex.weight[keep]
+    }
   }
 
   g <- graph_from_adjacency_matrix(net, mode = "directed", weighted = T)
@@ -2467,7 +2530,8 @@ netVisual_spatial <-function(net, coordinates, labels, color.use = NULL,title.na
     xlab(NULL) + ylab(NULL)  +
     coord_fixed() + theme(aspect.ratio = 1) +
     theme(panel.background = element_blank(),panel.border = element_blank(),axis.text=element_blank(),axis.ticks = element_blank(),legend.title = element_blank())+ theme(legend.key = element_blank())
-  gg <- gg + geom_point(aes(x_cent, y_cent), data = coordinates,colour = color.use[labels],alpha = alpha.image, size = point.size, show.legend = FALSE)
+  point.colors <- if (is.null(background.color.use)) color.use[labels] else background.color.use[as.character(labels)]
+  gg <- gg + geom_point(aes(x_cent, y_cent), data = coordinates,colour = point.colors,alpha = alpha.image, size = point.size, show.legend = FALSE)
   gg <- gg + scale_y_reverse()
   if (vertex.label.cex > 0){
     gg <- gg + ggnetwork::geom_nodetext_repel(aes(label = node_idents), color="black", size = vertex.label.cex)

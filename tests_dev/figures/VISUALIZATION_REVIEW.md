@@ -50,3 +50,8 @@ Grid/Flow 的网格向量聚合已去除逐网格 `sf` 子集开销，并通过�
 
 
 `merged/diff-isolate-edgecases/` 另含差异网络正负抵消、无孤立节点和单节点自环的实绘回归；全零网络按测试预期返回明确提示。
+
+
+## 网络图孤立群回归
+
+`P2/network-isolate-regression/` 含 17 个网络绘图边界情形；`P2/network-isolate-three-fixtures-2026-11-10.csv` 及各数据集的 `network-isolate-regression/` 含三对象 aggregate/individual 各三种布局的 18 张 PDF。每个数据集只选择一个 pathway 和一条 LR，全部使用 `remove.isolate = TRUE`，不能代表所有参数与信号。模拟数据产生绘图库弃用警告，其余本次图形调用没有捕获到警告。Slide-seq 空间网络点密、标签较小，hierarchy 部分长标签靠近中心，均需人工复核。问题定位及测试范围见 P2-021。

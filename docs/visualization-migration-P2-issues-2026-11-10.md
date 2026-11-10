@@ -147,3 +147,14 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 修复：依据行列是否存在非零差值识别孤立群；只在存在孤立群时删除并保留矩阵维度；给所有边初始化有效的自环角度，再覆盖自环的角度。全部删除时明确报告没有非零差异，未改变差值、边符号或筛选阈值。
 
 验证：`tests_dev/test-merged-diff-isolates.R` 从真实 merge producer 得到对象，实绘正负变化平衡、没有孤立群和只剩单个自环三种情况，并检查传入图构造的邻接矩阵与预期一致；全零情形检查明确错误。对应输出见 `tests_dev/figures/merged/diff-isolate-edgecases/`。
+
+
+## P2-021：网络图删除孤立群后的索引与图形属性错配
+
+位置：`netVisual_circle()`、`netVisual_spatial()`、`netVisual_hierarchy1()` 和 `netVisual_hierarchy2()` 的 `remove.isolate` 路径。原实现对空索引使用负下标会清空没有孤立群的网络；删除部分群后，颜色、权重、空间坐标及 hierarchy 接收群仍可能沿用删除前的位置。hierarchy2 的来源/目标筛选还引用了不存在的 `object@idents`；单个接收群时矩阵降维及布局坐标计算也会失败。影响是有效网络无法绘制，或节点属性与细胞群对应错误。
+
+修复：根据是否存在非零行或列筛选，在确有孤立群时同步子集颜色、权重和坐标，并保留原权重最大值；空间背景仍显示原全部细胞与对应颜色；按保留群映射接收群；来源/目标筛选使用网络矩阵的群名；单个接收群保留矩阵维度，并用长度确定布局坐标。全零网络或所有指定接收群被删除时返回明确错误。hierarchy 节点的逐群标签颜色与大小也按重排后的真实节点和接收节点同步。布局序列在群数 2 至 100 时与旧计算数值一致；没有修改通信概率、筛选阈值或统计定义。
+
+验证：`tests_dev/test-network-render-isolates.R` 实绘 17 个情形，检查邻接矩阵、颜色、权重、接收边和逐群标签属性；模拟、Visium 和完整 Slide-seq 分别针对一个 pathway 和一个 LR，使用 aggregate/individual 与 circle/spatial/hierarchy 组合写出 18 张 PDF，记录见 `tests_dev/figures/P2/network-isolate-three-fixtures-2026-11-10.csv`。`test-netvisual-group-migration.R` 和 `test-merge-spatialcellchat.R` 回归通过。此前出现的空边颜色转换警告通过仅在存在边时转换消除；Visium 个体 circle 的自环绘制警告源于 igraph 将 35 条边的 arrow.width 与 6 条自环一起循环，现将标量宽度直接传给绘图调用，保留宽度值。测试仍有绘图库弃用、环境 locale 和 renv 状态警告。
+
+上述测试未穷举 LR 与绘图参数。完整 Slide-seq 的空间网络预览中群标签较小、背景较密，hierarchy 两面板的部分长标签靠近中心，需人工核对图像；写出 PDF 不等同于视觉或生物学验收。

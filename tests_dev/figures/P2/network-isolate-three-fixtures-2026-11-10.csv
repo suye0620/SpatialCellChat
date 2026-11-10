@@ -1,0 +1,22 @@
+"dataset","cells","signal","lr","mode","layout","status","detail","warnings","file"
+"simulated",20,"P1","G1-R1","aggregate","circle","PDF-WRITTEN","","","tests_dev/figures/P2/simulated/network-isolate-regression/aggregate-circle.pdf"
+"simulated",20,"P1","G1-R1","aggregate","spatial","PDF-WRITTEN","","`get.edgelist()` was deprecated in igraph 2.0.0.
+i Please use `as_edgelist()` instead. | Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+i Please use `linewidth` instead.","tests_dev/figures/P2/simulated/network-isolate-regression/aggregate-spatial.pdf"
+"simulated",20,"P1","G1-R1","aggregate","hierarchy","PDF-WRITTEN","","`add.vertex.shape()` was deprecated in igraph 2.0.0.
+i Please use `add_shape()` instead.","tests_dev/figures/P2/simulated/network-isolate-regression/aggregate-hierarchy.pdf"
+"simulated",20,"P1","G1-R1","individual","circle","PDF-WRITTEN","","","tests_dev/figures/P2/simulated/network-isolate-regression/individual-circle.pdf"
+"simulated",20,"P1","G1-R1","individual","spatial","PDF-WRITTEN","","","tests_dev/figures/P2/simulated/network-isolate-regression/individual-spatial.pdf"
+"simulated",20,"P1","G1-R1","individual","hierarchy","PDF-WRITTEN","","","tests_dev/figures/P2/simulated/network-isolate-regression/individual-hierarchy.pdf"
+"visium",905,"TGFb","TGFB1_TGFBR1_TGFBR2","aggregate","circle","PDF-WRITTEN","","","tests_dev/figures/P2/visium/network-isolate-regression/aggregate-circle.pdf"
+"visium",905,"TGFb","TGFB1_TGFBR1_TGFBR2","aggregate","spatial","PDF-WRITTEN","","","tests_dev/figures/P2/visium/network-isolate-regression/aggregate-spatial.pdf"
+"visium",905,"TGFb","TGFB1_TGFBR1_TGFBR2","aggregate","hierarchy","PDF-WRITTEN","","","tests_dev/figures/P2/visium/network-isolate-regression/aggregate-hierarchy.pdf"
+"visium",905,"TGFb","TGFB1_TGFBR1_TGFBR2","individual","circle","PDF-WRITTEN","","","tests_dev/figures/P2/visium/network-isolate-regression/individual-circle.pdf"
+"visium",905,"TGFb","TGFB1_TGFBR1_TGFBR2","individual","spatial","PDF-WRITTEN","","","tests_dev/figures/P2/visium/network-isolate-regression/individual-spatial.pdf"
+"visium",905,"TGFb","TGFB1_TGFBR1_TGFBR2","individual","hierarchy","PDF-WRITTEN","","","tests_dev/figures/P2/visium/network-isolate-regression/individual-hierarchy.pdf"
+"slideseq",29536,"TGFb","TGFB1_TGFBR1_TGFBR2","aggregate","circle","PDF-WRITTEN","","","tests_dev/figures/P2/slideseq/network-isolate-regression/aggregate-circle.pdf"
+"slideseq",29536,"TGFb","TGFB1_TGFBR1_TGFBR2","aggregate","spatial","PDF-WRITTEN","","","tests_dev/figures/P2/slideseq/network-isolate-regression/aggregate-spatial.pdf"
+"slideseq",29536,"TGFb","TGFB1_TGFBR1_TGFBR2","aggregate","hierarchy","PDF-WRITTEN","","","tests_dev/figures/P2/slideseq/network-isolate-regression/aggregate-hierarchy.pdf"
+"slideseq",29536,"TGFb","TGFB1_TGFBR1_TGFBR2","individual","circle","PDF-WRITTEN","","","tests_dev/figures/P2/slideseq/network-isolate-regression/individual-circle.pdf"
+"slideseq",29536,"TGFb","TGFB1_TGFBR1_TGFBR2","individual","spatial","PDF-WRITTEN","","","tests_dev/figures/P2/slideseq/network-isolate-regression/individual-spatial.pdf"
+"slideseq",29536,"TGFb","TGFB1_TGFBR1_TGFBR2","individual","hierarchy","PDF-WRITTEN","","","tests_dev/figures/P2/slideseq/network-isolate-regression/individual-hierarchy.pdf"
