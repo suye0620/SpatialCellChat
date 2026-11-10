@@ -3828,8 +3828,9 @@ identifyCellTopics <- function(
       verbose = verbose,
       L1 = L1
     )
-    W <- outs_NMF$w %*% Matrix::diag(sqrt(outs_NMF$d))
-    H <- Matrix::diag(sqrt(outs_NMF$d)) %*% outs_NMF$h %>% Matrix::t()
+    sqrt.d <- .sc_nmf_sqrt_diagonal(outs_NMF$d)
+    W <- outs_NMF$w %*% sqrt.d
+    H <- sqrt.d %*% outs_NMF$h %>% Matrix::t()
     rownames(H) <- colnames(data_sr)
     colnames(H) <- stringr::str_c("Topic_", seq_len(NCOL(H)))
     rownames(W) <- rownames(data_sr)
@@ -4075,6 +4076,16 @@ identifyTopicCommunities <- function(
 }
 
 
+# Matrix::diag() treats a length-one numeric argument as a matrix order.  Use
+# an explicit diagonal constructor so rank-one NMF results remain 1 x 1.
+.sc_nmf_sqrt_diagonal <- function(d) {
+  d <- as.numeric(d)
+  if (!length(d) || any(!is.finite(d)) || any(d < 0)) {
+    stop("NMF singular values must be finite and non-negative.", call. = FALSE)
+  }
+  Matrix::Diagonal(x = sqrt(d))
+}
+
 #' @title suggestK1
 #' @description
 #' Cross validate for RcppML::nmf.
@@ -4136,8 +4147,9 @@ suggestK1 <- function(
               seed = seedSample[[i]],
               verbose = F
             )
-            W <- outs_NMF$w %*% Matrix::diag(sqrt(outs_NMF$d))
-            H <- Matrix::diag(sqrt(outs_NMF$d)) %*% outs_NMF$h %>% Matrix::t()
+            sqrt.d <- .sc_nmf_sqrt_diagonal(outs_NMF$d)
+            W <- outs_NMF$w %*% sqrt.d
+            H <- sqrt.d %*% outs_NMF$h %>% Matrix::t()
 
             Mat.hat <- W%*%Matrix::t(H)
 
@@ -4179,8 +4191,9 @@ suggestK1 <- function(
               seed = seedSample[[i]],
               verbose = F
             )
-            W <- outs_NMF$w %*% Matrix::diag(sqrt(outs_NMF$d))
-            H <- Matrix::diag(sqrt(outs_NMF$d)) %*% outs_NMF$h %>% Matrix::t()
+            sqrt.d <- .sc_nmf_sqrt_diagonal(outs_NMF$d)
+            W <- outs_NMF$w %*% sqrt.d
+            H <- sqrt.d %*% outs_NMF$h %>% Matrix::t()
             W.sub <- W[rowSample,,drop=F]
             H.sub <- H[colSample,,drop=F]
             Mat.sub.hat <- W.sub%*%Matrix::t(H.sub)

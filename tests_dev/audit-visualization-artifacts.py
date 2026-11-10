@@ -186,6 +186,16 @@ def main():
             if row.get('status') == 'PASS':
                 add((FIGURES / row['figure']).with_suffix('.pdf'), rel(summary), 'PASS', 'pdf')
 
+    # Remaining P5 migration figures are emitted by the focused regression
+    # runner and listed explicitly so regenerated captures stay in inventory.
+    p5_summary = FIGURES / 'summary-P5-remaining-migration.txt'
+    p5_text = p5_summary.read_text(encoding='utf-8') if p5_summary.is_file() else ''
+    if 'ALL P5 REMAINING MIGRATION CHECKS PASSED' not in p5_text:
+        errors.append(f'incomplete P5 regression summary: {rel(p5_summary)}')
+    else:
+        for path in sorted((FIGURES / 'P5' / 'simulated').glob('*.pdf')):
+            add(path, rel(p5_summary), 'PASS', 'pdf')
+
     for dataset in ('simulated', 'visium', 'slideseq'):
         summaries = [FIGURES / 'P4' / dataset / 'summary.csv',
                      FIGURES / 'P3' / dataset / 'netVisual_CommunFlowWidget-summary.csv']

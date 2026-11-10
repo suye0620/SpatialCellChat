@@ -1,3 +1,4 @@
+^renv$
 ^renv($|/)
 ^renv\.lock$
 ^tests_dev($|/)
@@ -6,5 +7,7 @@
 ^\.workbuddy($|/)
 ^\.tmp($|_)
 ^src/.*\.(o|dll|rds)$
+^R/legacy($|/)
+^man/legacy($|/)
 ^.*\.Rproj$
 ^\.Rproj\.user$

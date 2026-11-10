@@ -29,6 +29,15 @@ check <- function(label, value) {
 chat <- make_simulated_chat()
 chat <- netAnalysis_computeCentrality(chat, slot.name = "netP", do.group = FALSE)
 signal <- dimnames(chat@netP$centr.cell)[[3]][1]
+rank.one.chat <- identifyCellTopics(
+  chat, slot.name = "netP", pattern = "outgoing", topic.k = 1L,
+  verbose = FALSE, seed.use = 11L, maxit = 20L
+)
+check("rank-one topic producer stores cell and signaling factors",
+      ncol(rank.one.chat@netP$topic$outgoing$cell) == 1L &&
+        ncol(rank.one.chat@netP$topic$outgoing$signaling) == 1L &&
+        identical(rownames(rank.one.chat@netP$topic$outgoing$cell),
+                  colnames(chat@assay$norm)))
 
 single <- spatialGiPlot(chat, signaling.name = signal, measure = "indeg",
                         do.binary = FALSE, n = 4, return.object = FALSE)

@@ -95,3 +95,11 @@ P3 局部修复实验见 `P3/streamline-patch-experiment-2026-11-11/`：合成�
 ## Source package 检查
 
 补充：已修正 `.Rbuildignore`，排除 renv、tests_dev、调试 `.tmp_*` 和本地编译对象；干净 source tarball 的 `R CMD check` 在关闭强制 Suggests 后退出码为 0。检查仍有 2 个 WARNING 和 6 个 NOTE，主要是既有依赖声明、全局变量声明和 Rd 签名差异；本机缺少部分 Suggests 包，因此没有声称完整 CRAN 环境检查通过。
+
+## 2026-11-11 迁移遗漏复核
+
+当前源码复跑通过 `test-remaining-entrypoints.R`、`test-remaining-migration.R`、`test-analysis-network-migration.R`、`test-merge-spatialcellchat.R`、`test-merged-zero-comparison.R`、`test-viz-p3-migration.R`、`test-viz-p4-migration.R` 和 `test-plotly-spatial-stack.R`。其中新增 rank-one/rank-two `suggestK1()` 检查发现并修复了 Matrix 长度为 1 的 `diag()` 尺寸歧义；问题、原因和修复边界见 `docs/remaining-migration-issues-2026-11-10.md` P5-018。
+
+P4 的 15 个页面浏览器检查记录在 `recheck-449c181/P4/browser-summary-2026-11-10.csv`，15/15 通过，覆盖全细胞覆盖、3D scene、stack 三层/单 colorbar 和 `Plotly.relayout`。同一生产提交的隔离重跑产物与已有 HTML 重复，未另行纳入版本控制。这仍是浏览器 smoke，不是人工视觉或所有浏览器交互验收。
+
+merged 结构由真实 Visium 自身对照再次通过 `mergeSpatialCellChat()` producer 生成，并成功绘制 10 个 comparison consumers；摘要在 `merged/visium-self-control-2026-11-11/summary.csv`。该对照是同一样本的技术零差异，不是独立样本比较。完整独立样本比较仍受 P5-014 的基因轴和共同群注释契约阻塞。

@@ -98,11 +98,36 @@ contract needs to accept both source-tree and installed-package execution while
 still requiring the JS/CSS files to be present in the rendered dependency
 directory.
 
-The next audit must cover `rankSimilarity()`, `rankNetPairwise()`,
-`compareInteractions()`, `suggestK()`/`suggestK1()`, the comparison scatter
-functions, `spatialVisual_scoring()` merged behavior, topic/statistics plots,
-and all available 3D/widget branches. Any behavioral change must preserve the
-11-slot schema and be recorded here with a focused regression check.
+The focused audit is now complete for the previously listed entrances:
+`rankSimilarity()`, `rankNetPairwise()`, `compareInteractions()`, the
+comparison scatter functions, `spatialVisual_scoring()` merged behavior,
+topic/statistics plots, and the available 3D/widget branches. `suggestK()` is
+an optional Liger-only path and does not consume SpatialCellChat slots;
+`suggestK1()` is a matrix-only path and now has a real rank-one/rank-two
+regression. The remaining boundaries are optional dependency availability,
+manual visual review, and the explicitly preserved statistical semantics below.
+
+## P5-018: rank-one NMF topic/rank selection failed under current Matrix
+
+Location: `R/analysis.R::identifyCellTopics()` and `suggestK1()`.
+
+Cause: `Matrix::diag(sqrt(d))` interprets a length-one numeric argument as the
+order of a square matrix. For a rank-one NMF result, the resulting matrix can
+have an unrelated dimension, so the factor rescaling fails with a
+non-conformable matrix multiplication error. This was a dependency/API
+compatibility defect in an omitted analysis entrance, not a change to the NMF
+algorithm.
+
+Fix: Use the shared `.sc_nmf_sqrt_diagonal()` helper backed by
+`Matrix::Diagonal(x = sqrt(d))`, with finite/non-negative validation. The
+existing factor orientation, reconstruction, topic names, and cross-validation
+formula are unchanged.
+
+Validation: `tests_dev/test-remaining-migration.R` runs `suggestK1()` on an 8 x
+8 sparse matrix for ranks 1 and 2 with two replicates and verifies the ggplot
+and four statistic rows. The previous dimension error is no longer
+reproducible. The durable decision and consumer map are recorded in
+`.agents/notes/implemented/2026-11-11-nmf-rank-one-diagonal.md`.
 
 ## P5-008: merged pairwise rankings were not consumable
 

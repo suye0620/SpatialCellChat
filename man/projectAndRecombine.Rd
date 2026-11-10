@@ -10,7 +10,8 @@ projectAndRecombine(
   adj_matrix,
   alpha,
   projecting.function = randomWalkBySolve,
-  normalizeAdjMatrix = c("rows", "columns")
+  normalizeAdjMatrix = c("rows", "columns"),
+  ...
 )
 }
 \arguments{
@@ -32,6 +33,8 @@ actual projecting.}
 adjacency matrix be normalized by. rows
 corresponds to in-degree, columns to
 out-degree.}
+
+\item{...}{additional arguments passed to \code{projecting.function}.}
 }
 \value{
 matrix with network-projected gene expression data. Genes that are

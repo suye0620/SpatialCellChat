@@ -57,6 +57,24 @@ k.plot <- selectK(chat, slot.name = "net", pattern = "outgoing", k.range = 2, nr
 pass("selectK reads sparse group layers and honors a small rank range",
      inherits(k.plot, "ggplot") && all(unique(k.plot$data$k) == 2))
 
+if (!requireNamespace("RcppML", quietly = TRUE)) {
+  stop("RcppML is required for the suggestK1 rank-one regression.", call. = FALSE)
+}
+set.seed(11)
+topic.input <- Matrix::Matrix(matrix(abs(rnorm(64)), nrow = 8L), sparse = TRUE)
+topic.cv <- suggestK1(topic.input, k.test = c(1L, 2L), reps = 2L,
+                      p = 0, maxit = 5L, seed.use = 11L)
+pass("suggestK1 handles rank-one and rank-two NMF outputs",
+     inherits(topic.cv$figure, "ggplot") &&
+       nrow(topic.cv$stats) == 4L &&
+       all(topic.cv$stats$k %in% c(1L, 2L)))
+topic.cv.sampled <- suggestK1(topic.input, k.test = c(1L, 2L), reps = 2L,
+                             p = 0.5, maxit = 5L, seed.use = 12L)
+pass("suggestK1 sampled branch handles rank-one and rank-two outputs",
+     inherits(topic.cv.sampled$figure, "ggplot") &&
+       nrow(topic.cv.sampled$stats) == 4L &&
+       all(topic.cv.sampled$stats$k %in% c(1L, 2L)))
+
 chat@DB$geneInfo <- data.frame(
   Symbol = c("G1", "G2", "L3", "R1", "R2", "R3"),
   stringsAsFactors = FALSE

@@ -45,6 +45,10 @@ two@images$.grid <- list()
 group.map <- c(A = "AB", B = "AB", C = "C", D = "D")
 one <- mergeInteractions(one, group.map)
 two <- mergeInteractions(two, group.map)
+one@dr$umap <- matrix(seq_len(2L * ncol(one@assay$norm)), ncol = 2L,
+                     dimnames = list(colnames(one@assay$norm), c("UMAP1", "UMAP2")))
+two@dr$umap <- matrix(seq_len(2L * ncol(two@assay$norm)), ncol = 2L,
+                     dimnames = list(colnames(two@assay$norm), c("UMAP1", "UMAP2")))
 
 merged <- mergeSpatialCellChat(list(sample1 = one, sample2 = two))
 check("producer returns a merged SpatialCellChat", methods::is(merged, "SpatialCellChat") &&
@@ -60,7 +64,29 @@ check("snapshot names and cell-level sparse axes align",
         identical(dimnames(merged@misc$.datasets[[1]]$net$cell$prob)[[1]],
                   paste0("sample1_", colnames(one@assay$norm))) &&
         identical(dimnames(merged@misc$.datasets[[2]]$net$cell$prob)[[1]],
-                  paste0("sample2_", colnames(two@assay$norm))))
+                  paste0("sample2_", colnames(two@assay$norm))) &&
+        identical(dimnames(merged@misc$.datasets[[1]]$net$cell$prob)[[3]],
+                  dimnames(one@net$cell$prob)[[3]]) &&
+        identical(dimnames(merged@misc$.datasets[[2]]$net$cell$prob)[[3]],
+                  dimnames(two@net$cell$prob)[[3]]))
+retained.assays <- setdiff(names(one@assay), c("raw", "scale"))
+check("merged assay layers retain aligned values and named cell axes",
+      identical(names(merged@assay), names(one@assay)) &&
+        all(vapply(retained.assays, function(layer) {
+          expected <- do.call(cbind, list(one@assay[[layer]], two@assay[[layer]]))
+          identical(rownames(merged@assay[[layer]]), rownames(expected)) &&
+            identical(colnames(merged@assay[[layer]]),
+                      c(paste0("sample1_", colnames(one@assay[[layer]])),
+                        paste0("sample2_", colnames(two@assay[[layer]])))) &&
+            isTRUE(all.equal(unname(as.matrix(merged@assay[[layer]])),
+                             unname(as.matrix(expected))))
+        }, logical(1L))))
+check("safe dataset embeddings remain in snapshots with renamed cell axes",
+      identical(rownames(merged@misc$.datasets$sample1$dr$umap),
+                paste0("sample1_", colnames(one@assay$norm))) &&
+        identical(rownames(merged@misc$.datasets$sample2$dr$umap),
+                  paste0("sample2_", colnames(two@assay$norm))) &&
+        !length(merged@dr))
 check("dataset-specific LRsig tables are retained and unioned",
       nrow(merged@misc$.datasets[[1]]$LR$LRsig) == nrow(one@LR$LRsig) &&
         nrow(merged@misc$.datasets[[2]]$LR$LRsig) == nrow(two@LR$LRsig) &&
@@ -103,11 +129,17 @@ group.map.factor <- factor(unname(group.map), levels = unique(unname(group.map))
 membership <- outer(as.character(group.map.factor), levels(group.map.factor), `==`) * 1
 expected.one <- crossprod(membership, as.matrix(one@net$group$count) %*% membership)
 dimnames(expected.one) <- list(levels(group.map.factor), levels(group.map.factor))
-check("mergeInteractions aggregates group matrices by the named mapping",
+expected.weight.one <- crossprod(membership, as.matrix(one@net$group$weight) %*% membership)
+dimnames(expected.weight.one) <- list(levels(group.map.factor), levels(group.map.factor))
+check("mergeInteractions aggregates count and weight by named group mapping",
       isTRUE(all.equal(merged@misc$.datasets$sample1$net$group$count.merged,
                        expected.one)) &&
+        isTRUE(all.equal(merged@misc$.datasets$sample1$net$group$weight.merged,
+                         expected.weight.one)) &&
         identical(rownames(merged@misc$.datasets$sample1$net$group$count.merged),
-                  c("AB", "C", "D")))
+                  c("AB", "C", "D")) &&
+        identical(dimnames(merged@misc$.datasets$sample1$net$group$weight.merged),
+                  list(c("AB", "C", "D"), c("AB", "C", "D"))))
 check("getMaxWeight reads merged group matrices and sparse probability layers",
       identical(unname(getMaxWeight(merged, slot.name = "net",
                                     attribute = "count.merged")),
@@ -158,6 +190,22 @@ check("count.merged comparison uses merged group matrices",
       isTRUE(all.equal(merged.diff, expected.diff)) &&
         inherits(netVisual_diffInteraction(merged, comparison = c(1, 2),
                                            measure = "count.merged"), "recordedplot"))
+weight.diff <- .sc_viz_merged_difference(merged, c(1, 2), "weight.merged")$value
+expected.weight.diff <- merged@misc$.datasets$sample2$net$group$weight.merged -
+  merged@misc$.datasets$sample1$net$group$weight.merged
+check("weight.merged comparison uses mapped matrices without axis fallback",
+      isTRUE(all.equal(weight.diff, expected.weight.diff)))
+missing.measure.checks <- vapply(c("count.merged", "weight.merged"), function(measure) {
+  missing.merged.measure <- merged
+  missing.merged.measure@misc$.datasets$sample1$net$group[[measure]] <- NULL
+  missing.measure.error <- tryCatch({
+    .sc_viz_merged_difference(missing.merged.measure, c(1, 2), measure)
+    ""
+  }, error = conditionMessage)
+  grepl(paste0("no `", measure, "`"), missing.measure.error, fixed = TRUE)
+}, logical(1L))
+check("missing merged measures fail instead of falling back to ordinary matrices",
+      all(missing.measure.checks))
 check("merged bubble reads snapshot communication",
       inherits(netVisual_bubble(merged, comparison = c(1, 2), signaling = "P1", return.data = TRUE)$gg.obj,
                "ggplot"))
@@ -168,6 +216,20 @@ bad@idents <- factor(ifelse(seq_along(bad@idents) == 1L, "different", as.charact
 names(bad@idents) <- colnames(bad@assay$norm)
 check("group mismatch is rejected", inherits(try(mergeSpatialCellChat(
   list(sample1 = one, sample2 = bad)), silent = TRUE), "try-error"))
+merge_error <- function(expr) tryCatch({ force(expr); "" }, error = conditionMessage)
+check("invalid object lists are rejected explicitly",
+      grepl("every element", merge_error(mergeSpatialCellChat(list(one, list()))), fixed = TRUE))
+check("duplicate dataset names are rejected explicitly",
+      grepl("unique", merge_error(mergeSpatialCellChat(
+        list(one, two), add.names = c("same", "same"))), fixed = TRUE))
+different.datatype <- one
+different.datatype@misc$.datatype <- "RNA"
+check("datatype mismatch is rejected explicitly",
+      grepl("same misc\\$\\.datatype", merge_error(mergeSpatialCellChat(
+        list(one, different.datatype))), fixed = FALSE))
+check("duplicate resulting cell identifiers are rejected when not prefixed",
+      grepl("cell names must be unique", merge_error(mergeSpatialCellChat(
+        list(one, one), cell.prefix = FALSE)), fixed = TRUE))
 
 subset.one <- subsetSpatialCellChat(one, cells.use = colnames(one@assay$norm)[1:5])
 check("single subset keeps aligned assay and metadata",

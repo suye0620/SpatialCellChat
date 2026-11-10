@@ -1,0 +1,485 @@
+* using log directory 'C:/Users/jinLab1/AppData/Local/Temp/spatialcellchat-continued-check-20261111/SpatialCellChat.Rcheck'
+* using R version 4.4.3 (2025-02-28 ucrt)
+* using platform: x86_64-w64-mingw32
+* R was compiled by
+    gcc.exe (GCC) 13.3.0
+    GNU Fortran (GCC) 13.3.0
+* running under: Windows 10 x64 (build 19045)
+* using session charset: ASCII
+* using options '--no-manual --no-build-vignettes'
+* checking for file 'SpatialCellChat/DESCRIPTION' ... OK
+* checking extension type ... Package
+* this is package 'SpatialCellChat' version '0.1.0'
+* package encoding: UTF-8
+* checking package namespace information ... OK
+* checking package dependencies ... NOTE
+Packages suggested but not available for checking:
+  'roxygen2', 'SingleCellExperiment', 'SummarizedExperiment', 'gg.gap',
+  'wordcloud', 'raster', 'rstudioapi', 'scatterpie', 'rliger',
+  'SNFtool', 'pryr', 'expm'
+
+Vignette dependency required without any vignettes:: 'knitr'
+* checking if this is a source package ... OK
+* checking if there is a namespace ... OK
+* checking for executable files ... OK
+* checking for hidden files and directories ... OK
+* checking for portable file names ... OK
+* checking whether package 'SpatialCellChat' can be installed ... OK
+* used C++ compiler: 'G__~1.EXE (GCC) 13.3.0'
+* checking installed package size ... NOTE
+  installed size is 22.8Mb
+  sub-directories of 1Mb or more:
+    R     17.1Mb
+    data   4.0Mb
+    libs   1.0Mb
+* checking package directory ... OK
+* checking DESCRIPTION meta-information ... OK
+* checking top-level files ... NOTE
+File
+  LICENSE
+is not mentioned in the DESCRIPTION file.
+* checking for left-over files ... OK
+* checking index information ... OK
+* checking package subdirectories ... OK
+* checking code files for non-ASCII characters ... OK
+* checking R files for syntax errors ... OK
+* checking whether the package can be loaded ... OK
+* checking whether the package can be loaded with stated dependencies ... OK
+* checking whether the package can be unloaded cleanly ... OK
+* checking whether the namespace can be loaded with stated dependencies ... OK
+* checking whether the namespace can be unloaded cleanly ... OK
+* checking loading without being on the library search path ... OK
+* checking dependencies in R code ... WARNING
+'::' or ':::' import not declared from: 'callr'
+'library' or 'require' calls not declared from:
+  'Matrix' 'Seurat' 'cli' 'ggplot2' 'methods'
+'library' or 'require' calls to packages already attached by Depends:
+  'dplyr' 'igraph'
+  Please remove these calls from your code.
+'library' or 'require' calls in package code:
+  'Matrix' 'Seurat' 'cli' 'ggplot2' 'methods'
+  Please use :: or requireNamespace() instead.
+  See section 'Suggested packages' in the 'Writing R Extensions' manual.
+Namespace in Imports field not imported from: 'Rfast'
+  All declared Imports should be used.
+* checking S3 generic/method consistency ... OK
+* checking replacement functions ... OK
+* checking foreign function calls ... OK
+* checking R code for possible problems ... NOTE
+.H_to_conn_mat: no visible global function definition for
+  'max_factor_rcpp'
+.sc_identify_enriched_pairwise: no visible binding for global variable
+  'ligand'
+.sc_identify_enriched_pairwise: no visible binding for global variable
+  'receptor'
+.sc_streamline_probe: no visible binding for global variable 'x'
+.sc_streamline_probe: no visible binding for global variable 'y'
+.sc_streamline_probe: no visible binding for global variable 'dx'
+aggregateNet: no visible binding for global variable 'pathway_name'
+aggregateNet: no visible binding for global variable 'interaction_name'
+aggregateNet: no visible binding for global variable 'target'
+aggregateNet: no visible binding for global variable 'source_target'
+barPlot: no visible binding for global variable 'gene'
+compareInteractions: no visible binding for global variable 'dataset'
+computeEigengap: no visible binding for global variable 'nCluster'
+computeEigengap: no visible binding for global variable 'eigenVal'
+computeEnrichmentScore: no visible binding for global variable
+  'interaction_name'
+computeEnrichmentScore: no visible binding for global variable
+  'CellChatDB.mouse'
+computeEnrichmentScore: no visible binding for global variable
+  'CellChatDB.human'
+computeEnrichmentScore: no visible binding for global variable 'ligand'
+computeGridSize: no visible binding for global variable 'cell_type'
+doHeatmap : <anonymous>: no visible global function definition for
+  'RandomName'
+doHeatmap: no visible global function definition for 'RandomName'
+extractTopicSignaling : <anonymous>: no visible binding for global
+  variable 'CellChatDB.mouse'
+extractTopicSignaling : <anonymous>: no visible binding for global
+  variable 'CellChatDB.human'
+extractTopicSignaling : <anonymous>: no visible binding for global
+  variable 'ligand'
+extractTopicSignaling : <anonymous>: no visible binding for global
+  variable 'pathway_name'
+extractTopicSignaling : <anonymous>: no visible binding for global
+  variable 'absolute.v'
+identifyOverExpressedLigandReceptor: no visible binding for global
+  variable 'ligand'
+identifyOverExpressedLigandReceptor: no visible binding for global
+  variable 'receptor'
+identifyTopicCommunities: no visible binding for global variable
+  'cluster'
+identifyTopicCommunities: no visible binding for global variable
+  'avg_log2FC'
+netAnalysis_diff_signalingRole_scatter: no visible binding for global
+  variable 'x'
+netAnalysis_diff_signalingRole_scatter: no visible binding for global
+  variable 'y'
+netAnalysis_diff_signalingRole_scatter: no visible binding for global
+  variable 'Group'
+netAnalysis_dot: no visible binding for global variable 'id'
+netAnalysis_dot: no visible binding for global variable 'Contribution'
+netAnalysis_dot: no visible binding for global variable 'Signaling'
+netAnalysis_dot: no visible binding for global variable 'CellGroup'
+netAnalysis_river: no visible binding for global variable 'x'
+netAnalysis_river: no visible binding for global variable
+  'Contribution'
+netAnalysis_river: no visible binding for global variable 'stratum'
+netAnalysis_river: no visible binding for global variable 'connection'
+netAnalysis_river: no visible binding for global variable 'CellGroup'
+netAnalysis_signalingChanges_scatter: no visible binding for global
+  variable 'specificity'
+netAnalysis_signalingRole_scatter: no visible binding for global
+  variable 'x'
+netAnalysis_signalingRole_scatter: no visible binding for global
+  variable 'y'
+netAnalysis_signalingRole_scatter: no visible binding for global
+  variable 'Count'
+netAnalysis_signalingRole_scatter: no visible binding for global
+  variable 'Group'
+netVisual_CommunField: no visible binding for global variable
+  'x_cent_cut'
+netVisual_CommunField: no visible binding for global variable
+  'y_cent_cut'
+netVisual_CommunField: no visible binding for global variable 'x_cent'
+netVisual_CommunField: no visible binding for global variable 'y_cent'
+netVisual_CommunField: no visible binding for global variable
+  'alpha_image'
+netVisual_CommunField: no visible binding for global variable 'dx'
+netVisual_CommunField: no visible binding for global variable 'dy'
+netVisual_CommunField: no visible binding for global variable 'x'
+netVisual_CommunField: no visible binding for global variable 'y'
+netVisual_CommunField: no visible binding for global variable 'label'
+netVisual_CommunFieldGrid: no visible binding for global variable 'X'
+netVisual_CommunFieldGrid: no visible binding for global variable 'Y'
+netVisual_CommunFieldGrid: no visible binding for global variable 'lon'
+netVisual_CommunFieldGrid: no visible binding for global variable 'lat'
+netVisual_CommunFieldGrid: no visible binding for global variable 'u'
+netVisual_CommunFieldGrid: no visible binding for global variable 'v'
+netVisual_CommunFieldGrid: no visible binding for global variable
+  'norm_mag'
+netVisual_CommunFieldGrid: no visible binding for global variable 'mag'
+netVisual_CommunFieldGrid: no visible binding for global variable
+  'x_cent'
+netVisual_CommunFieldGrid: no visible binding for global variable
+  'y_cent'
+netVisual_CommunFlow: no visible binding for global variable 'X'
+netVisual_CommunFlow: no visible binding for global variable 'Y'
+netVisual_CommunFlow: no visible binding for global variable 'lon'
+netVisual_CommunFlow: no visible binding for global variable 'lat'
+netVisual_CommunFlow: no visible binding for global variable 'u'
+netVisual_CommunFlow: no visible binding for global variable 'v'
+netVisual_CommunFlow: no visible binding for global variable 'x_cent'
+netVisual_CommunFlow: no visible binding for global variable 'y_cent'
+netVisual_CommunFlow: no visible binding for global variable 'dx'
+netVisual_CommunFlow: no visible binding for global variable 'dy'
+netVisual_TopicComposition: no visible binding for global variable 'x'
+netVisual_TopicComposition: no visible binding for global variable 'y'
+netVisual_TopicComposition: no visible binding for global variable
+  'proportion'
+netVisual_TopicSignaling: no visible binding for global variable
+  'CellChatDB.mouse'
+netVisual_TopicSignaling: no visible binding for global variable
+  'CellChatDB.human'
+netVisual_TopicSignaling : <anonymous>: no visible binding for global
+  variable 'ligand'
+netVisual_TopicSignaling : <anonymous>: no visible binding for global
+  variable 'pathway_name'
+netVisual_TopicSignaling : <anonymous>: no visible binding for global
+  variable 'absolute.v'
+netVisual_TopicSignaling : <anonymous>: no visible binding for global
+  variable 'positive'
+netVisual_TopicSignaling : <anonymous>: no visible binding for global
+  variable 'feature'
+netVisual_barplot: no visible binding for global variable 'target'
+netVisual_bubble: no visible binding for global variable
+  'interaction_name_2'
+netVisual_bubble: no visible binding for global variable 'prob'
+netVisual_bubble: no visible binding for global variable 'pval'
+netVisual_chord_cell_internal: no visible binding for global variable
+  'target'
+netVisual_chord_cell_internal: no visible binding for global variable
+  'prob'
+netVisual_chord_gene: no visible binding for global variable
+  'pathway_name'
+netVisual_chord_gene: no visible binding for global variable
+  'interaction_name'
+netVisual_chord_gene: no visible binding for global variable
+  'source_target'
+netVisual_chord_gene: no visible binding for global variable 'prob'
+netVisual_chord_gene: no visible binding for global variable 'target'
+netVisual_circle: no visible binding for global variable 'target'
+netVisual_diffInteraction: no visible binding for global variable
+  'target'
+netVisual_embedding: no visible binding for global variable 'x'
+netVisual_embedding: no visible binding for global variable 'y'
+netVisual_embedding: no visible binding for global variable
+  'Commun.Prob.'
+netVisual_embeddingPairwise: no visible binding for global variable 'x'
+netVisual_embeddingPairwise: no visible binding for global variable 'y'
+netVisual_embeddingPairwise: no visible binding for global variable
+  'Commun.Prob.'
+netVisual_embeddingPairwiseZoomIn: no visible binding for global
+  variable 'x'
+netVisual_embeddingPairwiseZoomIn: no visible binding for global
+  variable 'y'
+netVisual_embeddingPairwiseZoomIn: no visible binding for global
+  variable 'Commun.Prob.'
+netVisual_embeddingZoomIn: no visible binding for global variable 'x'
+netVisual_embeddingZoomIn: no visible binding for global variable 'y'
+netVisual_embeddingZoomIn: no visible binding for global variable
+  'Commun.Prob.'
+netVisual_heatmap: no visible binding for global variable 'target'
+netVisual_hierarchy1: no visible binding for global variable 'target'
+netVisual_hierarchy1: no visible global function definition for 'E<-'
+netVisual_hierarchy2: no visible binding for global variable 'target'
+netVisual_spatial: no visible binding for global variable 'target'
+netVisual_spatial: no visible binding for global variable 'X1'
+netVisual_spatial: no visible binding for global variable 'X2'
+netVisual_spatial: no visible binding for global variable 'Y1'
+netVisual_spatial: no visible binding for global variable 'Y2'
+netVisual_spatial: no visible binding for global variable 'x_cent'
+netVisual_spatial: no visible binding for global variable 'y_cent'
+pieChart: no visible binding for global variable 'value'
+pieChart: no visible binding for global variable 'group'
+pieChart: no visible binding for global variable 'prop'
+plotFeatures: no visible binding for global variable 'x'
+plotFeatures: no visible binding for global variable 'y'
+plotFeatures: no visible binding for global variable 'spot_highlight'
+plotFeatures: no visible binding for global variable 'group.label'
+plotStatistics_Gi: no visible binding for global variable 'x'
+plotStatistics_Gi: no visible binding for global variable 'y'
+plotStatistics_Gi: no visible binding for global variable 'statistic_G'
+plotStatistics_Gi: no visible binding for global variable 'point_shape'
+plotStatistics_Gi: no visible binding for global variable
+  'statistic_G.d'
+plotStatistics_Lee: no visible binding for global variable 'x'
+plotStatistics_Lee: no visible binding for global variable 'y'
+plotStatistics_Lee: no visible binding for global variable 'proportion'
+plotly_spatialLRpairPlot_shiny : server: no visible binding for global
+  variable 'idx'
+plotly_spatialLRpairPlot_shiny : server: no visible binding for global
+  variable '.'
+rankNet: no visible binding for global variable 'contribution.scaled'
+rankNet: no visible binding for global variable 'contribution'
+rankNet: no visible binding for global variable 'group'
+relabelSpatialCellChat: no visible binding for global variable 'pre'
+searchPair : <anonymous>: no visible binding for global variable
+  'interaction_name'
+searchPair : <anonymous>: no visible binding for global variable
+  'pathway_name'
+searchPair : <anonymous>: no visible binding for global variable
+  'ligand'
+searchPair : <anonymous>: no visible binding for global variable
+  'receptor'
+selectK: no visible binding for global variable 'k'
+selectK: no visible binding for global variable 'Measure'
+showDatabaseCategory: no visible binding for global variable 'group'
+sketchData: no visible binding for global variable 'X'
+spatialDimPlotPoints: no visible binding for global variable 'x_cent'
+spatialDimPlotPoints: no visible binding for global variable 'y_cent'
+spatialFeaturePlot: no visible binding for global variable 'x'
+spatialFeaturePlot: no visible binding for global variable 'y'
+spatialFeaturePlot: no visible binding for global variable
+  'feature.data'
+spatialGiPlot: no visible binding for global variable '.'
+spatialTopicPlot: no visible binding for global variable 'x'
+spatialTopicPlot: no visible binding for global variable 'y'
+spatialTopicPlot: no visible binding for global variable 'feature.data'
+spatialVisual_scoring: no visible binding for global variable 'x'
+spatialVisual_scoring: no visible binding for global variable 'y'
+spatialVisual_scoring: no visible binding for global variable
+  'feature.data'
+spatialVisual_scoring: no visible binding for global variable 'value1'
+spatialVisual_scoring: no visible binding for global variable 'value2'
+spatialVisual_scoring: no visible binding for global variable 'value3'
+subsetCommunication_internal: no visible binding for global variable
+  'prob'
+subsetCommunication_internal: no visible binding for global variable
+  'interaction_name'
+subsetCommunication_internal: no visible binding for global variable
+  'pathway_name'
+subsetCommunication_internal: no visible binding for global variable
+  'source_target'
+subsetCommunication_internal: no visible binding for global variable
+  'pval'
+subsetCommunication_internal: no visible binding for global variable
+  'target'
+updateCellChatDB: no visible binding for global variable
+  'CellChatDB.human'
+updateCellChatDB: no visible binding for global variable
+  'CellChatDB.mouse'
+visualizePie: no visible binding for global variable 'x_cent'
+visualizePie: no visible binding for global variable 'y_cent'
+vizDimLoadings : <anonymous>: no visible binding for global variable
+  'CellChatDB.mouse'
+vizDimLoadings : <anonymous>: no visible binding for global variable
+  'CellChatDB.human'
+vizDimLoadings : <anonymous>: no visible binding for global variable
+  'ligand'
+vizDimLoadings : <anonymous>: no visible binding for global variable
+  'pathway_name'
+vizDimLoadings : <anonymous>: no visible binding for global variable
+  'absolute.v'
+vizDimLoadings : <anonymous>: no visible binding for global variable
+  'positive'
+vizDimLoadings : <anonymous>: no visible binding for global variable
+  'feature'
+Undefined global functions or variables:
+  . CellChatDB.human CellChatDB.mouse CellGroup Commun.Prob.
+  Contribution Count E<- Group Measure RandomName Signaling X X1 X2 Y
+  Y1 Y2 absolute.v alpha_image avg_log2FC cell_type cluster connection
+  contribution contribution.scaled dataset dx dy eigenVal feature
+  feature.data gene group group.label id idx interaction_name
+  interaction_name_2 k label lat ligand lon mag max_factor_rcpp
+  nCluster norm_mag pathway_name point_shape positive pre prob prop
+  proportion pval receptor source_target specificity spot_highlight
+  statistic_G statistic_G.d stratum target u v value value1 value2
+  value3 x x_cent x_cent_cut y y_cent y_cent_cut
+* checking Rd files ... NOTE
+checkRd: (-1) PPI.human.Rd:8: Lost braces; missing escapes or markup?
+     8 | A square matrix where A_{ij}=1 if protein i interacts with protein j
+       |                         ^
+checkRd: (-1) PPI.mouse.Rd:8: Lost braces; missing escapes or markup?
+     8 | A square matrix where A_{ij}=1 if protein i interacts with protein j
+       |                         ^
+* checking Rd metadata ... OK
+* checking Rd cross-references ... NOTE
+Unknown package 'pryr' in Rd xrefs
+* checking for missing documentation entries ... OK
+* checking for code/documentation mismatches ... WARNING
+Codoc mismatches from Rd file 'computeAvgCommunProb_Visium.Rd':
+computeAvgCommunProb_Visium
+  Code: function(object, cell.type.decomposition, avg.type = c("avg",
+                 "sum"), group.by = NULL, do.permutation = TRUE, nboot
+                 = 100, seed.use = 1L, colocalization.use = FALSE,
+                 thresh.colo = 0.05)
+  Docs: function(object, cell.type.decomposition, avg.type = c("avg",
+                 "sum"), group.by = NULL, do.permutation = T, nboot =
+                 100, seed.use = 1L, colocalization.use = F,
+                 thresh.colo = 0.05)
+  Mismatches in argument default values:
+    Name: 'do.permutation' Code: TRUE Docs: T
+    Name: 'colocalization.use' Code: FALSE Docs: F
+
+Codoc mismatches from Rd file 'computeGridSize.Rd':
+computeGridSize
+  Code: function(object, cellsize = NULL, grid.resolution = NULL,
+                 do.plot = TRUE, what = "polygons", square = TRUE)
+  Docs: function(object, cellsize = NULL, grid.resolution = NULL,
+                 do.plot = T, what = "polygons", square = T)
+  Mismatches in argument default values:
+    Name: 'do.plot' Code: TRUE Docs: T
+    Name: 'square' Code: TRUE Docs: T
+
+Codoc mismatches from Rd file 'createSpatialCellChat.Rd':
+createSpatialCellChat
+  Code: function(object, meta = NULL, group.by = NULL, input.assay =
+                 c("norm", "raw"), normalize = NULL, scale.factor =
+                 10000, do.log = TRUE, datatype = c("RNA", "spatial"),
+                 coordinates = NULL, coordinate.system = NULL,
+                 spatial.factors = NULL, image = NULL, image_name =
+                 NULL, assay_name = NULL, do.sparse = TRUE, sample =
+                 "sample1")
+  Docs: function(object, meta = NULL, group.by = NULL, datatype =
+                 c("RNA", "spatial"), coordinates = NULL,
+                 spatial.factors = NULL, assay = NULL, do.sparse = T)
+  Argument names in code not in docs:
+    input.assay normalize scale.factor do.log coordinate.system image
+    image_name assay_name sample
+  Argument names in docs not in code:
+    assay
+  Mismatches in argument names (first 3):
+    Position: 4 Code: input.assay Docs: datatype
+    Position: 5 Code: normalize Docs: coordinates
+    Position: 6 Code: scale.factor Docs: spatial.factors
+  Mismatches in argument default values:
+    Name: 'do.sparse' Code: TRUE Docs: T
+
+Codoc mismatches from Rd file 'identifyOverExpressedGenes.Rd':
+identifyOverExpressedGenes
+  Code: function(object, do.grid = FALSE, cellsize = c(5, 5), what =
+                 "polygons", square = TRUE, data.use = NULL,
+                 selection.method = c("wilcox", "moransi", "meringue"),
+                 features.name = "features", group.by = NULL,
+                 idents.use = NULL, invert = FALSE, group.dataset =
+                 NULL, pos.dataset = NULL, only.pos = TRUE, features =
+                 NULL, return.object = TRUE, thresh.pc = 0, thresh.fc =
+                 0, thresh.p = 0.05)
+  Docs: function(object, do.grid = F, cellsize = c(5, 5), what =
+                 "polygons", square = T, data.use = NULL,
+                 selection.method = c("wilcox", "moransi", "meringue"),
+                 features.name = "features", group.by = NULL,
+                 idents.use = NULL, invert = FALSE, group.dataset =
+                 NULL, pos.dataset = NULL, only.pos = TRUE, features =
+                 NULL, return.object = TRUE, thresh.pc = 0, thresh.fc =
+                 0, thresh.p = 0.05)
+  Mismatches in argument default values:
+    Name: 'do.grid' Code: FALSE Docs: F
+    Name: 'square' Code: TRUE Docs: T
+
+Codoc mismatches from Rd file 'level.SpatialCellChat.Rd':
+level.SpatialCellChat
+  Code: function(chat)
+  Docs: function(object)
+  Argument names in code not in docs:
+    chat
+  Argument names in docs not in code:
+    object
+  Mismatches in argument names:
+    Position: 1 Code: chat Docs: object
+
+Codoc mismatches from Rd file 'makeGridSpatialCellChat.Rd':
+makeGridSpatialCellChat
+  Code: function(object, data.slot = c("norm", "raw", "scale",
+                 "signaling", "smooth"), cellsize = c(5, 5), what =
+                 "polygons", square = TRUE, idents.ties.method =
+                 "first")
+  Docs: function(object, data.slot = c("data", "data.raw",
+                 "data.signaling", "data.scale", "data.project"),
+                 cellsize = c(5, 5), what = "polygons", square = T,
+                 idents.ties.method = "first")
+  Mismatches in argument default values:
+    Name: 'data.slot' Code: c("norm", "raw", "scale", "signaling", "smooth") Docs: c("data", "data.raw", "data.signaling", "data.scale", "data.project")
+    Name: 'square' Code: TRUE Docs: T
+
+Codoc mismatches from Rd file 'normalizeData.Rd':
+normalizeData
+  Code: function(data.raw, scale.factor = 10000, do.log = TRUE, verbose
+                 = TRUE)
+  Docs: function(data.raw, scale.factor = 10000, do.log = TRUE)
+  Argument names in code not in docs:
+    verbose
+
+Codoc mismatches from Rd file 'plotly_spatialDimPlot.Rd':
+plotly_spatialDimPlot
+  Code: function(object, group.by = NULL, group.highlight = NULL,
+                 cells.highlight = NULL, sources.use = NULL,
+                 targets.use = NULL, idents.use = NULL, method =
+                 c("2d", "3d"), color.use = NULL, nohighlight.alpha =
+                 0.65, title.name = NULL, scene.name = "scene",
+                 point.size = 2, show.legend = TRUE, legend.group.title
+                 = "labels", three.dim.z = 0)
+  Docs: function(object, group.by = NULL, group.highlight = NULL,
+                 cells.highlight = NULL, sources.use = NULL,
+                 targets.use = NULL, idents.use = NULL, method =
+                 c("2d", "3d"), color.use = NULL, nohighlight.alpha =
+                 0.65, title.name = NULL, scene.name = "scene",
+                 point.size = 2, show.legend = T, legend.group.title =
+                 "labels", three.dim.z = 0)
+  Mismatches in argument default values:
+    Name: 'show.legend' Code: TRUE Docs: T
+
+* checking Rd \usage sections ... OK
+* checking Rd contents ... OK
+* checking for unstated dependencies in examples ... OK
+* checking contents of 'data' directory ... OK
+* checking data for non-ASCII characters ... OK
+* checking LazyData ... OK
+* checking data for ASCII and uncompressed saves ... OK
+* checking line endings in C/C++/Fortran sources/headers ... OK
+* checking compiled code ... OK
+* checking examples ... OK
+* DONE
+Status: 2 WARNINGs, 6 NOTEs

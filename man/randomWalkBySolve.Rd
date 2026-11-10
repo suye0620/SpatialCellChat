@@ -4,7 +4,7 @@
 \alias{randomWalkBySolve}
 \title{project data on graph by solving the linear equation (I - alpha*A) * E_sm = E * (1-alpha)}
 \usage{
-randomWalkBySolve(E, A, alpha, normalizeAjdMatrix = c("rows", "columns"))
+randomWalkBySolve(E, A, alpha, normalizeAdjMatrix = c("rows", "columns"))
 }
 \arguments{
 \item{E}{initial data matrix [NxM]}
@@ -12,6 +12,8 @@ randomWalkBySolve(E, A, alpha, normalizeAjdMatrix = c("rows", "columns"))
 \item{A}{adjacency matrix of graph to network project on will be column-normalized.}
 
 \item{alpha}{projecting coefficient (1 - restart probability of random walk)}
+
+\item{normalizeAdjMatrix}{which dimension (rows or columns) should the adjacency matrix be normalized by}
 }
 \value{
 network-projected gene expression

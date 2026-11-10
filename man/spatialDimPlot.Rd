@@ -18,6 +18,9 @@ spatialDimPlot(
   shape.by = 16,
   title.name = NULL,
   point.size = 2.4,
+  image = TRUE,
+  image.alpha = 0.5,
+  crop = TRUE,
   legend.size = 3,
   legend.text.size = 8,
   legend.position = "right",
@@ -52,6 +55,12 @@ spatialDimPlot(
 \item{title.name}{title name}
 
 \item{point.size}{the size of spots}
+
+\item{image}{whether to draw the optional histology image; a raster name may also be supplied}
+
+\item{image.alpha}{alpha applied to the histology image}
+
+\item{crop}{whether to crop the plot to the observed spot coordinates}
 
 \item{legend.size}{the size of legend}
 
