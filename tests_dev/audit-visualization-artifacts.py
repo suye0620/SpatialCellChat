@@ -107,6 +107,7 @@ def main():
         FIGURES / 'P3' / 'slideseq' / 'display-diagnostics-2026-11-11' / 'summary.csv',
         FIGURES / 'P3' / 'streamline-cancellation-2026-11-11' / 'summary.csv',
         FIGURES / 'P3' / 'streamline-patch-experiment-2026-11-11' / 'summary.csv',
+        FIGURES / 'P2' / 'visium' / 'chord-label-experiment-2026-11-11' / 'summary.csv',
     ]
     for summary in diagnostics:
         if not summary.is_file():

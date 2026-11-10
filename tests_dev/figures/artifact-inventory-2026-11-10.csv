@@ -73,6 +73,8 @@ tests_dev/figures/P2/slideseq/network-isolate-regression/aggregate-hierarchy-pre
 tests_dev/figures/P2/slideseq/network-isolate-regression/aggregate-spatial-preview.png,image,REVIEW,665531,5f7bcba5108e415999d7ab38f8cfe2071181c0fee3e25a13c67787b38210c8c5,visual-review capture
 tests_dev/figures/P2/slideseq/rankNet-net.pdf,pdf,PASS,4494,37803d01f80f796ea13ae841966462058cfad565f9b6c25e295a6acbd9b48a43,tests_dev/figures/summary-all-P2-rankNet-net.csv
 tests_dev/figures/P2/slideseq/rankNet-netP.pdf,pdf,PASS,7802,5cb3e7a51ed516da0583fc6b361f47e721b6d2cdbb6d1ff0d91079111f491605,tests_dev/figures/summary-all-P2-rankNet-netP.csv
+tests_dev/figures/P2/visium/chord-label-experiment-2026-11-11/original.pdf,pdf,DIAGNOSTIC,3304441,338bd5ad4129ba4fdaeb77e6c9d109c38e00a1b5def5a458e5698e5c228fd44b,tests_dev/figures/P2/visium/chord-label-experiment-2026-11-11/summary.csv
+tests_dev/figures/P2/visium/chord-label-experiment-2026-11-11/spread.pdf,pdf,DIAGNOSTIC,3309019,a58185f7010e9385c39ded6659a4c413f1695e62318dcb1a43e7702cb051e14f,tests_dev/figures/P2/visium/chord-label-experiment-2026-11-11/summary.csv
 tests_dev/figures/P2/visium/netAnalysis_contribution.pdf,pdf,PASS,5676,510bb4149e48cf71a47e37830a5c4539a74baff243689e1ef385aee6918c6bbc,tests_dev/figures/summary-all-P2-netAnalysis_contribution.csv
 tests_dev/figures/P2/visium/netVisual-export-chord_chord_aggregate.pdf,pdf,PASS,41248,ccc3ad9702ffe450b714645f9defd6cf920cdf9e9d7bbc66bcd5a1520bec89c4,tests_dev/figures/summary-visium-P2.csv
 tests_dev/figures/P2/visium/netVisual-export-chord_chord_individual.pdf,pdf,PASS,39370,1946347ce7bd5ebc335e30338b0d87b7cc1cc22ef722bc888fa6edf76dffa6c9,tests_dev/figures/summary-visium-P2.csv
