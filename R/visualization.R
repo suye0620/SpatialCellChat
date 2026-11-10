@@ -2585,11 +2585,17 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
   }
 
   if (remove.isolate) {
-    idx1 <- which(Matrix::rowSums(net) == 0)
-    idx2 <- which(Matrix::colSums(net) == 0)
+    idx1 <- which(Matrix::rowSums(net != 0) == 0)
+    idx2 <- which(Matrix::colSums(net != 0) == 0)
     idx <- intersect(idx1, idx2)
-    net <- net[-idx, ]
-    net <- net[, -idx]
+    if (length(idx)) {
+      net <- net[-idx, -idx, drop = FALSE]
+    }
+  }
+
+  if (!nrow(net)) {
+    stop("No nonzero differential interactions remain after removing isolated groups.",
+         call. = FALSE)
   }
 
   net[abs(net) < stats::quantile(abs(net), probs = 1-top)] <- 0
@@ -2642,6 +2648,8 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
 
 
   if(sum(edge.start[,2]==edge.start[,1])!=0){
+    # Assign a valid value to every edge before setting self-loop angles.
+    igraph::E(g)$loop.angle <- rep(0, igraph::ecount(g))
     igraph::E(g)$loop.angle[which(edge.start[,2]==edge.start[,1])]<-loop.angle[edge.start[which(edge.start[,2]==edge.start[,1]),1]]
   }
   radian.rescale <- function(x, start=0, direction=1) {

@@ -1,0 +1,5 @@
+"case","retained","status","detail"
+"balanced",2,"PDF-WRITTEN",""
+"no_isolates",4,"PDF-WRITTEN",""
+"one_node",1,"PDF-WRITTEN",""
+"empty",0,"ERROR","No nonzero differential interactions remain after removing isolated groups."

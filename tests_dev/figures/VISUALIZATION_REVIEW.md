@@ -47,3 +47,6 @@ Grid/Flow 的网格向量聚合已去除逐网格 `sf` 子集开销，并通过�
 ## Merged 比较实绘与热图边界
 
 `merged/producer-comparison/summary.csv` 和同目录 10 张 PDF 使用真实 merge producer，但输入是模拟对象及其修改副本，不是独立生物样本。差异热图修复了正负变化求和抵消导致的误判和 `remove.isolate` 误删；边界图与三对象单图汇总分别见 `merged/heatmap-edgecases/` 和 `P2/heatmap-cancellation-regression-2026-11-10.csv`。图像仍需人工验收。
+
+
+`merged/diff-isolate-edgecases/` 另含差异网络正负抵消、无孤立节点和单节点自环的实绘回归；全零网络按测试预期返回明确提示。

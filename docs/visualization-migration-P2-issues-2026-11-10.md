@@ -138,3 +138,12 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 此前 producer 回归对一些比较入口仅断言返回类型，未保存实际图。本次基于模拟对象及其经过明确修改的副本，使用真实 `mergeSpatialCellChat()` 生产快照，输出 10 张比较 PDF 至 `tests_dev/figures/merged/producer-comparison/`；这不是独立生物样本的比较，也不是用户的视觉验收。
 
 另观察到 merged `netVisual_heatmap()` 的差值直接来自第二数据集减第一数据集，图例仍固定写 `Relative values`；当所有差值非负时，默认两色映射将零映射为第一种颜色。该说明和色阶可能令读者误解，需要结合已有绘图约定单独评估，本次没有改变配色或差值定义。
+
+
+## P2-020：差异网络图删除孤立节点时误删变化及自环绘图错误
+
+位置：`netVisual_diffInteraction()` 的 `remove.isolate` 与自环角度设置。正负差值的行列和可抵消，因此旧代码把仍有变化的节点判为孤立；没有孤立节点时，`-integer(0)` 又把矩阵清空。保留两节点的同时包含自环和普通边时，旧的自环角度只给部分边赋值，其他边的 NA 会导致当前 igraph 绘制失败。
+
+修复：依据行列是否存在非零差值识别孤立群；只在存在孤立群时删除并保留矩阵维度；给所有边初始化有效的自环角度，再覆盖自环的角度。全部删除时明确报告没有非零差异，未改变差值、边符号或筛选阈值。
+
+验证：`tests_dev/test-merged-diff-isolates.R` 从真实 merge producer 得到对象，实绘正负变化平衡、没有孤立群和只剩单个自环三种情况，并检查传入图构造的邻接矩阵与预期一致；全零情形检查明确错误。对应输出见 `tests_dev/figures/merged/diff-isolate-edgecases/`。
