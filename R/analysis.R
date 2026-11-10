@@ -1839,67 +1839,69 @@ computeLaplacian <- function(CM, tol = 0.01) {
 #' @examples
 rankSimilarity <- function(object, slot.name = "netP", type = c("functional","structural"), comparison1 = NULL,  comparison2 = c(1,2),
                            x.rotation = 90, title = NULL, color.use = NULL, bar.w = NULL, font.size = 8) {
+  object <- .sc_assert_spatial_cell_chat(object)
   type <- match.arg(type)
+  dataset.names <- .sc_ranknet_dataset_names(object)
+  comparison1 <- .sc_ranknet_index(comparison1, dataset.names, "comparison1")
+  if (length(comparison1) < 2L)
+    stop("comparison1 must select at least two datasets.", call. = FALSE)
+  if (is.null(comparison2)) comparison2 <- c(1L, 2L)
+  if (!is.numeric(comparison2) || anyNA(comparison2) ||
+      any(comparison2 != as.integer(comparison2)) ||
+      length(comparison2) != 2L ||
+      any(comparison2 < 1L | comparison2 > length(comparison1)) ||
+      anyDuplicated(comparison2))
+    stop("comparison2 must contain two distinct positions within comparison1.", call. = FALSE)
+  comparison2 <- as.integer(comparison2)
 
-  if (is.null(comparison1)) {
-    comparison1 <- 1:length(unique(object@meta$datasets))
-  }
   comparison.name <- paste(comparison1, collapse = "-")
-  cat("Compute the distance of signaling networks between datasets", as.character(comparison1[comparison2]), '\n')
-  comparison2.name <- names(methods::slot(object, slot.name))[comparison1[comparison2]]
-  # net <- list()
-  # for (i in 1:length(comparison2)) {
-  #   net[[i]] = methods::slot(object, slot.name)[[comparison1[comparison2[i]]]]$prob
-  # }
+  similarity <- methods::slot(object, slot.name)$similarity[[type]]
+  Y <- similarity$dr[[comparison.name]]
+  if (is.null(Y) || !length(Y)) {
+    stop("No joint similarity embedding was found for comparison ", comparison.name,
+         "; run netEmbedding() first.", call. = FALSE)
+  }
+  Y <- as.matrix(Y)
+  labels <- rownames(Y)
+  if (is.null(labels) || anyNA(labels) || any(!nzchar(labels)) || anyDuplicated(labels))
+    stop("The similarity embedding must have unique, named signaling-layer rows.", call. = FALSE)
 
-  #net.dim <- sapply(net, dim)[3,]
-  #position <- cumsum(net.dim); position <- c(0,position)
-  # if (is.null(pathway.remove)) {
-  #   similarity <- methods::slot(object, slot.name)$similarity[[type]]$matrix[[comparison.name]]
-  #   pathway.remove <- rownames(similarity)[which(colSums(similarity) == 1)]
-  #   pathway.remove.idx <- which(rownames(similarity) %in% pathway.remove)
-  # }
+  layer.names <- lapply(dataset.names[comparison1], function(dataset) {
+    prob <- object@misc$.datasets[[dataset]][[slot.name]]$group$prob
+    if (!inherits(prob, "SparseChatArray"))
+      stop("Missing group-level probability layers for dataset '", dataset, "'.", call. = FALSE)
+    candidates <- dimnames(prob)[[3L]]
+    candidates[paste0(candidates, "--", dataset) %in% labels]
+  })
+  row.indices <- lapply(seq_along(layer.names), function(i) {
+    match(paste0(layer.names[[i]], "--", dataset.names[comparison1[i]]), labels)
+  })
+  if (any(lengths(row.indices) == 0L))
+    stop("The similarity embedding does not contain layers for every selected dataset.", call. = FALSE)
+  first <- comparison2[[1L]]
+  second <- comparison2[[2L]]
+  shared <- intersect(layer.names[[first]], layer.names[[second]])
+  if (!length(shared))
+    stop("The selected datasets have no shared signaling layers in the embedding.", call. = FALSE)
 
-  # if (length(pathway.remove.idx) > 0) {
-  #   for (i in 1:length(pathway.remove.idx)) {
-  #     idx <- which(position - pathway.remove.idx[i] > 0)
-  #     if (!is.null(idx)) {
-  #       position[idx[1]] <- position[idx[1]] - 1
-  #       if (idx[1] == 2) {
-  #         position[3] <- position[3] - 1
-  #       }
-  #     }
-  #   }
-  # }
-
-  Y <- methods::slot(object, slot.name)$similarity[[type]]$dr[[comparison.name]]
-  group <- sub(".*--", "", rownames(Y))
-  data1 <- Y[group %in% comparison2.name[1], ]
-  data2 <- Y[group %in% comparison2.name[2], ]
-  rownames(data1) <- sub("--.*", "", rownames(data1))
-  rownames(data2) <- sub("--.*", "", rownames(data2))
-
-  pathway.show = as.character(intersect(rownames(data1), rownames(data2)))
-  data1 <- data1[pathway.show, ]
-  data2 <- data2[pathway.show, ]
-  euc.dist <- function(x1, x2) sqrt(sum((x1 - x2) ^ 2))
-  dist <- NULL
-  for(i in 1:nrow(data1)) dist[i] <- euc.dist(data1[i,],data2[i,])
-  df <- data.frame(name = pathway.show, dist = dist, row.names = pathway.show)
-  df <- df[order(df$dist), , drop = F]
+  first.rows <- row.indices[[first]][match(shared, layer.names[[first]])]
+  second.rows <- row.indices[[second]][match(shared, layer.names[[second]])]
+  data1 <- Y[first.rows, , drop = FALSE]
+  data2 <- Y[second.rows, , drop = FALSE]
+  distances <- sqrt(rowSums((data1 - data2) ^ 2))
+  df <- data.frame(name = shared, dist = as.numeric(distances), row.names = shared)
+  df <- df[order(df$dist, df$name), , drop = FALSE]
   df$name <- factor(df$name, levels = as.character(df$name))
 
-  gg <- ggplot(df, aes(x=name, y=dist)) + geom_bar(stat="identity",width = bar.w) +
-    theme_classic() + theme(text=element_text(size=font.size),axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.y = element_text(size=font.size)) +
-    xlab("") + ylab("Pathway distance") + coord_flip()#+
-  if (!is.null(title)) {
-    gg <- gg + ggtitle(title)+ theme(plot.title = element_text(hjust = 0.5))
-  }
-  if (!is.null(color.use)) {
-    gg <- gg + scale_fill_manual(values = ggplot2::alpha(color.use, alpha = 1), drop = FALSE, na.value = "white")
-    gg <- gg + scale_colour_manual(values = color.use, drop = FALSE, na.value = "white")
-  }
-  return(gg)
+  gg <- ggplot(df, aes(x = name, y = dist)) +
+    geom_bar(stat = "identity", width = bar.w, fill = color.use) +
+    theme_classic() +
+    theme(text = element_text(size = font.size), axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(), axis.title.y = element_text(size = font.size)) +
+    xlab("") + ylab("Pathway distance") + coord_flip()
+  if (!is.null(title))
+    gg <- gg + ggtitle(title) + theme(plot.title = element_text(hjust = 0.5))
+  gg
 }
 
 
@@ -1932,78 +1934,67 @@ compareInteractions <- function(object, measure = c("count", "weight"), color.us
                                 xlabel = NULL, ylabel = NULL, remove.xtick = FALSE,
                                 show.legend = TRUE, x.lab.rot = FALSE, angle.x = 45, vjust.x = NULL, hjust.x = 1, size.text = 10) {
   measure <- match.arg(measure)
-  if (measure == "count") {
-    df <- as.data.frame(sapply(object@net, function(x) sum(x$count)))
-    if (is.null(ylabel)) {
-      ylabel = "Number of inferred interactions"
-    }
-  } else if (measure == "weight") {
-    df <- as.data.frame(sapply(object@net, function(x) sum(x$weight)))
-    df[,1] <- round(df[,1],digits)
-    if (is.null(ylabel)) {
-      ylabel = "Interaction strength"
-    }
-  }
-  colnames(df) <- "count"
+  if (is.list(object) && !methods::is(object, "SpatialCellChat"))
+    object <- mergeCellChat(object, add.names = names(object), show.plot = FALSE)
+  object <- .sc_assert_spatial_cell_chat(object)
 
-  df$dataset <- names(object@net)
-  if (is.null(group)) {
-    group <- 1
-  }
-  df$group <- group
-  df$dataset <- factor(df$dataset, levels = names(object@net))
-  if (is.null(group.levels)) {
-    df$group <- factor(df$group)
+  if (identical(object@misc$.mode, "merged")) {
+    dataset.names <- .sc_ranknet_dataset_names(object)
+    branches <- lapply(dataset.names, function(name) object@misc$.datasets[[name]]$net$group)
   } else {
-    df$group <- factor(df$group, levels = group.levels)
+    dataset.names <- as.character(object@misc$.param$sample %||% "single")
+    branches <- list(object@net$group)
   }
+  values <- vapply(branches, function(branch) {
+    if (!is.list(branch) || is.null(branch[[measure]]))
+      stop("compareInteractions requires group-level `", measure,
+           "`; run aggregateNet() first.", call. = FALSE)
+    sum(branch[[measure]], na.rm = TRUE)
+  }, numeric(1))
+  if (identical(measure, "weight")) values <- round(values, digits)
+  if (is.null(ylabel)) {
+    ylabel <- if (identical(measure, "count")) "Number of inferred interactions" else "Interaction strength"
+  }
+  df <- data.frame(count = values, dataset = dataset.names, stringsAsFactors = FALSE)
 
-  if (is.null(color.use)) {
-    color.use <- ggPalette(length(unique(group)))
-  }
-  #   theme_classic() #+ scale_x_discrete(limits = (levels(df$x)))
+  if (is.null(group)) group <- rep(1, length(dataset.names))
+  if (length(group) != length(dataset.names))
+    stop("group must have one value per dataset.", call. = FALSE)
+  df$group <- if (is.null(group.levels)) factor(group) else factor(group, levels = group.levels)
+  df$dataset <- factor(df$dataset, levels = dataset.names)
+  if (is.null(color.use)) color.use <- ggPalette(length(levels(df$group)))
+  if (length(color.use) < length(levels(df$group)))
+    stop("color.use must contain at least one color per group level.", call. = FALSE)
+
   if (!is.null(group.facet)) {
-    if (all(group.facet %in% colnames(df))) {
-      gg <- ggplot(df, aes(x=dataset, y=count, fill = group)) +
-        geom_bar(stat="identity", width=width, position=position_dodge())
-      gg <- gg + facet_wrap(group.facet, nrow = n.row)
+    if (length(group.facet) == 1L && group.facet %in% names(df)) {
+      df$group.facet <- df[[group.facet]]
+    } else if (length(group.facet) != length(dataset.names)) {
+      stop("group.facet must have one value per dataset.", call. = FALSE)
     } else {
       df$group.facet <- group.facet
-      if (is.null(group.facet.levels)) {
-        df$group.facet <- factor(df$group.facet)
-      } else {
-        df$group.facet <- factor(df$group.facet, levels = group.facet.levels)
-      }
-      gg <- ggplot(df, aes(x=dataset, y=count, fill = group)) +
-        geom_bar(stat="identity", width=width, position=position_dodge())
-      gg <- gg + facet_wrap(~group.facet, nrow = n.row)
     }
-  } else {
-    gg <- ggplot(df, aes(x=dataset, y=count, fill = group)) +
-      geom_bar(stat="identity", width=width, position=position_dodge())
+    df$group.facet <- if (is.null(group.facet.levels)) factor(df$group.facet) else
+      factor(df$group.facet, levels = group.facet.levels)
   }
-  gg <- gg + geom_text(aes(label=count), vjust=-0.3, size=3, position = position_dodge(0.9))
-  gg <- gg + ylab(ylabel) + xlab(xlabel) + theme_classic() +
-    labs(title = title.name) +  theme(plot.title = element_text(size = 10, face = "bold", hjust = 0.5)) +
-    theme(text = element_text(size = size.text), axis.text = element_text(colour="black"))
-  gg <- gg + scale_fill_manual(values = alpha(color.use, alpha = color.alpha), drop = FALSE)
-  #  gg <- gg + scale_color_manual(values = alpha(color.use, alpha = 1), drop = FALSE) + guides(colour = FALSE)
-  if (remove.xtick) {
-    gg <- gg + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
-  }
-  if (is.null(legend.title)) {
-    gg <- gg + theme(legend.title = element_blank())
-  } else {
-    gg <- gg + guides(fill=guide_legend(legend.title))
-  }
-  if (!show.legend) {
-    gg <- gg + theme(legend.position = "none")
-  }
-  if (x.lab.rot) {
-    gg <- gg + theme(axis.text.x = element_text(angle = angle.x, hjust = hjust.x, vjust = vjust.x, size=size.text))
-  }
+  aes.base <- ggplot2::aes(x = dataset, y = count, fill = group)
+  gg <- ggplot2::ggplot(df, aes.base) +
+    geom_bar(stat = "identity", width = width, position = position_dodge())
+  if (!is.null(group.facet)) gg <- gg + facet_wrap(~group.facet, nrow = n.row)
+  gg <- gg + geom_text(aes(label = count), vjust = -0.3, size = 3,
+                       position = position_dodge(0.9)) +
+    ylab(ylabel) + xlab(xlabel) + theme_classic() +
+    labs(title = title.name) +
+    theme(plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
+          text = element_text(size = size.text), axis.text = element_text(colour = "black")) +
+    scale_fill_manual(values = alpha(color.use, alpha = color.alpha), drop = FALSE)
+  if (remove.xtick) gg <- gg + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  if (is.null(legend.title)) gg <- gg + theme(legend.title = element_blank())
+  else gg <- gg + labs(fill = legend.title)
+  if (!show.legend) gg <- gg + theme(legend.position = "none")
+  if (x.lab.rot) gg <- gg + theme(axis.text.x = element_text(angle = angle.x, hjust = hjust.x,
+                                                              vjust = vjust.x, size = size.text))
   gg
-  return(gg)
 }
 
 
@@ -2015,32 +2006,77 @@ compareInteractions <- function(object, measure = c("count", "weight"), color.us
 #' @export
 #'
 rankNetPairwise <- function(object, LR.use = NULL) {
-  if (is.null(LR.use)) {
-    pairLR.use <- object@LR$LRsig
-  } else {
-    pairLR.use <- LR.use
-  }
-  net <- object@net
-  prob <- net$prob
-  pval <- net$pval
-  numCluster <- dim(prob)[1]
-  pairwiseLR <- list()
-  for (i in 1:numCluster) {
-    temp <- list()
-    for (j in 1:numCluster) {
-      pvalij <- pval[i,j,]; pvalij <- as.vector(pvalij)
-      probij <- prob[i,j,]; probij <- as.vector(probij)
-      index <- 1:length(pvalij)
-      data <- data.frame(pathway_index = index, interaction_name = pairLR.use$interaction_name, interaction_name_2 = pairLR.use$interaction_name_2, pathway_name = pairLR.use$pathway_name, ligand = pairLR.use$ligand, receptor = pairLR.use$receptor,
-                         prob = probij, pval = pvalij, row.names = rownames(pairLR.use))
-      temp[[j]] <- data[with(data, order(pval, -prob)), ]
+  object <- .sc_assert_spatial_cell_chat(object)
+  make_rank <- function(net, lr.table) {
+    branch <- net$group
+    prob <- branch$prob
+    if (!inherits(prob, "SparseChatArray"))
+      stop("rankNetPairwise requires net$group$prob; run computeAvgCommunProb() first.", call. = FALSE)
+    layer.names <- dimnames(prob)[[3L]]
+    if (is.null(lr.table) || !is.data.frame(lr.table))
+      stop("LR.use must resolve to a ligand-receptor data frame.", call. = FALSE)
+    if (is.null(LR.use)) {
+      selected <- lr.table
+    } else if (is.character(LR.use)) {
+      selected <- lr.table[lr.table$interaction_name %in% LR.use, , drop = FALSE]
+    } else if (is.data.frame(LR.use)) {
+      selected <- LR.use
+    } else {
+      stop("LR.use must be NULL, character interaction names, or a data frame.", call. = FALSE)
     }
-    names(temp) <- colnames(prob)
-    pairwiseLR[[i]] <- temp
+    required <- c("interaction_name", "pathway_name", "ligand", "receptor")
+    missing <- setdiff(required, names(selected))
+    if (length(missing))
+      stop("LR metadata is missing required columns: ", paste(missing, collapse = ", "), call. = FALSE)
+    selected <- selected[!duplicated(selected$interaction_name), , drop = FALSE]
+    selected <- selected[selected$interaction_name %in% layer.names, , drop = FALSE]
+    if (!nrow(selected)) stop("No selected LR layers are present in net$group$prob.", call. = FALSE)
+    selected.names <- as.character(selected$interaction_name)
+    pval <- branch$pval
+    if (!inherits(pval, "SparseChatArray") ||
+        !identical(dimnames(prob), dimnames(pval)))
+      stop("rankNetPairwise requires net$group$pval aligned with net$group$prob.", call. = FALSE)
+    pairwise <- lapply(seq_along(dimnames(prob)[[1L]]), function(i) {
+      out <- lapply(seq_along(dimnames(prob)[[2L]]), function(j) {
+        interaction <- selected.names
+        values <- vapply(interaction, function(name) as.numeric(prob[[name]][i, j]), numeric(1))
+        pvalues <- vapply(interaction, function(name) {
+          if (inherits(pval, "SparseChatArray") && name %in% dimnames(pval)[[3L]])
+            as.numeric(pval[[name]][i, j])
+          else NA_real_
+        }, numeric(1))
+        data <- data.frame(
+          pathway_index = match(interaction, layer.names),
+          interaction_name = interaction,
+          interaction_name_2 = if ("interaction_name_2" %in% names(selected))
+            as.character(selected$interaction_name_2[match(interaction, selected$interaction_name)]) else NA_character_,
+          pathway_name = as.character(selected$pathway_name[match(interaction, selected$interaction_name)]),
+          ligand = as.character(selected$ligand[match(interaction, selected$interaction_name)]),
+          receptor = as.character(selected$receptor[match(interaction, selected$interaction_name)]),
+          prob = values, pval = pvalues,
+          row.names = interaction,
+          stringsAsFactors = FALSE
+        )
+        pval.order <- ifelse(is.na(data$pval), Inf, data$pval)
+        data[order(pval.order, -data$prob, data$interaction_name), , drop = FALSE]
+      })
+      names(out) <- dimnames(prob)[[2L]]
+      out
+    })
+    names(pairwise) <- dimnames(prob)[[1L]]
+    pairwise
   }
-  names(pairwiseLR) <- rownames(prob)
-  object@net$pairwiseRank <- pairwiseLR
-  return(object)
+
+  if (identical(object@misc$.mode, "merged")) {
+    for (dataset in .sc_ranknet_dataset_names(object)) {
+      snapshot <- object@misc$.datasets[[dataset]]
+      snapshot$net$pairwiseRank <- make_rank(snapshot$net, snapshot$LR$LRsig)
+      object@misc$.datasets[[dataset]] <- snapshot
+    }
+  } else {
+    object@net$pairwiseRank <- make_rank(object@net, object@LR$LRsig)
+  }
+  object
 }
 
 
@@ -3049,33 +3085,36 @@ dataset.record <- object@misc$.datasets[[dataset.name[comparison[ii]]]]
     incoming <- matrix(0, nrow = length(cell.levels), ncol = dim(centr)[3])
     dimnames(outgoing) <- list(cell.levels, dimnames(centr)[[3]])
     dimnames(incoming) <- dimnames(outgoing)
-    for (i in 1:dim(centr)[3]) {
-      outgoing[,i] <- centr[x.measure,,i]
-      incoming[,i] <- centr[y.measure,,i]
+    if (!setequal(dimnames(centr)[[2L]], cell.levels))
+      stop("Centrality group names must match the merged object identities.", call. = FALSE)
+    for (i in seq_len(dim(centr)[3])) {
+      outgoing[,i] <- centr[x.measure, cell.levels, i]
+      incoming[,i] <- centr[y.measure, cell.levels, i]
     }
     mat.out <- t(outgoing)
     mat.in <- t(incoming)
 
-    mat.all <- array(0, dim = c(length(signaling),ncol(mat.out),2))
-    mat.t <-list(mat.out, mat.in)
-    for (i in 1:length(comparison)) {
-      mat = mat.t[[i]]
-      mat1 <- mat[rownames(mat) %in% signaling, , drop = FALSE]
-      mat <- matrix(0, nrow = length(signaling), ncol = ncol(mat))
-      idx <- match(rownames(mat1), signaling)
-      mat[idx[!is.na(idx)], ] <- mat1
-      dimnames(mat) <- list(signaling, colnames(mat1))
-      mat.all[,,i] = mat
+    align.to.signaling <- function(mat) {
+      aligned <- matrix(0, nrow = length(signaling), ncol = length(cell.levels),
+                        dimnames = list(signaling, cell.levels))
+      present <- intersect(rownames(mat), signaling)
+      if (length(present)) aligned[present, colnames(mat)] <- mat[present, colnames(mat), drop = FALSE]
+      aligned
     }
-    dimnames(mat.all) <- list(dimnames(mat)[[1]], dimnames(mat)[[2]], c("outgoing", "incoming"))
+    mat.all <- array(0, dim = c(length(signaling), length(cell.levels), 2L),
+                     dimnames = list(signaling, cell.levels, c("outgoing", "incoming")))
+    mat.all[,,1L] <- align.to.signaling(mat.out)
+    mat.all[,,2L] <- align.to.signaling(mat.in)
     mat.all.merged[[ii]] <- mat.all
 
   }
 
   mat.diff <- mat.all.merged[[2]] -  mat.all.merged[[1]]
 
-  outgoing.diff <- colSums(mat.diff[ , , 1])
-  incoming.diff <- colSums(mat.diff[ , , 2])
+  outgoing.diff <- colSums(matrix(mat.diff[, , 1], nrow = length(signaling),
+                                  dimnames = list(signaling, cell.levels)))
+  incoming.diff <- colSums(matrix(mat.diff[, , 2], nrow = length(signaling),
+                                  dimnames = list(signaling, cell.levels)))
 
 
   df <- data.frame(x = outgoing.diff, y = incoming.diff, labels = names(incoming.diff))
@@ -3214,28 +3253,32 @@ dataset.record <- object@misc$.datasets[[dataset.name[comparison[ii]]]]
     incoming <- matrix(0, nrow = length(cell.levels), ncol = dim(centr)[3])
     dimnames(outgoing) <- list(cell.levels, dimnames(centr)[[3]])
     dimnames(incoming) <- dimnames(outgoing)
-    for (i in 1:dim(centr)[3]) {
-      outgoing[,i] <- centr[x.measure,,i]
-      incoming[,i] <- centr[y.measure,,i]
+    if (!setequal(dimnames(centr)[[2L]], cell.levels))
+      stop("Centrality group names must match the merged object identities.", call. = FALSE)
+    for (i in seq_len(dim(centr)[3])) {
+      outgoing[,i] <- centr[x.measure, cell.levels, i]
+      incoming[,i] <- centr[y.measure, cell.levels, i]
     }
     mat.out <- t(outgoing)
     mat.in <- t(incoming)
 
-    mat.all <- array(0, dim = c(length(signaling),ncol(mat.out),2))
-    mat.t <-list(mat.out, mat.in)
-    for (i in 1:length(comparison)) {
-      mat = mat.t[[i]]
-      mat1 <- mat[rownames(mat) %in% signaling, , drop = FALSE]
-      mat <- matrix(0, nrow = length(signaling), ncol = ncol(mat))
-      idx <- match(rownames(mat1), signaling)
-      mat[idx[!is.na(idx)], ] <- mat1
-      dimnames(mat) <- list(signaling, colnames(mat1))
-      mat.all[,,i] = mat
+    align.to.signaling <- function(mat) {
+      aligned <- matrix(0, nrow = length(signaling), ncol = length(cell.levels),
+                        dimnames = list(signaling, cell.levels))
+      present <- intersect(rownames(mat), signaling)
+      if (length(present)) aligned[present, colnames(mat)] <- mat[present, colnames(mat), drop = FALSE]
+      aligned
     }
-    dimnames(mat.all) <- list(dimnames(mat)[[1]], dimnames(mat)[[2]], c("outgoing", "incoming"))
+    mat.all <- array(0, dim = c(length(signaling), length(cell.levels), 2L),
+                     dimnames = list(signaling, cell.levels, c("outgoing", "incoming")))
+    mat.all[,,1L] <- align.to.signaling(mat.out)
+    mat.all[,,2L] <- align.to.signaling(mat.in)
     mat.all.merged[[ii]] <- mat.all
   }
-  mat.all.merged.use <- list(mat.all.merged[[1]][,idents.use,], mat.all.merged[[2]][,idents.use,])
+  mat.all.merged.use <- lapply(mat.all.merged, function(x) {
+    matrix(x[, idents.use, ], nrow = length(signaling),
+           dimnames = list(signaling, c("outgoing", "incoming")))
+  })
   idx.specific <- mat.all.merged.use[[1]] * mat.all.merged.use[[2]]
   mat.sum <- mat.all.merged.use[[2]] +  mat.all.merged.use[[1]]
   out.specific.signaling <- rownames(idx.specific)[(mat.sum[,1] != 0) & (idx.specific[,1] == 0)]

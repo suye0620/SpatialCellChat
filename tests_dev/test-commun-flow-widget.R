@@ -77,14 +77,22 @@ check("valid call returns a spatialcellchat htmlwidget",
 check("widget call does not mutate input",
       identical(chat, before))
 
-dependency <- widget$dependencies[[1L]]
-check("source widget embeds its local frontend assets",
-      identical(attr(widget, "package"), "htmlwidgets") &&
-        length(widget$dependencies) == 1L &&
-        inherits(dependency, "html_dependency") &&
-        identical(dependency$name, "spatialcellchat-commun-flow") &&
-        identical(dependency$script, "spatialcellchat-commun-flow.js") &&
-        identical(dependency$stylesheet, "spatialcellchat-commun-flow.css"))
+dependency <- if (length(widget$dependencies)) widget$dependencies[[1L]] else NULL
+asset.package <- attr(widget, "package")
+asset.dir <- if (identical(asset.package, "htmlwidgets")) {
+  file.path(getwd(), "inst", "htmlwidgets")
+} else {
+  system.file("htmlwidgets", package = "SpatialCellChat")
+}
+check("widget resolves local frontend assets in source or installed mode",
+      ((identical(asset.package, "htmlwidgets") && length(widget$dependencies) == 1L &&
+          inherits(dependency, "html_dependency") &&
+          identical(dependency$name, "spatialcellchat-commun-flow") &&
+          identical(dependency$script, "spatialcellchat-commun-flow.js") &&
+          identical(dependency$stylesheet, "spatialcellchat-commun-flow.css")) ||
+       (identical(asset.package, "SpatialCellChat") && is.null(dependency))) &&
+        all(file.exists(file.path(asset.dir, c(
+          "spatialcellchat-commun-flow.js", "spatialcellchat-commun-flow.css")))))
 
 render.dir <- tempfile("spatialcellchat-commun-flow-")
 dir.create(render.dir)
