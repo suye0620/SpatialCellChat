@@ -1,0 +1,13 @@
+dataset,file,kind,status,plotly,traceCount,pointCount,zPointCount,uniqueCellIds,mainSvg,canvas,sceneCount,browserRelayout
+"simulated","plotly_spatialDimPlot_2d.html","2d","PASS","object",4,20,0,20,true,false,0,true
+"simulated","plotly_spatialDimPlot_3d.html","3d","PASS","object",4,20,20,20,true,true,1,true
+"simulated","plotly_spatialLRpairPlot.html","lr","PASS","object",3,22,0,20,true,false,0,true
+"simulated","spatialGiPlot_3d.html","gi3d","PASS","object",3,22,23,0,true,true,1,true
+"visium","plotly_spatialDimPlot_2d.html","2d","PASS","object",6,905,0,905,true,false,0,true
+"visium","plotly_spatialDimPlot_3d.html","3d","PASS","object",6,905,905,905,true,true,1,true
+"visium","plotly_spatialLRpairPlot.html","lr","PASS","object",3,907,0,905,true,false,0,true
+"visium","spatialGiPlot_3d.html","gi3d","PASS","object",3,907,908,0,true,true,1,true
+"slideseq","plotly_spatialDimPlot_2d.html","2d","PASS","object",8,29536,0,29536,true,false,0,true
+"slideseq","plotly_spatialDimPlot_3d.html","3d","PASS","object",8,29536,29536,29536,true,true,1,true
+"slideseq","plotly_spatialLRpairPlot.html","lr","PASS","object",3,29538,0,29536,true,false,0,true
+"slideseq","spatialGiPlot_3d.html","gi3d","PASS","object",3,29538,29539,0,true,true,1,true
