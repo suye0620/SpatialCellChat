@@ -38,3 +38,13 @@
 当前源码以 `R CMD INSTALL --no-multiarch --with-keep.source` 安装到临时库后，`test-streamline-installed.R` 通过了公开 `netVisual_CommunFlow()` 的非零对角场、全零场、箭头倍率、序列化和新 R 进程重载检查。新增的 `test-installed-visualization-smoke.R` 使用已安装命名空间读取真实模拟对象，并成功生成 geometry 距离图、heatmap、表达图和 `plotly_spatialStackPlot()` HTML；结果在 `tests_dev/figures/recheck-449c181/installed-smoke/`。
 
 安装测试曾先暴露测试脚本使用未导出的 `assay()` 泛型；测试已改用对象的公开数据结构重新执行通过。该发现不要求修改生产包 API，但说明源码直载测试不能替代安装命名空间测试。安装日志、安装后流线日志和 smoke 日志均保存在复测目录。该门禁仍使用当前机器的 renv 依赖，尚未证明在全新机器上 `renv::restore()` 后无需额外依赖安装。
+
+## 2026-11-11 source package and R CMD check
+
+直接对含有本地 renv 的工作区执行 `R CMD check` 会扫描开发目录，不能作为 source package 证据。`.Rbuildignore` 原先只排除 `renv` 顶层名字，未阻止递归内容、`tests_dev`、`.tmp_*` 和本地 `src` 编译对象进入检查范围；这会产生路径过长、二进制文件和隐藏调试文件错误。现在已明确排除这些开发内容。
+
+用当前工作区构建的 `SpatialCellChat_0.1.0.tar.gz` 有 242 个条目，检查确认不含 `renv/`、`tests_dev/`、`.tmp_*`、`.o`、`.dll` 或 `src/symbols.rds`。在 Windows 本机设置 `C` locale、关闭强制 Suggests 检查后，对该干净 tarball 执行 `R CMD check --no-manual --no-build-vignettes`，结果为退出码 0，状态为 2 个 WARNING、6 个 NOTE；R 语法、加载/卸载、namespace、安装、examples、Rd usage、编译代码均通过。
+
+保留的 WARNING/NOTE 来自既有包质量问题：若干源码中的 `library()`/`require()` 和 `callr`/`Rfast` 声明不一致，部分全局变量缺少可见绑定声明，若干 Rd 与当前函数签名不一致，PPI 文本的 Rd 标记和 `pryr` 交叉引用有问题。它们不阻止本轮可视化迁移，但应作为后续包质量工作处理。完整输出见 `tests_dev/figures/recheck-449c181/R-CMD-check-tar-force-suggests-false-r4.log`。
+
+未关闭 `_R_CHECK_FORCE_SUGGESTS_` 时，检查还会因本机缺少 `roxygen2`、`SingleCellExperiment`、`SummarizedExperiment`、`gg.gap`、`wordcloud`、`raster`、`rstudioapi`、`scatterpie`、`rliger`、`SNFtool`、`pryr`、`expm` 等 Suggests 包而提前停止。这是当前环境恢复缺口，不能声称已完成全新环境的完整 CRAN 检查。

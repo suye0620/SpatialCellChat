@@ -1,4 +1,10 @@
-^renv$
+^renv($|/)
 ^renv\.lock$
+^tests_dev($|/)
+^docs($|/)
+^\.agents($|/)
+^\.workbuddy($|/)
+^\.tmp($|_)
+^src/.*\.(o|dll|rds)$
 ^.*\.Rproj$
 ^\.Rproj\.user$

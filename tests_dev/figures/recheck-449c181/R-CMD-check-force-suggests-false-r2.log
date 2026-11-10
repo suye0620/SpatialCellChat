@@ -1,0 +1,180 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+* using log directory 'D:/AIProjects/SpatialCellChat/..Rcheck'
+* using R version 4.4.3 (2025-02-28 ucrt)
+* using platform: x86_64-w64-mingw32
+* R was compiled by
+    gcc.exe (GCC) 13.3.0
+    GNU Fortran (GCC) 13.3.0
+* running under: Windows 10 x64 (build 19045)
+* using session charset: ASCII
+* using options '--no-manual --no-build-vignettes'
+* checking for file './DESCRIPTION' ... OK
+* checking extension type ... Package
+* this is package 'SpatialCellChat' version '0.1.0'
+* package encoding: UTF-8
+* checking package namespace information ... OK
+* checking package dependencies ... NOTE
+Packages suggested but not available for checking:
+  'roxygen2', 'SingleCellExperiment', 'SummarizedExperiment', 'gg.gap',
+  'wordcloud', 'raster', 'rstudioapi', 'scatterpie', 'rliger',
+  'SNFtool', 'pryr', 'expm'
+
+Vignette dependency required without any vignettes:: 'knitr'
+* checking if this is a source package ... WARNING
+Subdirectory 'SpatialCellChat/src' contains apparent object files/libraries
+  RcppExports.o SpatialCellChat.dll SpatialChat_Rcpp.o
+Object files/libraries should not be included in a source package.
+
+In addition to the above warning(s), found the following notes:
+
+Found the following apparent object files/libraries:
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/Biobase/libs/x64/Biobase.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/BiocNeighbors/libs/x64/BiocNeighbors.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/FNN/libs/x64/FNN.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/IRanges/libs/x64/IRanges.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/MASS/libs/x64/MASS.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/MERINGUE/libs/x64/MERINGUE.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/Matrix/libs/x64/Matrix.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/NMF/libs/x64/NMF.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RANN/libs/x64/RANN.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RSpectra/libs/x64/RSpectra.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/Rcpp/libs/x64/Rcpp.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppAnnoy/libs/x64/RcppAnnoy.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppArmadillo/libs/x64/RcppArmadillo.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppEigen/libs/x64/RcppEigen.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppML/libs/x64/RcppML.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppParallel/lib/x64/tbb.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppParallel/lib/x64/tbbmalloc.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppParallel/lib/x64/tbbmalloc_proxy.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppParallel/libs/x64/RcppParallel.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/RcppTOML/libs/x64/RcppTOML.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/Rfast/libs/x64/Rfast.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/Rtsne/libs/x64/Rtsne.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/S4Vectors/libs/x64/S4Vectors.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/S7/libs/x64/S7.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/Seurat/libs/x64/Seurat.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/SeuratObject/libs/x64/SeuratObject.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/SparseM/libs/x64/SparseM.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/SpatialCellChat/libs/x64/SpatialCellChat.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/akima/libs/x64/akima.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/askpass/libs/x64/askpass.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/backports/libs/x64/backports.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/base64enc/libs/x64/base64enc.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/bitops/libs/x64/bitops.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/caTools/libs/x64/caTools.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/cachem/libs/x64/cachem.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/checkmate/libs/x64/checkmate.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/classInt/libs/x64/classInt.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/libs/x64/cli.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/clue/libs/x64/clue.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/cluster/libs/x64/cluster.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/colorspace/libs/x64/colorspace.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/commonmark/libs/x64/commonmark.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/curl/libs/x64/curl.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/data.table/libs/x64/data_table.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/deldir/libs/x64/deldir.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/digest/libs/x64/digest.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/dotCall64/libs/x64/dotCall64.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/dplyr/libs/x64/dplyr.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/dqrng/libs/x64/dqrng.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/e1071/libs/x64/e1071.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/farver/libs/x64/farver.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/fastmap/libs/x64/fastmap.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/forecast/libs/x64/forecast.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/fracdiff/libs/x64/fracdiff.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/fs/libs/x64/fs.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/geometry/libs/x64/geometry.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/ggrepel/libs/x64/ggrepel.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/glue/libs/x64/glue.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/goftest/libs/x64/goftest.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/gsw/libs/x64/gsw.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/gtools/libs/x64/gtools.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/htmltools/libs/x64/htmltools.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/httpuv/libs/x64/httpuv.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/igraph/libs/x64/igraph.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/irlba/libs/x64/irlba.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/isoband/libs/x64/isoband.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/jsonlite/libs/x64/jsonlite.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/kernlab/libs/x64/kernlab.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/ks/libs/x64/ks.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/later/libs/x64/later.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/lattice/libs/x64/lattice.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/lazyeval/libs/x64/lazyeval.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/lme4/libs/x64/lme4.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/lmtest/libs/x64/lmtest.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/lpSolve/libs/x64/lpSolve.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/lubridate/libs/x64/lubridate.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/magrittr/libs/x64/magrittr.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/matrixStats/libs/x64/matrixStats.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/mclust/libs/x64/mclust.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/mgcv/libs/x64/mgcv.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/microbenchmark/libs/x64/microbenchmark.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/mime/libs/x64/mime.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/minqa/libs/x64/minqa.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/multicool/libs/x64/multicool.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/mvtnorm/libs/x64/mvtnorm.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/network/libs/x64/network.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/nlme/libs/x64/nlme.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/nloptr/libs/x64/nloptr.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/oce/libs/x64/oce.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/openssl/libs/x64/openssl.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/parallelly/libs/x64/parallelly.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/plyr/libs/x64/plyr.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/png/libs/x64/png.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/polyclip/libs/x64/polyclip.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/proxy/libs/x64/proxy.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/purrr/libs/x64/purrr.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/quantreg/libs/x64/quantreg.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/rappdirs/libs/x64/rappdirs.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/rbibutils/libs/x64/rbibutils.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/reshape2/libs/x64/reshape2.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/reticulate/libs/x64/reticulate.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/rjson/libs/x64/rjson.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/rlang/libs/x64/rlang.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/s2/libs/x64/s2.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/sass/libs/x64/sass.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/scattermore/libs/x64/scattermore.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/sctransform/libs/x64/sctransform.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/sf/libs/x64/sf.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/sitmo/libs/x64/sitmo.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/sna/libs/x64/sna.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/sourcetools/libs/x64/sourcetools.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/sp/libs/x64/sp.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/spam/libs/x64/spam.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/spatstat.explore/libs/x64/spatstat.explore.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/spatstat.geom/libs/x64/spatstat.geom.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/spatstat.random/libs/x64/spatstat.random.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/spatstat.sparse/libs/x64/spatstat.sparse.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/spatstat.univar/libs/x64/spatstat.univar.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/spatstat.utils/libs/x64/spatstat.utils.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/spdep/libs/x64/spdep.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/statnet.common/libs/x64/statnet.common.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/stringi/libs/x64/stringi.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/survival/libs/x64/survival.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/svglite/libs/x64/svglite.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/sys/libs/x64/sys.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/systemfonts/libs/x64/systemfonts.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/textshaping/libs/x64/textshaping.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/tibble/libs/x64/tibble.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/tidyr/libs/x64/tidyr.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/timechange/libs/x64/timechange.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/units/libs/x64/units.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/urca/libs/x64/urca.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/utf8/libs/x64/utf8.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/uwot/libs/x64/uwot.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/vctrs/libs/x64/vctrs.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/wk/libs/x64/wk.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/xfun/libs/x64/xfun.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/yaml/libs/x64/yaml.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/zigg/libs/x64/zigg.dll
+  renv/library/windows/R-4.4/x86_64-w64-mingw32/zoo/libs/x64/zoo.dll
+Object files/libraries should not be included in a source package.
+
+Subdirectory 'renv/library/windows/R-4.4/x86_64-w64-mingw32/ALRA' seems to contain an installed version of the package.
+* checking if there is a namespace ... OK
+* checking for executable files ...

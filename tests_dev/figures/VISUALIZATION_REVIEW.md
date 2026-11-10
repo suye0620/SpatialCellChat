@@ -91,3 +91,7 @@ P3 局部修复实验见 `P3/streamline-patch-experiment-2026-11-11/`：合成�
 ## 安装包复测
 
 2026-11-11：当前生产提交 `449c181` 的安装包在临时库中完成安装；安装后流线兼容测试和真实模拟对象的 geometry、heatmap、表达、3D 堆叠 smoke 均通过。对应产物和日志位于 `recheck-449c181/installed-smoke/` 及其相邻日志。安装测试曾发现测试脚本错误使用未导出的 `assay()`，已改正并重跑；这不是生产 API 的改动。
+
+## Source package 检查
+
+补充：已修正 `.Rbuildignore`，排除 renv、tests_dev、调试 `.tmp_*` 和本地编译对象；干净 source tarball 的 `R CMD check` 在关闭强制 Suggests 后退出码为 0。检查仍有 2 个 WARNING 和 6 个 NOTE，主要是既有依赖声明、全局变量声明和 Rd 签名差异；本机缺少部分 Suggests 包，因此没有声称完整 CRAN 环境检查通过。

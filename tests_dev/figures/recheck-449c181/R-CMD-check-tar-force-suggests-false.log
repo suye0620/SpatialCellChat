@@ -1,0 +1,92 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+* using log directory 'D:/AIProjects/SpatialCellChat/SpatialCellChat.Rcheck'
+* using R version 4.4.3 (2025-02-28 ucrt)
+* using platform: x86_64-w64-mingw32
+* R was compiled by
+    gcc.exe (GCC) 13.3.0
+    GNU Fortran (GCC) 13.3.0
+* running under: Windows 10 x64 (build 19045)
+* using session charset: ASCII
+* using options '--no-manual --no-build-vignettes'
+* checking for file 'SpatialCellChat/DESCRIPTION' ... OK
+* checking extension type ... Package
+* this is package 'SpatialCellChat' version '0.1.0'
+* package encoding: UTF-8
+* checking package namespace information ... OK
+* checking package dependencies ... NOTE
+Packages suggested but not available for checking:
+  'roxygen2', 'SingleCellExperiment', 'SummarizedExperiment', 'gg.gap',
+  'wordcloud', 'raster', 'rstudioapi', 'scatterpie', 'rliger',
+  'SNFtool', 'pryr', 'expm'
+
+Vignette dependency required without any vignettes:: 'knitr'
+* checking if this is a source package ... OK
+* checking if there is a namespace ... OK
+* checking for executable files ... OK
+* checking for hidden files and directories ... NOTE
+Found the following hidden files and directories:
+  .tmp_debug_gi.R
+  .tmp_debug_gi_core.R
+  .tmp_debug_p1.R
+  .tmp_debug_signaling.R
+  .tmp_debug_test2.py
+  .tmp_debug_test3.py
+  .tmp_debug_test4.py
+  .tmp_debug_test_patch.py
+  .tmp_export_scan.txt
+  .tmp_find_blocks.py
+  .tmp_func_list.txt
+  .tmp_inspect_gi.R
+  .tmp_inspect_merge.R
+  .tmp_inspect_net.R
+  .tmp_inspect_slots.R
+  .tmp_install_viz_deps.R
+  .tmp_oldrefs.txt
+  .tmp_patch_analysis.py
+  .tmp_patch_scatter.py
+  .tmp_patch_test.py
+  .tmp_patch_test2.py
+  .tmp_patch_test3.py
+  .tmp_patch_test4.py
+  .tmp_patch_widget_test.py
+  .tmp_run_widget.R
+  .tmp_scan_old.R
+  .tmp_test_p1.R
+  .tmp_test_topic.R
+  .tmp_trace_gi.R
+  .tmp_widget_introspect.R
+These were most likely included in error. See section 'Package
+structure' in the 'Writing R Extensions' manual.
+* checking for portable file names ... OK
+* checking whether package 'SpatialCellChat' can be installed ... OK
+* used C++ compiler: 'G__~1.EXE (GCC) 13.3.0'
+* checking installed package size ... NOTE
+  installed size is 22.8Mb
+  sub-directories of 1Mb or more:
+    R     17.1Mb
+    data   4.0Mb
+    libs   1.0Mb
+* checking package directory ... OK
+* checking DESCRIPTION meta-information ... WARNING
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+ ERROR
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+* DONE
+
+Status: 1 ERROR, 1 WARNING, 3 NOTEs
+See
+  'D:/AIProjects/SpatialCellChat/SpatialCellChat.Rcheck/00check.log'
+for details.

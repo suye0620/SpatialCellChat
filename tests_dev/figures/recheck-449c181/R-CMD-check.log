@@ -1,0 +1,81 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+* using log directory 'D:/AIProjects/SpatialCellChat/..Rcheck'
+* using R version 4.4.3 (2025-02-28 ucrt)
+* using platform: x86_64-w64-mingw32
+* R was compiled by
+    gcc.exe (GCC) 13.3.0
+    GNU Fortran (GCC) 13.3.0
+* running under: Windows 10 x64 (build 19045)
+* using session charset: ASCII
+* using options '--no-manual --no-build-vignettes --as-cran'
+* checking for file './DESCRIPTION' ... OK
+* checking extension type ... Package
+* this is package 'SpatialCellChat' version '0.1.0'
+* package encoding: UTF-8
+* checking CRAN incoming feasibility ... [69s] WARNING
+Maintainer: 'Xiangzheng Cheng <xzcheng@whu.edu.cn>, Suoqin Jin <suoqin.jin@gmail.com>'
+
+The maintainer field is invalid or specifies more than one person
+
+New submission
+
+Strong dependencies not in mainstream repositories:
+  ALRA, MERINGUE
+Suggests or Enhances not in mainstream repositories:
+  pryr
+
+Package has a VignetteBuilder field but no prebuilt vignette index.
+
+Found the following (possibly) invalid URLs:
+  URL: http://www.string-db.org/ (moved to https://www.string-db.org/)
+    From: man/PPI.human.Rd
+          man/PPI.mouse.Rd
+    Status: 200
+    Message: OK
+  URL: https://github.com/sqjin/CellChat/
+    From: man/CellChatDB.human.Rd
+          man/CellChatDB.mouse.Rd
+          man/CellChatDB.zebrafish.Rd
+    Status: Error
+    Message: libcurl error code 35:
+          Recv failure: Connection was reset
+
+The Title field should be in title case. Current version is:
+'Inference and analysis of cell-cell communication from spatial transcriptomics data'
+In title case that is:
+'Inference and Analysis of Cell-Cell Communication from Spatial Transcriptomics Data'
+
+The Description field should start with a capital letter.
+
+The build time stamp has invalid/outdated format.
+* checking package namespace information ... OK
+* checking package dependencies ... ERROR
+Packages suggested but not available:
+  'roxygen2', 'SingleCellExperiment', 'SummarizedExperiment', 'gg.gap',
+  'wordcloud', 'raster', 'rstudioapi', 'scatterpie', 'rliger',
+  'SNFtool', 'pryr', 'expm'
+
+Vignette dependency required without any vignettes:: 'knitr'
+
+Imports includes 48 non-default packages.
+Importing from so many packages makes the package vulnerable to any of
+them becoming unavailable.  Move as many as possible to Suggests and
+use conditionally.
+
+The suggested packages are required for a complete check.
+Checking can be attempted without them by setting the environment
+variable _R_CHECK_FORCE_SUGGESTS_ to a false value.
+
+See section 'The DESCRIPTION file' in the 'Writing R Extensions'
+manual.
+* DONE
+
+Status: 1 ERROR, 1 WARNING
+See
+  'D:/AIProjects/SpatialCellChat/..Rcheck/00check.log'
+for details.

@@ -1,0 +1,22 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+* using log directory 'D:/AIProjects/SpatialCellChat/SpatialCellChat_0.1.0-r2.Rcheck'
+* using R version 4.4.3 (2025-02-28 ucrt)
+* using platform: x86_64-w64-mingw32
+* R was compiled by
+    gcc.exe (GCC) 13.3.0
+    GNU Fortran (GCC) 13.3.0
+* running under: Windows 10 x64 (build 19045)
+* using session charset: ASCII
+* checking package directory ... ERROR
+package directory 'D:/AIProjects/SpatialCellChat/SpatialCellChat_0.1.0-r2.Rcheck/00_pkg_src/SpatialCellChat_0.1.0-r2' does not exist
+* DONE
+
+Status: 1 ERROR
+See
+  'D:/AIProjects/SpatialCellChat/SpatialCellChat_0.1.0-r2.Rcheck/00check.log'
+for details.
