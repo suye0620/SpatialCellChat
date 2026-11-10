@@ -19,22 +19,22 @@
 | 函数 | 行 | 状态 | 旧依赖 | 关联 | 批次 |
 |---|---|---|---|---|---|
 | `spatialFeaturePlot` | 350 | migrated | 读取 `assay` 与 `net$group/cell`，显式 LR 稀疏逐层筛选，坐标按 cell name 对齐；保留旧 `slot.name` 值映射 | V-001/003/004 | P1 |
-| `netVisual` | 964 | broken | `net$prob/pval`（4 布局总入口）；spatial 分支引用未定义 `labels` | V-001/006 | P2 |
-| `netVisual_aggregate` | 1353 | broken | `net$prob/pval`；`vertex.weight=="incoming"` 隐式接口 | V-001/002 | P2 |
-| `netVisual_individual` | 1517 | broken | 同上；spatial 分支 `labels=labels` 未定义 | V-001/006 | P2 |
+| `netVisual` | 964 | migrated | 逐 LR 使用 `net$group$prob/pval` 的稀疏层；空间分支显式传入 coordinates/idents | V-001/006 | P2 |
+| `netVisual_aggregate` | 1353 | migrated | 逐 LR 使用 `net$group$prob/pval`，保留本次 `pval > thresh` 聚合语义 | V-001/002 | P2 |
+| `netVisual_individual` | 1517 | migrated | 同上；空间分支使用对象 `@idents` 与坐标 | V-001/006 | P2 |
 | `netVisual_diffInteraction` | 2485 | broken | `@net[[comparison]][[measure]]` 旧 merged 布局 | V-001/007 | P2 |
 | `netVisual_heatmap` | 2647 | broken | `@options$mode`、`net[[i]][[measure]]`、remove.isolate 重复删两次、cluster 参数错位 | V-001/007/008 | P2 |
 | `netVisual_barplot` | 2844 | broken | 旧 merged 检测与旧容器 | V-001 | P2 |
 | `netVisual_bubble` | 2992 | partial | 主路径走 `subsetCommunication`（已适配）；L3062 `prob.original` 裸变量 bug | V-001/009 | P2 |
-| `netVisual_chord_cell` | 3360 | broken | `net$prob/pval`；netP 分支实际实时聚合 | V-001/006 | P2 |
-| `netVisual_chord_gene` | 3651 | broken | `slot(object,"net")$prob`（slot.name 失效） | V-001 | P2 |
+| `netVisual_chord_cell` | 3360 | migrated | 复用稀疏 group LR 层；保留 netP 分支实时 LR 聚合语义 | V-001/006 | P2 |
+| `netVisual_chord_gene` | 3651 | migrated | 逐层读取稀疏 group LR 网络，按 `pval > thresh` 门控并关联 LR 注释 | V-001 | P2 |
 | `netVisual_embedding` | 4250 | broken | similarity 新、点大小读旧 `netP$prob` | V-001/017 | P3 |
 | `netVisual_embeddingZoomIn` | 4344 | broken | 同上 | V-001/017 | P3 |
 | `netVisual_embeddingPairwise` | 4431 | broken | 旧 merged 嵌套 | V-001/017 | P3 |
 | `netVisual_embeddingPairwiseZoomIn` | 4546 | broken | 同上 | V-001/017 | P3 |
 | `netVisual_CommunField` | 5390 | broken | 旧 `slot$field` 路径（V-013） | V-013 | P3 |
 | `netVisual_CommunFieldZoomIn` | 6373 | broken | 随基础图失效，修 CommunField 后自动恢复 | V-013 | P3 |
-| `plotGeneExpression` | 6545 | broken | `@data.signaling` | V-003/005 | P3 |
+| `plotGeneExpression` | 6545 | migrated | 读取 `assay$signaling`；bar 分支支持单/多 feature | V-003/005 | P3 |
 | `plotly_spatialLRpairPlot` | 7202 | broken | `@data` + `apply(prob>0,3,sum)` 稠密膨胀 | V-001/004 | P4 |
 | `plotly_spatialLRpairPlot_shiny` | 7831 | broken | 启动即崩 + observer 累积 | V-001 | P4 |
 | `netVisual_TopicComposition` | 4679 | partial | SCC meta 读 `@meta.data`（错）、remove.isolate 错轴 | V-014 | P3 |
@@ -53,7 +53,7 @@
 
 **历史基线（已由后续迁移修正）**：当时 `mergeCellChat` 尚未定义，comparison consumers 因此没有可验证的 producer。当前实现由 `mergeSpatialCellChat()` 作为正式 producer，并保留仅供旧内部调用点使用的 `mergeCellChat()` adapter；实际状态和剩余边界见 [P2 migration issue log](visualization-migration-P2-issues-2026-11-10.md#p2-015-merged-comparison-producer-与空间坐标语义)。
 
-另有两个确定性变量名 bug：`selectK:992`（`data_sr` 应为 `data`）、`netVisual_bubble:3062`（`prob.original` 应为 `df.net$prob.original`）。
+历史上另有两个确定性变量名 bug：`selectK` 的 `data_sr` 和 `netVisual_bubble` 的 `prob.original`。两处现已分别改为 group-level 稀疏层展开后的 `data` 与 `df.net$prob.original`；后续回归仍需保留这两个断言。
 
 ## 4. OK / keep 清单（回归基线，不重构主体）
 

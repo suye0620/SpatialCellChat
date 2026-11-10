@@ -1011,8 +1011,20 @@ extractEnrichedLR_internal <- function(net, LR, DB, signaling, enriched.only = T
 #'
 #' @examples
 selectK <- function(object, slot.name = "netP", pattern = c("outgoing","incoming"), title.name = NULL, do.facet = TRUE, k.range = seq(2,10), nrun = 30, seed.use = 10) {
+  object <- .sc_assert_spatial_cell_chat(object)
   pattern <- match.arg(pattern)
-  prob <- methods::slot(object, slot.name)$prob
+  slot.name <- match.arg(slot.name, c("net", "netP"))
+  if (length(k.range) == 0L || anyNA(k.range) || any(k.range < 2) ||
+      any(k.range != as.integer(k.range)))
+    stop("k.range must contain integers >= 2", call. = FALSE)
+  if (length(nrun) != 1L || !is.numeric(nrun) || is.na(nrun) ||
+      nrun < 1 || nrun != as.integer(nrun))
+    stop("nrun must be a positive integer", call. = FALSE)
+
+  # Group probabilities are stored as one sparse matrix per signaling layer.
+  # Convert only this small group-level tensor for NMF; never materialize the
+  # cell-level communication array here.
+  prob <- .sc_group_prob_array(object, slot.name)
   if (pattern == "outgoing") {
     data_sender <- apply(prob, c(1,3), sum)
     data_sender = sweep(data_sender, 2L, apply(data_sender, 2, function(x) max(x, na.rm = TRUE)), '/', check.margin = FALSE)
@@ -1024,24 +1036,30 @@ selectK <- function(object, slot.name = "netP", pattern = c("outgoing","incoming
   }
   data <- data0
   data <- data[rowSums(data)!=0,]
+  if (!nrow(data) || !ncol(data))
+    stop("The selected signaling network has no non-zero group scores", call. = FALSE)
+  max.rank <- min(dim(data)) - 1L
+  if (max.rank < 2L || any(k.range > max.rank))
+    stop("k.range must be between 2 and ", max.rank,
+         " for the available group-by-signaling matrix", call. = FALSE)
 
   if (is.null(title.name)) {
     title.name <- paste0(pattern, " signaling \n")
     # title.name <- paste0(pattern, " signaling \n (nrun = ", nrun, ", seed = ", seed.use, ")")
   }
 
-  res <- NMF::nmfEstimateRank(data_sr, range = 20:30,  nrun=30L, seed = seed.use)
+  res <- NMF::nmfEstimateRank(data, range = as.integer(k.range), nrun = as.integer(nrun), seed = seed.use)
 
   df1 <- data.frame(k = res$measures$rank, score = res$measures$cophenetic, Measure = "Cophenetic")
   df2 <- data.frame(k = res$measures$rank, score = res$measures$silhouette.consensus, Measure = "Silhouette")
   # df3 <- data.frame(k = res$measures$rank, score = res$measures$dispersion, Measure = "Dispersion")
   df <- rbind(df1, df2)
   #df <- rbind(df1, df2, df3)
-  gg <- ggplot(df, aes(x = k, y = score, group = Measure, color = Measure)) + geom_line(size=1) +
+  gg <- ggplot(df, aes(x = k, y = score, group = Measure, color = Measure)) + geom_line(linewidth=1) +
     geom_point() +
     theme_classic() + labs(x = 'Number of patterns', y='Measure score') +
     labs(title = title.name) +  theme(plot.title = element_text(size = 10, face = "bold", hjust = 0.5)) +
-    theme(legend.position = "right") + theme(text = element_text(size = 10)) + scale_x_discrete(limits = (unique(df$k))) +
+    theme(legend.position = "right") + theme(text = element_text(size = 10)) + scale_x_continuous(breaks = sort(unique(df$k))) +
     scale_color_brewer(palette="Set2") + guides(color=guide_legend("Measure type"))
   if (do.facet) {
     gg <- gg + facet_wrap(~ Measure, scales='free')
@@ -2605,7 +2623,14 @@ subsetCommunication_internal <- function(net, LR, cells.level, slot.name = "net"
   if (!is.null(signaling)) {
     missing <- setdiff(signaling, LR$pathway_name)
     if (length(missing)) stop("Cannot find signaling pathway: ", paste(missing, collapse = ", "), call. = FALSE)
-    pairLR.use <- LR[LR$pathway_name %in% signaling, "interaction_name", drop = FALSE]
+    # `netP` layers are already keyed by pathway name.  Do not replace a
+    # pathway selector with LR interaction names, otherwise the later filter
+    # removes every pathway row from the new pathway-level container.
+    pairLR.use <- if (identical(slot.name, "netP")) {
+      data.frame(pathway_name = as.character(signaling), stringsAsFactors = FALSE)
+    } else {
+      LR[LR$pathway_name %in% signaling, "interaction_name", drop = FALSE]
+    }
   }
 
   if (!is.null(pairLR.use)){
@@ -2801,7 +2826,7 @@ netAnalysis_signalingRole_network <- function(object, signaling, slot.name = "ne
 
     ht1 = Heatmap(mat, col = color.heatmap.use, na_col = "white", name = "Importance",
                   bottom_annotation = col_annotation,
-                  cluster_rows = cluster.rows,cluster_columns = cluster.rows,
+                  cluster_rows = cluster.rows,cluster_columns = cluster.cols,
                   row_names_side = "left",row_names_rot = 0,row_names_gp = gpar(fontsize = font.size),column_names_gp = gpar(fontsize = font.size),
                   width = unit(width, "cm"), height = unit(height, "cm"),
                   column_title = paste0(dimnames(centr)[[3]][i], " signaling pathway network"),column_title_gp = gpar(fontsize = font.size.title),column_names_rot = 45,
@@ -3398,7 +3423,7 @@ netAnalysis_signalingRole_heatmap <- function(object, signaling = NULL, pattern 
   }
   ht1 = Heatmap(mat, col = color.heatmap.use, na_col = "white", name = "Relative strength",
                 bottom_annotation = col_annotation, top_annotation = ha2, right_annotation = ha1,
-                cluster_rows = cluster.rows,cluster_columns = cluster.rows,
+                cluster_rows = cluster.rows,cluster_columns = cluster.cols,
                 row_names_side = "left",row_names_rot = 0,row_names_gp = gpar(fontsize = font.size),column_names_gp = gpar(fontsize = font.size),
                 width = unit(width, "cm"), height = unit(height, "cm"),
                 column_title = title,column_title_gp = gpar(fontsize = font.size.title),column_names_rot = 90,
@@ -3417,7 +3442,8 @@ netAnalysis_signalingRole_heatmap <- function(object, signaling = NULL, pattern 
 #' This function returns a data frame consisting of all the inferred cell-cell communications with mapped DEG information
 #'
 #' @param object CellChat object
-#' @param features.name a char name used for extracting the DEG in `object@var.features[[features.name]]`
+#' @param features.name a char name used for extracting the DEG table in
+#'   `object@misc$.var.features[[paste0(features.name, ".info")]]`
 #' @param thresh threshold of the p-value for determining significant interaction
 #' @importFrom  dplyr select
 #'
@@ -3426,16 +3452,20 @@ netAnalysis_signalingRole_heatmap <- function(object, signaling = NULL, pattern 
 #' @export
 #'
 netMappingDEG <- function(object, features.name, thresh = 0.05) {
+  object <- .sc_assert_spatial_cell_chat(object)
   features.name <- paste0(features.name, ".info")
-  if (!(features.name %in% names(object@var.features))) {
-    stop("The input features.name does not exist in `names(object@var.features)`. Please first run `identifyOverExpressedGenes`! ")
+  var.features <- object@misc$.var.features
+  if (!is.list(var.features) || !(features.name %in% names(var.features))) {
+    stop("The input features.name does not exist in `names(object@misc$.var.features)`. Please first run `identifyOverExpressedGenes`! ", call. = FALSE)
   }
-  DEG <- object@var.features[[features.name]]
+  DEG <- var.features[[features.name]]
   geneInfo <- object@DB$geneInfo
   complex_input <- object@DB$complex
 
   df.net <- subsetCommunication(object, thresh = thresh)
-  if (is.list(df.net)) {
+  # A data.frame is also a list in base R; only merged output from
+  # subsetCommunication() should enter the dataset-list branch.
+  if (is.list(df.net) && !is.data.frame(df.net)) {
     net <- data.frame()
     for (ii in 1:length(df.net)) {
       df.net[[ii]]$datasets <- names(df.net)[ii]

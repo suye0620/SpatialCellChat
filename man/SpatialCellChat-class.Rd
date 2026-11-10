@@ -4,41 +4,23 @@
 \name{SpatialCellChat-class}
 \alias{SpatialCellChat-class}
 \alias{SpatialCellChat}
-\title{The key slots used in the SpatialCellChat object are described below.}
+\title{The 11-slot SpatialCellChat object}
 \description{
-The key slots used in the SpatialCellChat object are described below.
+A SpatialCellChat object stores expression assays, spatial geometry, metadata,
+LR annotations, sparse communication layers, pathway results, and analysis
+artifacts. The mode and datatype are stored in \code{misc}, not as top-level S4 slots.
 }
 \section{Slots}{
-
 \describe{
-\item{\code{data.raw}}{raw count data matrix}
-
-\item{\code{data}}{normalized data matrix for SpatialCellChat analysis (Genes should be in rows and cells in columns)}
-
-\item{\code{data.signaling}}{a subset of normalized matrix only containing signaling genes}
-
-\item{\code{data.scale}}{scaled data matrix}
-
-\item{\code{data.project}}{projected data}
-
-\item{\code{images}}{a list of spatial image objects}
-
-\item{\code{net}}{a three-dimensional array P (K×K×N), where K is the number of cell groups and N is the number of ligand-receptor pairs. Each row of P indicates the communication probability originating from the sender cell group to other cell groups.}
-
-\item{\code{netP}}{a three-dimensional array representing cel-cell communication networks on a signaling pathway level}
-
-\item{\code{DB}}{ligand-receptor interaction database used in the analysis (a subset of CellChatDB)}
-
-\item{\code{LR}}{a list of information related with ligand-receptor pairs}
-
-\item{\code{meta}}{data frame storing the information associated with each cell}
-
-\item{\code{idents}}{a factor defining the cell identity used for all analysis. It becomes a list for a merged SpatialCellChat object}
-
-\item{\code{var.features}}{A list: one element is a vector consisting of the identified over-expressed signaling genes; one element is a data frame returned from the differential expression analysis}
-
-\item{\code{dr}}{List of the reduced 2D coordinates, one per method, e.g., umap/tsne/dm}
-
-\item{\code{options}}{List of miscellaneous data, such as parameters used throughout analysis, and a indicator whether the SpatialCellChat object is a single or merged}
+\item{\code{assay}}{Named assay matrices: raw, norm, scale, smooth, and signaling.}
+\item{\code{images}}{Spatial coordinates, coordinate calibration, rasters, FOV data, and distance/grid caches.}
+\item{\code{meta}}{A data frame of cell/spot metadata.}
+\item{\code{idents}}{A factor defining the cell/spot group for each observation.}
+\item{\code{features}}{A data frame of gene-level metadata.}
+\item{\code{LR}}{LR interaction annotations and selected LR tables.}
+\item{\code{dr}}{Dimensional reductions and other embeddings.}
+\item{\code{net}}{LR-level communication results. Group probabilities and p-values are stored under \code{net$group}; cell probabilities are under \code{net$cell}; temporary computation data are under \code{net$tmp}.}
+\item{\code{netP}}{Pathway-level communication results with the same group/cell organization as \code{net}.}
+\item{\code{DB}}{The communication database and gene/complex annotations used in analysis.}
+\item{\code{misc}}{Mode, datatype, parameters, operation log, variable-feature results, and merged dataset snapshots.}
 }}
-

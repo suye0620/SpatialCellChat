@@ -6899,7 +6899,7 @@ barPlot <- function(object, features, group.by = NULL, split.by = NULL, color.us
                     x.lab.rot = FALSE, ncol = 1, ...) {
   method <- match.arg(method)
   if (is.null(group.by)) {
-    labels = Idents(object)
+    labels = Seurat::Idents(object)
   } else {
     labels = object@meta.data[,group.by]
   }
@@ -6913,11 +6913,11 @@ barPlot <- function(object, features, group.by = NULL, split.by = NULL, color.us
     group.levels <- levels(group)
     df <- data.frame()
     for (i in 1:length(group.levels)) {
-      data = GetAssayData(object, slot = "data", assay = assay)[, group == group.levels[i]]
+      data = Seurat::GetAssayData(object, slot = "data", assay = assay)[, group == group.levels[i]]
       labels.use <- labels[group == group.levels[i]]
-      dataavg <- aggregate(t(data[features, ]), list(labels.use) , FUN = FunMean)
-      dataavg <- t(dataavg[,-1])
-      colnames(dataavg) <- levels(labels.use)
+      dataavg <- aggregate(t(data[features, , drop = FALSE]), list(labels.use) , FUN = FunMean)
+      dataavg <- as.data.frame(t(dataavg[, -1, drop = FALSE]))
+      colnames(dataavg) <- levels(droplevels(labels.use))
       dataavg <- as.data.frame(dataavg)
       dataavg$gene = rownames(dataavg)
       df1 = reshape2::melt(dataavg, id.vars = c("gene"))
@@ -6929,10 +6929,10 @@ barPlot <- function(object, features, group.by = NULL, split.by = NULL, color.us
     df$condition <- factor(df$condition, levels = group.levels)
 
   } else {
-    data = GetAssayData(object, slot = "data", assay = assay)
-    dataavg <- aggregate(t(data[features, ]), list(labels) , FUN = FunMean)
-    dataavg <- t(dataavg[,-1])
-    colnames(dataavg) <- levels(labels)
+    data = Seurat::GetAssayData(object, slot = "data", assay = assay)
+    dataavg <- aggregate(t(data[features, , drop = FALSE]), list(labels) , FUN = FunMean)
+    dataavg <- as.data.frame(t(dataavg[, -1, drop = FALSE]))
+    colnames(dataavg) <- levels(droplevels(labels))
     dataavg$gene = rownames(dataavg)
     df1 = reshape2::melt(dataavg, id.vars = c("gene"))
     colnames(df1) <- c("gene","labels","value")
@@ -6941,8 +6941,8 @@ barPlot <- function(object, features, group.by = NULL, split.by = NULL, color.us
   }
   gg <- list()
   for (i in 1:length(features)) {
+    df.use <- subset(df, gene == features[i])
     if (i < length(features)) {
-      df.use = subset(df, gene == features[i])
       gg[[i]] <- barplot_internal(df.use, x = "labels", y = "value", fill = "condition",color.use = color.use,ylabel = features[i],remove.xtick = TRUE,x.lab.rot = x.lab.rot,...)
     }else {
       gg[[i]] <- barplot_internal(df.use, x = "labels", y = "value", fill = "condition",color.use = color.use,ylabel = features[i],remove.xtick = FALSE,x.lab.rot = x.lab.rot,...)

@@ -9,7 +9,7 @@ netMappingDEG(object, features.name, thresh = 0.05)
 \arguments{
 \item{object}{CellChat object}
 
-\item{features.name}{a char name used for extracting the DEG in `object@var.features[[features.name]]`}
+\item{features.name}{a char name used for extracting the DEG table in `object@misc$.var.features[[paste0(features.name, ".info")]]`}
 
 \item{thresh}{threshold of the p-value for determining significant interaction}
 }
