@@ -212,3 +212,12 @@ Validation: `tests_dev/test-extractEnrichedLR.R` checks a one-interaction
 dataset-local candidate table, and `tests_dev/test-merge-spatialcellchat.R`
 checks merged extraction through the real producer when one dataset lacks a
 requested pathway.
+
+
+## P5-014: real fixture pair does not satisfy the merged producer contract
+
+Location: `.sc_merge_assert_inputs()` and `mergeSpatialCellChat()` in `R/merging.R`. `tests_dev/audit-merge-real-fixtures.R` reads the existing independent Visium PP1 and Slide-seq MBM05 fixtures without modifying them. The 905-spot and 29,536-cell objects have 23,718 shared gene names but their full gene axes and order differ; their group-level names have no intersection. The stored DB objects are identical. The real producer rejects the pair at the gene-axis check, before it reaches the group-axis check; summary: `tests_dev/figures/merged/real-fixture-contract-2026-11-11.csv`.
+
+Cause and significance: the current contract intentionally requires identical assay gene order and identical group levels, and the downstream comparison paths interpret groups as corresponding named biological populations. A group missing from one dataset is not necessarily a measured zero. Automatically padding groups or relabeling these unrelated annotations could produce plausible but misleading comparisons. The current test evidence therefore does not establish an independent-sample biological comparison.
+
+Next direction: use independently acquired compatible samples with a defensible common annotation and aligned gene/DB inputs; separately decide how comparisons should represent groups or genes missing from one dataset before relaxing the existing contract. Merely having an identical stored DB does not establish sample comparability.
