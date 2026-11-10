@@ -1874,6 +1874,7 @@ rankSimilarity <- function(object, slot.name = "netP", type = c("functional","st
     candidates[paste0(candidates, "--", dataset) %in% labels]
   })
   row.indices <- lapply(seq_along(layer.names), function(i) {
+    if (!length(layer.names[[i]])) return(integer())
     match(paste0(layer.names[[i]], "--", dataset.names[comparison1[i]]), labels)
   })
   if (any(lengths(row.indices) == 0L))

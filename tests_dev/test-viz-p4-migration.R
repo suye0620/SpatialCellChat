@@ -88,6 +88,25 @@ gated@net$group$prob <- SparseChatArray(group.layers, dimnames = dimnames(gated@
 gated@net$group$pval <- SparseChatArray(p.layers, dimnames = dimnames(gated@net$group$pval))
 check("group p-value boundary remains inclusive", length(plotly_spatialLRpairPlot(gated, pairLR.use = pair, enriched.only = TRUE, do.group = TRUE, thresh = 0.05)) == 2L)
 expect_error("group p-value above threshold is excluded", plotly_spatialLRpairPlot(gated, pairLR.use = pair, enriched.only = TRUE, do.group = TRUE, thresh = 0.049))
+coords <- as.data.frame(chat@images$coordinates)
+scores <- data.frame(x = coords[, 1], y = coords[, 2], score = seq_len(nrow(coords)),
+                     row.names = rownames(coords))
+feature.3d <- plotly::plotly_build(plotFeatures(scores, method = "3d",
+  cells.highlight = rownames(scores)[1:3], three.dim.z = 7, plot.title = "score"))
+feature.traces <- feature.3d$x$data[1:2]
+check("3D feature traces preserve all cell ids and highlight membership",
+      setequal(unlist(lapply(feature.traces, `[[`, "customdata")), rownames(scores)) &&
+        setequal(feature.traces[[1]]$customdata, rownames(scores)[1:3]))
+check("3D feature traces use the requested z coordinate",
+      all(vapply(feature.traces, function(trace) all(trace$z == 7), logical(1))))
+gi.3d <- plotly::plotly_build(plotStatistics_Gi(scores, group.by = chat@idents[rownames(scores)],
+  group.highlight = seq_len(nrow(scores)) > 3L, n = 4L, method = "3d", three.dim.z = 7))
+gi.traces <- gi.3d$x$data[1:2]
+check("3D Gi traces preserve all points and highlight membership",
+      identical(vapply(gi.traces, function(trace) length(trace$x), integer(1)),
+                c(3L, nrow(scores) - 3L)))
+check("3D Gi traces use the requested z coordinate",
+      all(vapply(gi.traces, function(trace) all(trace$z == 7), logical(1))))
 app <- plotly_spatialLRpairPlot_shiny(chat, features = gene)
 shiny::testServer(app, {
   session$flushReact()

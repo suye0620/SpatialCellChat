@@ -17,7 +17,7 @@ identifyEnrichedInteractions(
 \arguments{
 \item{object}{CellChat object}
 
-\item{from}{a vector giving the index or the name of source cell groups}
+\item{from}{a nonempty vector giving the index or the name of source cell groups; invalid groups are rejected}
 
 \item{to}{a corresponding vector giving the index or the name of target cell groups. Note: The length of 'from' and 'to' must be the same, giving the corresponding pair of cell groups for communication.}
 
@@ -27,7 +27,12 @@ identifyEnrichedInteractions(
 
 \item{pairLR.use0}{ligand-receptor pairs to use; default is all the significant interactions}
 
-\item{thresh}{threshold of the p-value for determining significant interaction}
+\item{thresh}{p-value threshold used to select candidate interactions when
+\code{pairLR.use0} is NULL. The historical final filtering also uses 0.05.}
+}
+\value{
+A data frame for a single object, or a named list of data frames for
+a merged object, one per dataset. Run \code{rankNetPairwise()} first.
 }
 \description{
 Identify all the significant interactions (L-R pairs) from some cell groups to other cell groups

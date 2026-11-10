@@ -103,3 +103,78 @@ The next audit must cover `rankSimilarity()`, `rankNetPairwise()`,
 functions, `spatialVisual_scoring()` merged behavior, topic/statistics plots,
 and all available 3D/widget branches. Any behavioral change must preserve the
 11-slot schema and be recorded here with a focused regression check.
+
+## P5-008: merged pairwise rankings were not consumable
+
+Location: `R/modeling.R::identifyEnrichedInteractions()` and
+`R/analysis.R::rankNetPairwise()`.
+
+Cause and impact: the producer writes merged rankings into each dataset snapshot,
+but the consumer read only `object@net$pairwiseRank`. Consequently the ordinary
+producer-then-consumer sequence failed for merged objects.
+
+Fix: consume each matching snapshot and return a dataset-named list, consistent
+with merged `subsetCommunication()`. A single object still returns a data frame;
+missing rankings identify the dataset and request `rankNetPairwise()`. The legacy
+filtering algorithm is unchanged. The proposed decision record is
+`.agents/notes/proposed/2026-11-10-merged-pairwise-enrichment.md`.
+
+Validation: `tests_dev/test-remaining-entrypoints.R` checks the single-object
+path, different dataset-local results and missing-ranking errors.
+
+## P5-009: empty embedding layer selection did not trigger the intended error
+
+Location: `R/analysis.R::rankSimilarity()` row index construction.
+
+Cause: `paste0(character(0), "--", dataset)` can yield a nonempty string in R.
+Matching that string produces `NA`, so a missing dataset appeared to have one
+index. This did not supply a valid comparison, but the subsequent error misreported
+the problem as no shared layers.
+
+Fix and validation: keep empty index vectors empty; focused tests check absent
+dataset layers and row-name permutation. No distance calculation is changed.
+
+## P5-010: historical threshold and directional-change semantics remain open
+
+`identifyEnrichedInteractions()` uses `pval < thresh` for initial candidates,
+but subsequently applies a fixed 0.05 cutoff, including when `pairLR.use0` is
+provided. Thus `thresh > 0.05` does not simply expand the final result. This
+pre-existing behavior is documented, not silently changed in the migration;
+resolving its intended statistical meaning requires a separate decision.
+
+`netAnalysis_signalingChanges_scatter()` filters using `rowSums(mat.diff) != 0`.
+An outgoing change of +2 and incoming change of -2 cancels and disappears even
+though both changed. This is A-13 in `docs/ANALYSIS_SEMANTICS.md`. The current
+pass preserves legacy behavior as requested; the focused regression verifies the
+current behavior, not its scientific correctness. A later decision should test
+each direction independently and address zero and missing-layer interpretation.
+
+## P5-011: validation and dependency boundaries
+
+`suggestK()` consumes a Liger object and `suggestK1()` a matrix; neither directly
+reads SpatialCellChat slots, so they are not slot-migration consumers. Their
+NMF/statistical interpretation and optional dependencies remain separate issues.
+
+P4 HTML generation and sampled screenshots are not full browser-interaction
+acceptance. The three-object P4 summaries explicitly say `BROWSER-NOT-TESTED`;
+Shiny `testServer()` is server-side only. P3 Slide-seq Grid and Flow remain
+`VISUAL-REVIEW`, including the integration warning on the default Flow plot.
+The 3D stack remains a non-public prototype without a verified multi-slice data
+and registration contract (P4-004); it is not counted as delivered.
+
+The Agent Notes validator reports pre-existing errors in other records; the new
+merged-pairwise note itself validates. Do not claim that the full Note set is
+clean until those independent records are repaired and revalidated.
+
+## P5-012: invalid group names could silently change cell-pair identity
+
+Location: `identifyEnrichedInteractions()` previously removed invalid `from`
+and `to` names independently before checking the remaining lengths. For example,
+`from = c("A", "missing")`, `to = c("missing", "B")` was silently converted
+to A -> B even though A -> B was not one of the requested pairs. This affects
+single and merged results and can yield plausible but scientifically wrong data.
+
+Fix: reject invalid names, missing values, empty selections and non-integer or
+out-of-range indices before pairing; retain valid pair order and bidirectional
+logic. This deliberately replaces the unsafe historical partial-name behavior
+with an error. Focused tests cover mismatched invalid names and invalid indices.

@@ -106,6 +106,18 @@ check("rankNetPairwise rejects missing p-values instead of inventing evidence",
 enriched <- identifyEnrichedInteractions(pairwise, from = "A", to = "B", thresh = 0.05)
 check("identifyEnrichedInteractions consumes the migrated pairwise result",
       is.data.frame(enriched) && all(enriched$interaction_name %in% c("LR1", "LR2")))
+check("invalid group names cannot silently re-pair endpoints",
+      grepl("Invalid cell group", tryCatch({
+        identifyEnrichedInteractions(pairwise, c("A", "missing"), c("missing", "B")); ""
+      }, error = conditionMessage), fixed = TRUE))
+check("empty and out-of-range group selections are rejected",
+      nzchar(tryCatch({ identifyEnrichedInteractions(pairwise, integer(), integer()); "" },
+                      error = conditionMessage)) &&
+        nzchar(tryCatch({ identifyEnrichedInteractions(pairwise, 1, 3); "" },
+                        error = conditionMessage)))
+none.enriched <- identifyEnrichedInteractions(pairwise, "A", "B", thresh = 0)
+check("empty threshold selection returns an empty result",
+      is.data.frame(none.enriched) && nrow(none.enriched) == 0L)
 
 merged <- mergeSpatialCellChat(list(one = one, two = two), show.plot = FALSE)
 check("compareInteractions reads snapshot group matrices",
@@ -120,6 +132,19 @@ pairwise.merged <- rankNetPairwise(merged)
 check("rankNetPairwise stores dataset-local results in merged snapshots",
       all(vapply(pairwise.merged@misc$.datasets,
                  function(x) is.list(x$net$pairwiseRank), logical(1))))
+pairwise.merged@misc$.datasets$two$net$pairwiseRank$A$B["LR1", "pval"] <- 0.01
+pairwise.merged@misc$.datasets$two$net$pairwiseRank$A$B["LR2", "pval"] <- 0.20
+merged.enriched <- identifyEnrichedInteractions(pairwise.merged, "A", "B", pair.only = FALSE)
+check("merged enrichment consumes the matching dataset ranking",
+      identical(names(merged.enriched), c("one", "two")) &&
+        identical(merged.enriched$one$interaction_name, "LR2") &&
+        identical(merged.enriched$two$interaction_name, "LR1"))
+unranked <- pairwise.merged
+unranked@misc$.datasets$two$net$pairwiseRank <- NULL
+check("merged enrichment identifies a missing dataset ranking",
+      grepl("dataset 'two'", tryCatch({
+        identifyEnrichedInteractions(unranked, "A", "B"); ""
+      }, error = conditionMessage), fixed = TRUE))
 
 Y <- matrix(c(0, 0, 1, 0, 0, 0, 2, 0), nrow = 4L, byrow = TRUE,
             dimnames = list(c("P1--one", "P2--one", "P1--two", "P2--two"),
@@ -129,6 +154,17 @@ ranked <- rankSimilarity(merged, type = "functional", comparison1 = c(1, 2))
 check("rankSimilarity reads the merged embedding and aligns dataset suffixes",
       inherits(ranked, "ggplot") && identical(as.character(ranked$data$name), c("P1", "P2")) &&
         identical(as.numeric(ranked$data$dist), c(0, 1)))
+permuted.embedding <- merged
+permuted.embedding@netP$similarity$functional$dr$`1-2` <- Y[c(4, 2, 3, 1), , drop = FALSE]
+check("rankSimilarity aligns permuted embedding rows by name",
+      identical(rankSimilarity(permuted.embedding, type = "functional", comparison1 = c(1, 2))$data,
+                ranked$data))
+missing.embedding <- merged
+missing.embedding@netP$similarity$functional$dr$`1-2` <- Y[1:2, , drop = FALSE]
+check("rankSimilarity rejects a dataset absent from the embedding",
+      grepl("does not contain layers", tryCatch({
+        rankSimilarity(missing.embedding, type = "functional", comparison1 = c(1, 2)); ""
+      }, error = conditionMessage), fixed = TRUE))
 
 role.diff <- netAnalysis_diff_signalingRole_scatter(
   merged, comparison = c(1, 2), do.label = FALSE, show.legend = FALSE
