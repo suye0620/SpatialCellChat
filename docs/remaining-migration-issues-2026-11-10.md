@@ -178,3 +178,6 @@ Fix: reject invalid names, missing values, empty selections and non-integer or
 out-of-range indices before pairing; retain valid pair order and bidirectional
 logic. This deliberately replaces the unsafe historical partial-name behavior
 with an error. Focused tests cover mismatched invalid names and invalid indices.
+
+When no pair passes the requested candidate threshold, the same consumer now
+returns a typed empty data frame instead of failing while binding an empty list.
