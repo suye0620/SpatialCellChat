@@ -206,6 +206,15 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 
 沿用 P2-026 的实验代码，不修改生产函数。`tests_dev/diagnose-chord-external-boundaries.R` 对模拟 P1（3 个扇区）、Visium COLLAGEN（111 个扇区）和完整 Slide-seq NOTCH（38 个扇区），分别在 24×16、9×7 英寸 PDF 上绘制有、无图例的四种组合，共 12 个实验。`lab.cex=0.7`、`small.gap=0.25`。每例保存扇区映射、标签测量、引线顶点及输入网络快照。
 
-12 个 PDF 均生成；逐段检测得到 12 例引线严格交叉数均为 0。模拟和 Slide-seq 这几组画布/字号下，基于 `strheight` 的相邻文字高度检查未发现重叠；Visium 大画布也未发现，而 9×7 英寸画布在左右两列共发现 109 对相邻标签高度重叠。该检查只衡量文字包围盒的垂直间距，不等同于完整可读性验证。查看 9×7 Visium 有图例的预览还发现右下角图例覆盖标签；24×16 预览中未观察到这一覆盖。其他图例位置、字号、字体、设备和更密集数据仍未经验证。PNG 转换提示缺少 ArialUnicode 字体，PDF 是主要产物。
+12 个 PDF 均生成；逐段检测得到 12 例引线严格交叉数均为 0。模拟和 Slide-seq 这几组画布/字号下，基于 `strheight` 的相邻文字高度检查未发现重叠；Visium 大画布也未发现，而 9×7 英寸画布在左右两列共发现 109 对相邻标签高度重叠。该检查只衡量文字包围盒的垂直间距，不等同于完整可读性验证。查看 9×7 Visium 有图例的预览时曾认为右下角图例覆盖标签；后续实测修正见 P2-028。24×16 预览中未观察到这一覆盖。其他图例位置、字号、字体、设备和更密集数据仍未经验证。PNG 转换提示缺少 ArialUnicode 字体，PDF 是主要产物。
 
 因此生产化必须能检测设备与标签容量，并处理图例和标签竞争空间，而不能仅以原型引线不交叉作为通过条件。引线检测仅统计严格交叉，不覆盖相切、近重合或线宽。图、汇总和坐标位于 `tests_dev/figures/P2/chord-external-boundaries-2026-11-11/`，检查脚本为 `tests_dev/audit-chord-boundaries.py`；所有结果标记为 `DRAWN-REVIEW`，等待人工视觉及生物学验收。
+
+
+## P2-028：可选圆外标签实现与图例边界更正
+
+`netVisual_chord_gene()` 新增只能按名称传入的 `label.layout`，默认 `"radial"` 保留原绘图，`"outside"` 将每个显示扇区的标签分列并用颜色一致的引线相连。数据筛选、扇区和边的输入不变；圆外模式改变绘图画布及预留轨道高度。文字测量表明相邻标签重叠或超出绘图区时会提示扩大设备或减小 `lab.cex`；图例的包围盒与标签相交时提示调整 `legend.pos.x`、`legend.pos.y` 或设备。提示不保证其他视觉元素不重叠，也不代表图像已人工验收。
+
+更正 P2-027 的目测：9×7 Visium 默认图例与最近标签之间测得约 0.012 英寸间隙，不应认定为实际覆盖；将 `legend.pos.x` 从 20 改为 30 后发生可测量重叠并触发提示。Slide-seq 小画布默认图例检测到标签重叠。三对象的原版、默认和圆外图及警告记录位于 `tests_dev/figures/P2/chord-production-outside-2026-11-11/`。`tests_dev/test-chord-outside-layout.R` 对比三对象旧版与当前默认的 chord 输入，并核对圆外模式的边、权重、扇区顺序和颜色；模拟对象使用旧版位置参数及 `link.sort` 对默认 PNG 做逐像素等价检查。测试还检查空输入、非法参数、长标签、图例碰撞和出错后 circlize 状态；`tests_dev/audit-chord-production-paths.py` 对记录的 9 组生产引线逐段检测，严格交叉均为零。
+
+独立临时库已安装并实际调用圆外模式，Rd 语法检查通过。以上覆盖 PDF 和模拟 PNG、有限数据与参数，并不穷举不同设备、字体、嵌套或旋转的 grid 视口、线条相切与近重合、自定义添加图形或生物学解读；图像仍需用户检查。PNG 转换提示本机缺少 ArialUnicode 字体，PDF 为主要产物。

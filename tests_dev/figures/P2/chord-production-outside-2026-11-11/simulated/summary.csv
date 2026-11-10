@@ -1,0 +1,6 @@
+"dataset","case","signal","status","error","warnings","file"
+"simulated","old","P1","DRAWN-REVIEW","","","tests_dev/figures/P2/chord-production-outside-2026-11-11/simulated/old.pdf"
+"simulated","radial","P1","DRAWN-REVIEW","","","tests_dev/figures/P2/chord-production-outside-2026-11-11/simulated/radial.pdf"
+"simulated","outside-large","P1","DRAWN-REVIEW","","","tests_dev/figures/P2/chord-production-outside-2026-11-11/simulated/outside-large.pdf"
+"simulated","outside-small","P1","DRAWN-REVIEW","","","tests_dev/figures/P2/chord-production-outside-2026-11-11/simulated/outside-small.pdf"
+"simulated","outside-small-legend-overlap","P1","DRAWN-REVIEW","","","tests_dev/figures/P2/chord-production-outside-2026-11-11/simulated/outside-small-legend-overlap.pdf"

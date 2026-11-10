@@ -29,7 +29,8 @@ netVisual_chord_gene(
   legend.pos.y = 20,
   show.legend = TRUE,
   thresh = 0.05,
-  ...
+  ...,
+  label.layout = c("radial", "outside")
 )
 }
 \arguments{
@@ -82,6 +83,8 @@ net should have at least three columns: "source","target" and "interaction_name"
 \item{thresh}{threshold of the p-value for determining significant interaction when visualizing links at the level of ligands/receptors;}
 
 \item{...}{other parameters to chordDiagram}
+
+\item{label.layout}{Named-only label layout: \code{"radial"} (default) or \code{"outside"}. Outside labels require sufficient device space; warnings identify measured label or legend overlaps.}
 }
 \value{
 an object of class "recordedplot"

@@ -1,0 +1,10 @@
+dataset,case,sectors,strict_crossings,pairs_with_crossings
+simulated,outside-large,3,0,0
+simulated,outside-small,3,0,0
+simulated,outside-small-legend-overlap,3,0,0
+visium,outside-large,111,0,0
+visium,outside-small,111,0,0
+visium,outside-small-legend-overlap,111,0,0
+slideseq,outside-large,38,0,0
+slideseq,outside-small,38,0,0
+slideseq,outside-small-legend-overlap,38,0,0

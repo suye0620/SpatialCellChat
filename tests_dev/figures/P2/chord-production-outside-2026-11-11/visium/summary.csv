@@ -1,0 +1,6 @@
+"dataset","case","signal","status","error","warnings","file"
+"visium","old","COLLAGEN","DRAWN-REVIEW","","","tests_dev/figures/P2/chord-production-outside-2026-11-11/visium/old.pdf"
+"visium","radial","COLLAGEN","DRAWN-REVIEW","","","tests_dev/figures/P2/chord-production-outside-2026-11-11/visium/radial.pdf"
+"visium","outside-large","COLLAGEN","DRAWN-REVIEW","","","tests_dev/figures/P2/chord-production-outside-2026-11-11/visium/outside-large.pdf"
+"visium","outside-small","COLLAGEN","DRAWN-REVIEW","","Outside chord labels exceed available space; enlarge the plotting device or reduce lab.cex.","tests_dev/figures/P2/chord-production-outside-2026-11-11/visium/outside-small.pdf"
+"visium","outside-small-legend-overlap","COLLAGEN","DRAWN-REVIEW","","Outside chord labels exceed available space; enlarge the plotting device or reduce lab.cex. | Outside chord labels overlap the legend; change legend.pos.x/legend.pos.y or enlarge the plotting device.","tests_dev/figures/P2/chord-production-outside-2026-11-11/visium/outside-small-legend-overlap.pdf"

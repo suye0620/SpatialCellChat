@@ -3737,6 +3737,75 @@ netVisual_chord_cell_internal <- function(net, color.use = NULL, group = NULL, c
 }
 
 
+# Draw one exterior label per displayed sector. The chord inputs are untouched.
+.sc_chord_gene_outside_labels <- function(grid.col, lab.cex, legend = NULL,
+                                           legend.pos.x = 20, legend.pos.y = 20) {
+  sectors <- circlize::get.all.sector.index()
+  angle <- vapply(sectors, function(s) mean(circlize::get.cell.meta.data(
+    "xplot", sector.index = s, track.index = 1L)), numeric(1)) * pi / 180
+  radius <- vapply(sectors, function(s) circlize::get.cell.meta.data(
+    "cell.top.radius", sector.index = s, track.index = 2L), numeric(1))
+  x <- cos(angle); y <- sin(angle)
+  side <- ifelse(x >= 0, 1, -1)
+  label.y <- numeric(length(sectors))
+  for (direction in c(-1, 1)) {
+    idx <- which(side == direction)
+    idx <- idx[order(y[idx])]
+    if (length(idx)) label.y[idx] <- if (length(idx) == 1L) 0 else seq(-1.08, 1.08, length.out = length(idx))
+  }
+  label <- trimws(sectors)
+  height <- graphics::strheight(label, cex = lab.cex)
+  width <- graphics::strwidth(label, cex = lab.cex)
+  left <- ifelse(side > 0, 1.22, -1.22 - width)
+  right <- ifelse(side > 0, 1.22 + width, -1.22)
+  bottom <- label.y - height / 2
+  top <- label.y + height / 2
+  overlaps <- FALSE
+  for (direction in c(-1, 1)) {
+    idx <- which(side == direction)
+    idx <- idx[order(label.y[idx])]
+    if (length(idx) > 1L && any(bottom[idx[-1L]] <= top[idx[-length(idx)]])) overlaps <- TRUE
+  }
+  usr <- graphics::par("usr")
+  overflow <- any(left < usr[1L] | right > usr[2L] | bottom < usr[3L] | top > usr[4L])
+  if (overlaps || overflow) {
+    warning("Outside chord labels exceed available space; enlarge the plotting device or reduce lab.cex.", call. = FALSE)
+  }
+  if (!is.null(legend)) {
+    # Measure the actual grid viewport anchor in device coordinates.
+    anchor <- grid::deviceLoc(grid::unit(1, "npc") - grid::unit(legend.pos.x, "mm"),
+                              grid::unit(legend.pos.y, "mm"), valueOnly = TRUE)
+    legend.width <- grid::convertWidth(grid::grobWidth(legend@grob), "in", valueOnly = TRUE)
+    legend.height <- grid::convertHeight(grid::grobHeight(legend@grob), "in", valueOnly = TRUE)
+    legend.right <- anchor$x
+    legend.left <- legend.right - legend.width
+    legend.bottom <- anchor$y
+    legend.top <- legend.bottom + legend.height
+    text.left <- graphics::grconvertX(left, from = "user", to = "inches")
+    text.right <- graphics::grconvertX(right, from = "user", to = "inches")
+    text.bottom <- graphics::grconvertY(bottom, from = "user", to = "inches")
+    text.top <- graphics::grconvertY(top, from = "user", to = "inches")
+    if (any(text.left < legend.right & text.right > legend.left &
+            text.bottom < legend.top & text.top > legend.bottom)) {
+      warning("Outside chord labels overlap the legend; change legend.pos.x/legend.pos.y or enlarge the plotting device.", call. = FALSE)
+    }
+  }
+  for (i in seq_along(sectors)) {
+    start <- atan2(y[i], x[i])
+    if (side[i] < 0 && start < 0) start <- start + 2 * pi
+    end <- asin(label.y[i] / 1.1)
+    if (side[i] < 0) end <- pi - end
+    t <- seq(0, 1, length.out = 33L)
+    r <- radius[i] + t * (1.1 - radius[i])
+    theta <- start + t * (end - start)
+    graphics::lines(c(r * cos(theta), side[i] * 1.2),
+                    c(r * sin(theta), label.y[i]), col = grid.col[sectors[i]], lwd = .45, xpd = NA)
+    graphics::text(side[i] * 1.22, label.y[i], labels = label[i],
+                   adj = c(if (side[i] > 0) 0 else 1, .5), cex = lab.cex, xpd = NA)
+  }
+  invisible(NULL)
+}
+
 #' Chord diagram for visualizing cell-cell communication for a set of ligands/receptors or signaling pathways
 #'
 #' Names of ligands/receptors or signaling pathways will be displayed in this chord diagram
@@ -3767,6 +3836,7 @@ netVisual_chord_cell_internal <- function(net, color.use = NULL, group = NULL, c
 #' @param legend.pos.x,legend.pos.y adjust the legend position
 #' @param thresh threshold of the p-value for determining significant interaction when visualizing links at the level of ligands/receptors;
 #' @param ... other parameters to chordDiagram
+#' @param label.layout Named-only label layout: \code{"radial"} (default) or \code{"outside"}. Outside labels require sufficient device space; warnings identify measured label or legend overlaps.
 #' @importFrom circlize circos.clear chordDiagram circos.track circos.text get.cell.meta.data
 #' @importFrom dplyr select %>% group_by summarize
 #' @importFrom grDevices recordPlot
@@ -3782,7 +3852,12 @@ netVisual_chord_gene <- function(object, slot.name = "net", color.use = NULL,
                                  transparency = 0.4, link.border = NA,
                                  title.name = NULL, legend.pos.x = 20, legend.pos.y = 20, show.legend = TRUE,
                                  thresh = 0.05,
-                                 ...){
+                                 ..., label.layout = c("radial", "outside")){
+  label.layout <- match.arg(label.layout)
+  if (label.layout == "outside" &&
+      (!is.numeric(lab.cex) || length(lab.cex) != 1L || !is.finite(lab.cex) || lab.cex <= 0)) {
+    stop("lab.cex must be a positive finite number for outside labels.", call. = FALSE)
+  }
   if (!is.null(pairLR.use)) {
     if (!is.data.frame(pairLR.use)) {
       stop("pairLR.use should be a data frame with a signle column named either 'interaction_name' or 'pathway_name' ")
@@ -3920,6 +3995,10 @@ netVisual_chord_gene <- function(object, slot.name = "net", color.use = NULL,
     link.arr.type = "big.arrow"
   }
   circos.clear()
+  if (label.layout == "outside") {
+    on.exit(circos.clear(), add = TRUE)
+    circlize::circos.par(canvas.xlim = c(-2.1, 2.1), canvas.ylim = c(-1.2, 1.2))
+  }
   chordDiagram(df.plot,
                order = order.sector,
                col = edge.color,
@@ -3931,7 +4010,7 @@ netVisual_chord_gene <- function(object, slot.name = "net", color.use = NULL,
                link.arr.type = link.arr.type,
                annotationTrack = "grid",
                annotationTrackHeight = annotationTrackHeight,
-               preAllocateTracks = list(track.height = max(strwidth(order.sector))),
+               preAllocateTracks = list(track.height = if (label.layout == "outside") 0.04 else max(strwidth(order.sector))),
                small.gap = small.gap,
                big.gap = big.gap,
                link.visible = link.visible,
@@ -3940,17 +4019,22 @@ netVisual_chord_gene <- function(object, slot.name = "net", color.use = NULL,
                reduce = reduce,
                ...)
 
-  circos.track(track.index = 1, panel.fun = function(x, y) {
-    xlim = get.cell.meta.data("xlim")
-    xplot = get.cell.meta.data("xplot")
-    ylim = get.cell.meta.data("ylim")
-    sector.name = get.cell.meta.data("sector.index")
-    circos.text(mean(xlim), ylim[1], sector.name, facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5),cex = lab.cex)
-  }, bg.border = NA)
+  if (label.layout == "outside") {
+    lgd <- if (show.legend) ComplexHeatmap::Legend(at = names(color.use), type = "grid", legend_gp = grid::gpar(fill = color.use), title = "Cell State") else NULL
+    .sc_chord_gene_outside_labels(grid.col, lab.cex, lgd, legend.pos.x, legend.pos.y)
+  } else {
+    circos.track(track.index = 1, panel.fun = function(x, y) {
+      xlim = get.cell.meta.data("xlim")
+      xplot = get.cell.meta.data("xplot")
+      ylim = get.cell.meta.data("ylim")
+      sector.name = get.cell.meta.data("sector.index")
+      circos.text(mean(xlim), ylim[1], sector.name, facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5),cex = lab.cex)
+    }, bg.border = NA)
+  }
 
   # https://jokergoo.github.io/circlize_book/book/legends.html
   if (show.legend) {
-    lgd <- ComplexHeatmap::Legend(at = names(color.use), type = "grid", legend_gp = grid::gpar(fill = color.use), title = "Cell State")
+    if (label.layout != "outside") lgd <- ComplexHeatmap::Legend(at = names(color.use), type = "grid", legend_gp = grid::gpar(fill = color.use), title = "Cell State")
     ComplexHeatmap::draw(lgd, x = unit(1, "npc")-unit(legend.pos.x, "mm"), y = unit(legend.pos.y, "mm"), just = c("right", "bottom"))
   }
 

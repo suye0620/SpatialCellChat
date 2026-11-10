@@ -129,6 +129,17 @@ def main():
             if row['status'] == 'DRAWN-REVIEW':
                 add(ROOT / row['file'], rel(summary), 'DIAGNOSTIC', 'pdf')
 
+    # Optional production chord layout comparisons still require visual review.
+    chord_production = FIGURES / 'P2' / 'chord-production-outside-2026-11-11'
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        summary = chord_production / dataset / 'summary.csv'
+        if not summary.is_file():
+            errors.append(f'missing chord production summary: {rel(summary)}')
+            continue
+        for row in rows(summary):
+            if row['status'] == 'DRAWN-REVIEW':
+                add(ROOT / row['file'], rel(summary), 'REVIEW', 'pdf')
+
     # Producer-derived flow comparisons use the same field for both stats.
     production = FIGURES / 'P3' / 'streamline-production-comparison-2026-11-11'
     for dataset in ('simulated', 'visium', 'slideseq'):
