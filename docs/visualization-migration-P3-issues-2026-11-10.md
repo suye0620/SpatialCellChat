@@ -145,3 +145,5 @@ Flow 默认 `res = 0.5`，该对象依赖层在每个方向仅执行 1 步积分
 验证：`tests_dev/test-arrow-display-scale.R` 检查默认值、参数边界、空场、实际图形 grob 的箭头杆与箭头头部、阈值、保存和重载。`tests_dev/compare-arrow-display-scale.R` 分别在三个对象上用 `computeCommunField()` 生成真实输入，比较倍率 1 和 4 的绘图层及背景并实绘；6 张 PDF、汇总与警告位于 `tests_dev/figures/P3/arrow-display-scale-2026-11-11/`。三个示例均仅箭头绘制长度改变，且保持原始输入场。
 
 不能把 4 当作统一推荐值：完整 Slide-seq LAMININ 中非零箭头长度中位数由约 0.075 mm 变为 0.298 mm，但最长箭头约 10 mm；Visium COLLAGEN 示例原本的中位数约 18.3 mm，4 倍会严重拥挤。倍率属于显示设置，不改变生物学结果，也不是绝对强度标尺；跨图比较时应保持倍率一致并结合画布与重叠检查。两个 Slide-seq PNG 预览转换时提示缺少 ArialUnicode 字体，PDF 仍为主要图像产物。图像仍需用户视觉和生物学验收，Flow 默认积分分辨率问题也未解决。
+
+2026-11-11 补充：`tests_dev/compare-grid-legacy-default.R` 从 Git 提交 `66a16b6` 载入修改前的函数，对同一个由真实 producer 生成的 9 细胞场比较原函数与当前默认函数；箭头原始图层数据、两个构建后的图层及图标签完全一致。此检查需要仓库历史，不代替三对象完整参数组合对照。
