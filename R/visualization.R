@@ -2653,11 +2653,20 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
   }
 
   if (remove.isolate) {
+    n.groups <- nrow(net)
     idx1 <- which(Matrix::rowSums(net != 0) == 0)
     idx2 <- which(Matrix::colSums(net != 0) == 0)
     idx <- intersect(idx1, idx2)
+    keep <- setdiff(seq_len(n.groups), idx)
+    if (is.null(color.use)) color.use <- scPalette(n.groups)
+    if (is.null(vertex.weight.max)) vertex.weight.max <- max(vertex.weight)
     if (length(idx)) {
-      net <- net[-idx, -idx, drop = FALSE]
+      net <- net[keep, keep, drop = FALSE]
+      if (length(color.use) == n.groups) color.use <- color.use[keep]
+      if (length(vertex.weight) == n.groups) vertex.weight <- vertex.weight[keep]
+      if (length(vertex.label.color) == n.groups) vertex.label.color <- vertex.label.color[keep]
+      if (length(vertex.label.cex) == n.groups) vertex.label.cex <- vertex.label.cex[keep]
+      if (length(shape) == n.groups) shape <- shape[keep]
     }
   }
 
@@ -2694,7 +2703,7 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
     igraph::E(g)$label<-igraph::E(g)$weight
     igraph::E(g)$label <- round(igraph::E(g)$label, digits = 1)
   }
-  igraph::E(g)$arrow.width<-arrow.width
+  if (length(arrow.width) != 1L) igraph::E(g)$arrow.width <- arrow.width
   igraph::E(g)$arrow.size<-arrow.size
   igraph::E(g)$label.color<-edge.label.color
   igraph::E(g)$label.cex<-edge.label.cex
@@ -2727,6 +2736,7 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
   label.locs <- radian.rescale(x=1:length(igraph::V(g)), direction=-1, start=0)
   label.dist <- vertex.weight/max(vertex.weight)+2
   plot(g,edge.curved=edge.curved,vertex.shape=shape,layout=coords_scale,margin=margin, vertex.label.dist=label.dist,
+       edge.arrow.width = if (length(arrow.width) == 1L) arrow.width else igraph::E(g)$arrow.width,
        vertex.label.degree=label.locs, vertex.label.family="Helvetica", edge.label.family="Helvetica") # "sans"
   if (!is.null(title.name)) {
     text(0,1.5,title.name, cex = 1.1)

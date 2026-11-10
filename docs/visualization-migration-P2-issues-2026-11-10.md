@@ -167,3 +167,12 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 修复：依据网络矩阵的群名、请求的 measure 和通路名称索引中心性；缺少名称、名称重复或缺失对应群/measure/通路时，要求重新计算或检查群中心性，不再静默错配。中心性数值与原有缩放公式保持不变。
 
 验证：`tests_dev/test-network-centrality-spatial.R` 对三对象分别用 incoming/outgoing，比较群顺序原样与反转时实际绘图层的节点大小，并检查缺群错误、输入未修改；六张实绘 PDF 和汇总见 `tests_dev/figures/P2/centrality-spatial-three-fixtures-2026-11-10.csv`。`test-netvisual-group-migration.R` 回归通过。每个数据集只覆盖一个通路，PDF 仍须人工验收；R 环境和绘图库仍有 locale、renv 与弃用警告。
+
+
+## P2-023：merged 差异网络删群后节点属性长度与群名不匹配
+
+位置：`netVisual_diffInteraction(remove.isolate = TRUE)`。P2-020 已修正差异矩阵的孤立群判断，但没有同步处理颜色、权重、标签和形状。删除一个中间群后，原有的四群属性仍传给三个节点，逐群向量会引发 igraph 属性长度错误；默认配色则按剩余节点数重建，可能改变群颜色。差异边、正负颜色和差异数值的计算不受这一问题影响。
+
+修复：保留原群顺序的默认调色板及权重缩放最大值，在删群时同步子集逐群颜色、权重、标签颜色、字号和形状；标量箭头宽度直接传给 igraph 绘图，避免普通边与多个自环共存时因参数长度错配而重复绘制或警告。差异值、正负颜色、`top` 筛选顺序和计算均未改变。
+
+验证：`test-merged-diff-isolates.R` 经真实 `mergeSpatialCellChat()` 生产模拟对象及其修改副本，检查正负平衡、无孤立群、单节点自环，以及删除中间群时自定义/默认配色、权重、标签、形状与邻接矩阵；最后两例含 5 条边和 2 个自环，未产生长度回收警告。五种情况写出 PDF，全零情况返回预期明确错误。原始比较数据并非独立生物样本，图像仍需人工验收。
