@@ -1,0 +1,2 @@
+"dataset","signal","cells","rows","nonzero","median_original_cm","maximum_original_cm","median_scaled_cm","maximum_scaled_cm","other_columns_identical","magnitude_times_four"
+"visium","COLLAGEN",905,1560,715,1.82755864479153,6.7592291786489,7.3102345791661,27.0369167145956,TRUE,TRUE

@@ -128,6 +128,16 @@ def main():
             for kind in ('original', 'adapted'):
                 add(production / f'{dataset}-{tag}-{kind}.pdf', rel(summary), 'DIAGNOSTIC', 'pdf')
 
+    # Explicit arrow scale comparisons on producer-derived fields.
+    arrow_scale = FIGURES / 'P3' / 'arrow-display-scale-2026-11-11'
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        summary = arrow_scale / f'{dataset}-summary.csv'
+        if not summary.is_file():
+            errors.append(f'missing arrow scale comparison summary: {rel(summary)}')
+            continue
+        for scale in (1, 4):
+            add(arrow_scale / f'{dataset}-scale-{scale}.pdf', rel(summary), 'DIAGNOSTIC', 'pdf')
+
     # Browser screenshots and explicitly documented visual-review previews are
     # included as supporting evidence, separate from PASS or visual acceptance.
     for phase in ('P0', 'P2', 'P3', 'P4'):

@@ -1,0 +1,2 @@
+"dataset","signal","cells","rows","nonzero","median_original_cm","maximum_original_cm","median_scaled_cm","maximum_scaled_cm","other_columns_identical","magnitude_times_four"
+"slideseq","LAMININ",29536,2401,540,0.00746120986604746,0.250181965124394,0.0298448394641898,1.00072786049757,TRUE,TRUE

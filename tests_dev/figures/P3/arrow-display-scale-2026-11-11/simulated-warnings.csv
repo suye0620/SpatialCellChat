@@ -1,0 +1,3 @@
+"case","warning"
+"simulated 1 construction","st_centroid assumes attributes are constant over geometries"
+"simulated 4 construction","st_centroid assumes attributes are constant over geometries"

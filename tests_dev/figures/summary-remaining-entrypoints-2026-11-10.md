@@ -36,3 +36,7 @@ Ten comparison consumers now have actual PDFs under `merged/producer-comparison/
 ## Streamline compatibility follow-up, 2026-11-11
 
 The default Flow layer now has a guarded correction for the metR 0.19.0 nonzero-diagonal filtering defect. The synthetic and producer-field comparisons, their limits, the zero-field fix, and remaining Slide-seq display issues are recorded in P3-020 and P3-021. The six three-object/resolution comparisons and their original/adapted PDFs are in `P3/streamline-production-comparison-2026-11-11/`. These are not visual or biological acceptance.
+
+## Field-grid arrow display scale, 2026-11-11
+
+The named-only `arrow.scale` option leaves the default unchanged and labels non-default display scaling. Three-object comparisons at 1 and 4 are under `P3/arrow-display-scale-2026-11-11/`; 4 is a controlled comparison, not a recommended universal value. P3-022 records numerical results and outstanding visual review.

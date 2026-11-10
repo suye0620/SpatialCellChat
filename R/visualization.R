@@ -5867,7 +5867,10 @@ netVisual_CommunField <- function(
 #' `grid.resolution` is a positive finite multiplier. When
 #' `images$spatial.factors$ratio` is unavailable, coordinates remain in raw
 #' units and no physical scale is reported. Zero-length vectors are transparent;
-#' nonzero arrows retain the requested opacity.
+#' nonzero arrows retain the requested opacity. `arrow.scale` changes only
+#' displayed arrow shaft lengths and is shown in the caption when not 1; use
+#' the same value when comparing lengths across plots. Large values may make
+#' arrows overlap.
 #'
 #' @param object SpatialCellChat object
 #' @param signaling a signaling pathway or ligand-receptor pair to visualize
@@ -5906,6 +5909,8 @@ netVisual_CommunField <- function(
 #' @param legend.text.size the text size on the legend
 #' @param title.name title name of the plot
 #' @param ... other parameters passing to metR::geom_arrow
+#' @param arrow.scale Positive finite scalar multiplying displayed arrow shaft
+#'   lengths after filtering; defaults to 1. Does not change stored field values.
 #' @import ggplot2
 #'
 #' @return ggplot2 object
@@ -5933,6 +5938,7 @@ netVisual_CommunFieldGrid <- function(
     arrow.type = "closed",
     lineend = "round",
     ...,
+    arrow.scale = 1,
     legend.size = 2,
     legend.text.size = 8,
     title.name = NULL
@@ -5941,6 +5947,9 @@ netVisual_CommunFieldGrid <- function(
   pattern <- match.arg(pattern)
   grid.field.mean <- match.arg(grid.field.mean)
   arrow.line.width <- .sc_resolve_arrow_width(arrow.line.width)
+  if (length(arrow.scale) != 1L || !is.numeric(arrow.scale) || is.complex(arrow.scale) ||
+      is.na(arrow.scale) || !is.finite(arrow.scale) || arrow.scale <= 0)
+    stop("arrow.scale must be one positive finite number", call. = FALSE)
 
   if (pattern == "outgoing") {
     arrow.ends = "last"
@@ -6128,6 +6137,17 @@ netVisual_CommunFieldGrid <- function(
     axis.title = element_blank()
   ) + theme(legend.key = element_blank())
 
+  arrow.mapping <- aes(
+    x = lon, y = -lat, dx = u, dy = -v,
+    size = after_stat(norm_mag),
+    alpha = after_stat(ifelse(mag > 0, arrow.line.alpha, 0))
+  )
+  if (arrow.scale != 1) {
+    # Applied after the stat: min.mag, sampling, directions and widths use
+    # the original field, while only rendered shaft length is multiplied.
+    arrow.mapping$mag <- aes(mag = after_stat(mag * !!arrow.scale))$mag
+  }
+
   gg <- ggplot() +
     # metR::geom_contour_fill(data = uv.se, aes(x = lon, y = lat, z = vel),
     # na.fill = TRUE, bins = 70) +
@@ -6140,14 +6160,7 @@ netVisual_CommunFieldGrid <- function(
     ) +
     scale_color_manual(values = color.use)+
     metR::geom_arrow(
-      mapping = aes(
-        x = lon,
-        y = -lat,
-        dx = u,
-        dy = -v,
-        size = after_stat(norm_mag),
-        alpha = after_stat(ifelse(mag > 0, arrow.line.alpha, 0))
-      ),
+      mapping = arrow.mapping,
       data = uv.se,
       color = arrow.line.color,
       min.mag = min.mag,
@@ -6190,6 +6203,9 @@ netVisual_CommunFieldGrid <- function(
       vjust = 0,
       size = 10
     ))
+
+  if (arrow.scale != 1)
+    gg <- gg + labs(caption = paste0("Arrow length display scale: ", format(arrow.scale, digits = 6, trim = TRUE), "x"))
 
   return(gg)
 }

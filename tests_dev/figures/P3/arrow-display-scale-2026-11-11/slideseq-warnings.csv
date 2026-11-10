@@ -1,0 +1,3 @@
+"case","warning"
+"slideseq 1 construction","st_centroid assumes attributes are constant over geometries"
+"slideseq 4 construction","st_centroid assumes attributes are constant over geometries"

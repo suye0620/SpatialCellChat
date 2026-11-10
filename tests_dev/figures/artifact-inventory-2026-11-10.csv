@@ -101,6 +101,14 @@ tests_dev/figures/P2/visium/netVisual_individual-hierarchy.pdf,pdf,PASS,160103,e
 tests_dev/figures/P2/visium/netVisual_individual-spatial.pdf,pdf,PASS,5316565,50d17c43b40d5caba6c037f7dfc78e0d51c570b72c013bf8034b2a4bf2a21d7e,tests_dev/figures/summary-visium-P2.csv
 tests_dev/figures/P2/visium/rankNet-net.pdf,pdf,PASS,6020,9ca0fdce368086d699dc300932b7e841be79bbbd0c99a9d46957102bab6f611e,tests_dev/figures/summary-all-P2-rankNet-net.csv
 tests_dev/figures/P2/visium/rankNet-netP.pdf,pdf,PASS,8387,4fc83f74d4c5ecd099b030c11f0333ce47dcc5b5959542a35e243a433c19f220,tests_dev/figures/summary-all-P2-rankNet-netP.csv
+tests_dev/figures/P3/arrow-display-scale-2026-11-11/simulated-scale-1.pdf,pdf,DIAGNOSTIC,44316,de62df6f565f1d22777bbea7762cd1c7432391f8784d11dcc6eac358f10f55fa,tests_dev/figures/P3/arrow-display-scale-2026-11-11/simulated-summary.csv
+tests_dev/figures/P3/arrow-display-scale-2026-11-11/simulated-scale-4.pdf,pdf,DIAGNOSTIC,45336,da981c6f25402b011b111094df99342eda3dbaa8305e46f7cffd1923c32d9ad5,tests_dev/figures/P3/arrow-display-scale-2026-11-11/simulated-summary.csv
+tests_dev/figures/P3/arrow-display-scale-2026-11-11/slideseq-scale-1-preview.png,image,REVIEW,1520454,31c843d574eec22f0b3afb62e5997cb63eeeef8a19d3727df6c2d756a0a45fa7,visual-review capture
+tests_dev/figures/P3/arrow-display-scale-2026-11-11/slideseq-scale-1.pdf,pdf,DIAGNOSTIC,1697167,9abe1f82a1318a19e7b9db3a65ea1faf8a8374a0830483fa563e42e5e8ca00ed,tests_dev/figures/P3/arrow-display-scale-2026-11-11/slideseq-summary.csv
+tests_dev/figures/P3/arrow-display-scale-2026-11-11/slideseq-scale-4-preview.png,image,REVIEW,1468809,16ff8fdd6d50a0bc627fbc29b2f1a23bcbcd8d72255cd5357eedd99610c40f61,visual-review capture
+tests_dev/figures/P3/arrow-display-scale-2026-11-11/slideseq-scale-4.pdf,pdf,DIAGNOSTIC,1696350,8b9b597084e5137d4f59883b72f404fdf3010fb7ebd96b14276c2138203c11f6,tests_dev/figures/P3/arrow-display-scale-2026-11-11/slideseq-summary.csv
+tests_dev/figures/P3/arrow-display-scale-2026-11-11/visium-scale-1.pdf,pdf,DIAGNOSTIC,76903,67ffd10e2852a2d881f46c584b13125b39bcc6ded0705a8f3411dce5d9c7741c,tests_dev/figures/P3/arrow-display-scale-2026-11-11/visium-summary.csv
+tests_dev/figures/P3/arrow-display-scale-2026-11-11/visium-scale-4.pdf,pdf,DIAGNOSTIC,77740,9e9e85ba98fab94a2da7a07a29ee67714506dc1bbca8a453202b30e6f4135c2d,tests_dev/figures/P3/arrow-display-scale-2026-11-11/visium-summary.csv
 tests_dev/figures/P3/simulated/flow-widget-browser.png,image,REVIEW,123454,fc27f5775caa5d0087aab5c9918af7c4d057719adae87d5d31dd3ee769476a7c,visual-review capture
 tests_dev/figures/P3/simulated/netAnalysis_dot.pdf,pdf,PASS,4982,669689ec0670bbfdee73bdc2a58e9b9a7163fdbfc460ca7eef45b5e2fad3c784,tests_dev/figures/summary-simulated-P3.csv
 tests_dev/figures/P3/simulated/netAnalysis_river.pdf,pdf,PASS,6667,70157414751cc8e20adee040d90a5b455780425afd736cf7e3eef62f445326f9,tests_dev/figures/summary-simulated-P3.csv

@@ -9,7 +9,7 @@ netVisual_CommunFieldGrid(object, signaling, slot.name = "netP",
   color.use = NULL, point.size = 2, image.alpha = 0.3, min.mag = 0,
   arrow.skip = NULL, arrow.line.color = "grey20", arrow.line.width = c(0.35, 1.4),
   arrow.line.alpha = 0.9, arrow.angle = 22.5, arrow.length = 0.5,
-  arrow.type = "closed", lineend = "round", ..., legend.size = 2,
+  arrow.type = "closed", lineend = "round", ..., arrow.scale = 1, legend.size = 2,
   legend.text.size = 8, title.name = NULL)
 }
 \arguments{
@@ -35,10 +35,11 @@ netVisual_CommunFieldGrid(object, signaling, slot.name = "netP",
 \item{arrow.type}{Grid arrowhead type.}
 \item{lineend}{Line ending style.}
 \item{...}{Other parameters passed to the underlying metR geom.}
+\item{arrow.scale}{Positive finite scalar multiplying displayed arrow shaft lengths after filtering; defaults to 1. Does not change stored field values.}
 \item{legend.size}{Legend point size.}
 \item{legend.text.size}{Legend text size.}
 \item{title.name}{Plot title.}
 }
 \value{A ggplot2 object.}
 \description{Aggregate and plot a communication vector field on a spatial grid.}
-\details{Grid geometry uses the first two canonical \code{images$coordinates} axes after the existing visualization coordinate preparation. If \code{images$spatial.factors$ratio} is unavailable, coordinates remain in raw units and no physical scale is reported. Zero-length vectors are transparent; nonzero arrows retain the requested opacity.}
+\details{Grid geometry uses the first two canonical \code{images$coordinates} axes after the existing visualization coordinate preparation. If \code{images$spatial.factors$ratio} is unavailable, coordinates remain in raw units and no physical scale is reported. Zero-length vectors are transparent; nonzero arrows retain the requested opacity. \code{arrow.scale} changes only displayed arrow shaft lengths and is shown in the caption when not 1; use the same value when comparing lengths across plots. Large values may make arrows overlap.}

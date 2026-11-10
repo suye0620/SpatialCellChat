@@ -1,0 +1,2 @@
+"dataset","signal","cells","rows","nonzero","median_original_cm","maximum_original_cm","median_scaled_cm","maximum_scaled_cm","other_columns_identical","magnitude_times_four"
+"simulated","P1",20,1681,1681,0.00371749425616239,0.0100863805382441,0.0148699770246496,0.0403455221529765,TRUE,TRUE
