@@ -1,0 +1,4 @@
+"case","warning"
+"exact-construction","st_centroid assumes attributes are constant over geometries"
+"near-construction","st_centroid assumes attributes are constant over geometries"
+"opposite_diagonal-construction","st_centroid assumes attributes are constant over geometries"

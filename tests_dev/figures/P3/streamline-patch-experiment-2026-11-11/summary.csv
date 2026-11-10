@@ -1,0 +1,4 @@
+"case","baseline_rows","patched_rows","unchanged_control","replacements","metR_version","file"
+"exact",0,324,FALSE,2,"0.19.0","tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/exact-local-patch.pdf"
+"near",324,324,TRUE,2,"0.19.0","tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/near-local-patch.pdf"
+"opposite_diagonal",324,324,TRUE,2,"0.19.0","tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/opposite_diagonal-local-patch.pdf"

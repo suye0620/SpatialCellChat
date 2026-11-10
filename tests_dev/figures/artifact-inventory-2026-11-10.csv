@@ -152,6 +152,10 @@ tests_dev/figures/P3/streamline-cancellation-2026-11-11/exact-cancellation-previ
 tests_dev/figures/P3/streamline-cancellation-2026-11-11/exact-cancellation.pdf,pdf,DIAGNOSTIC,5626,1e84db998368a38501bf8dea17c33bf6de0a4a9fb8615a45e242e0fbeb10a7b8,tests_dev/figures/P3/streamline-cancellation-2026-11-11/summary.csv
 tests_dev/figures/P3/streamline-cancellation-2026-11-11/near-cancellation-preview.png,image,REVIEW,21225,19f0eaee2b051890fe34292c21a41ce6d1849ae62484730ef1ee24d08472837a,visual-review capture
 tests_dev/figures/P3/streamline-cancellation-2026-11-11/near-cancellation.pdf,pdf,DIAGNOSTIC,7737,6134b82ab42417054184a299dabd2e744b54b040233a0cde650b3fc297e4d918,tests_dev/figures/P3/streamline-cancellation-2026-11-11/summary.csv
+tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/exact-local-patch-preview.png,image,REVIEW,20962,1e758310d467f2a19cf9eccd5b8e018aea9a43d979deeea25e21ea0aff316c34,visual-review capture
+tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/exact-local-patch.pdf,pdf,DIAGNOSTIC,7729,91cc467eae0e5e6a941c22f96c06add032e0b080ec9fabca6ef28bfa844413e6,tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/summary.csv
+tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/near-local-patch.pdf,pdf,DIAGNOSTIC,7737,b1a38cd10f3bbfa9814fdbee9fa7ba3eea5b23804b8cd29c062fd7b1c4a33ea8,tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/summary.csv
+tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/opposite_diagonal-local-patch.pdf,pdf,DIAGNOSTIC,7688,fd6e33116cd1e5bba1fc866b3e2012da81643731bcecb46ba215b50a0a9d1039,tests_dev/figures/P3/streamline-patch-experiment-2026-11-11/summary.csv
 tests_dev/figures/P3/visium/flow-widget-browser.png,image,REVIEW,242567,42f5ab9e306ac8045ff63beb8c0f5f4a6b72798a74ec8c8964c7091d31bfb525,visual-review capture
 tests_dev/figures/P3/visium/netAnalysis_dot.pdf,pdf,PASS,32286,c4e9d0b4432ea510617e1e9885f6cb578dc750c9361bc787d14900c5f4f00f3c,tests_dev/figures/summary-visium-P3.csv
 tests_dev/figures/P3/visium/netAnalysis_river.pdf,pdf,PASS,117974,1dbeb271f826c559c7eff96001cfa9daac281ec5102070d6a984f8556448c60c,tests_dev/figures/summary-visium-P3.csv
