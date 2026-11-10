@@ -179,6 +179,7 @@ Phase 0 不变量：`idents` 始终是覆盖全部细胞的 factor，保持与�
 - "表达数据"是加和（rbind），"通讯结果"是并列（list）
 - 单样本：`net$cell$prob` → SparseChatArray nC×nC×N
 - 多样本：`net$cell$prob` 为空，各样本结果存 `misc$.datasets[[name]]`，其内部镜像保存对应的 `net`、`netP`、`dr` 和 `misc` 数据
+- 空间多样本的坐标系默认各自局部：快照保留本数据集的坐标、影像和空间因子；顶层 `images$coordinate.scope = "dataset-local"`，顶层坐标与校准信息为空。空间绘图不能把这些坐标当成同一组织平面；如需联合空间图，必须先建立并确认共同坐标变换
 - 跑完 joint 分析后，`net$group$prob` 存放统一的 K×K×N 结果
 - 对比分析（如"处理组 vs 对照组"）是函数层能力，不在 slot 层预设
 
@@ -199,6 +200,8 @@ netP                 → pathway-level 通讯结果（prob, pval, count, weight,
 ```
 
 `LR` 是 LR-level 通讯条目的元数据，`netP` 保存 pathway-level 结果；`pval` 是置信度标注，`count`/`weight` 是降维汇总，`centr` 是网络中心性。三维 `prob` / `pval` 统一使用 `SparseChatArray`。
+
+`mergeInteractions()` 根据一一对应每个当前 group 的映射，在 `net$group` 中额外存储 `count.merged`、`weight.merged` 和 `group.merged`。comparison 绘图中的 merged 指标只读取这些显式聚合结果；不会自动退化为普通 `count`/`weight`。
 
 ### 4. `signalingData` 方案（历史讨论，已废止）
 

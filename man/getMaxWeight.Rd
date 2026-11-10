@@ -2,7 +2,7 @@
 % Please edit documentation in R/analysis.R
 \name{getMaxWeight}
 \alias{getMaxWeight}
-\title{Compute the maximum value of certain measures in the inferred cell-cell communication networks}
+\title{Compute the maximum value of measures in communication networks}
 \usage{
 getMaxWeight(
   object.list,
@@ -11,24 +11,21 @@ getMaxWeight(
 )
 }
 \arguments{
-\item{object.list}{List of CellChat objects}
+\item{object.list}{A list of single or merged SpatialCellChat objects.}
 
-\item{slot.name}{the slot name of object that is used to compute the maximum value.
+\item{slot.name}{The source of the values: \code{idents}, \code{net}, or \code{netP}.
 
-When slot.name = "idents", 'attribute' should be "idents", which will compute the maximum number of cells per cell group across all datasets
+When \code{slot.name = "idents"}, \code{attribute} must be \code{idents}, which computes the maximum number of cells per group across objects and datasets.
 
-When slot.name = "net", 'attribute' can be either "count" or "weight", which will compute he maximum number of interactions (or interaction weights) across all datasets
+For \code{net} or \code{netP}, \code{attribute} may be \code{count} or \code{weight}. For \code{net}, it may also be \code{count.merged} or \code{weight.merged}.
 
-When slot.name = "net" or "netP", 'attribute' can be a single pathway name or a ligand-receptor pair name}
+For \code{net} or \code{netP}, \code{attribute} may be a single available signaling-layer name. Layer maxima are read from \code{group$prob} without densifying the full three-dimensional array.}
 
-\item{attribute}{the attribute to compute the maximum values. `attribute` should have the same length as `slot.name`.
-
-`attribute` can only be "count", "weight","count.merged","weight.merged" or a single pathway name or a ligand-receptor pair name}
+\item{attribute}{The attribute to compute. It must have the same length as \code{slot.name}, with each entry corresponding to the slot at the same position.}
 }
 \value{
 A numeric vector
 }
 \description{
-To better control the node size and edge weights of the inferred networks across different datasets,
-we compute the maximum number of cells per cell group and the maximum number of interactions (or interaction weights) across all datasets
+Computes maximum cell-group sizes, group-level interaction measures, or signaling-layer probabilities across objects and merged datasets.
 }

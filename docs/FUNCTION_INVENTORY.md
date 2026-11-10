@@ -8,7 +8,7 @@
 
 ## 0. 关键结论
 
-1. **包当前无法安装。** `R CMD INSTALL` 失败：`undefined exports: liftSpatialCellChat, mergeSpatialCellChat, subsetSpatialCellChat, updateSpatialCellChat`。NAMESPACE 仍导出这四个函数，但 `R/` 下已无定义。测试全部走 `source()` 直连源码，所以 `tests_dev/` 全绿也掩盖了这个问题。
+1. **历史基线中的安装阻塞已修复。** 本文记录的 `undefined exports` 是早期审计状态；`mergeSpatialCellChat`、`subsetSpatialCellChat`、`liftSpatialCellChat`、`updateSpatialCellChat` 已在源码中实现。本轮仍须以当前源码重跑 `R CMD INSTALL`，不能把旧的 source-only 测试结果当作安装验收。
 2. **进度分布不均。** 300 个函数中，`迁移11slot` 24 个、`新增(11slot)` 51 个、`部分迁移` 9 个、`重构` 23 个、`新增` 54 个、`未动` 139 个。迁移集中在类定义、建模主链路与分析聚合层；**可视化层几乎没动**。
 3. **计算链路已闭环，展示与下游未闭环。** `computeCommunProb` → `filterProbability` → `computeAvgCommunProb` → `computeCommunProbPathway` → `aggregateNet` 全部只读写新槽；但 `netVisual_*` 家族仍读 `net$prob` / `net$pval`，在新对象上直接失效。
 4. **死代码与兼容层仍在。** 明确不可达 4 个，疑似 40 个，主要来自 `@data` / `@var.features` / `net$prob.cell` 等已删槽位的旧工具链。

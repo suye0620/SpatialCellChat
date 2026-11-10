@@ -2207,75 +2207,160 @@ computeNetD_structure <- function(g, h, w1 = 0.45, w2 = 0.45, w3 = 0.1){
 #' To better control the node size and edge weights of the inferred networks across different datasets,
 #' we compute the maximum number of cells per cell group and the maximum number of interactions (or interaction weights) across all datasets
 #'
-#' @param object.list List of CellChat objects
-#' @param slot.name the slot name of object that is used to compute the maximum value.
+#' @param object.list A list of single or merged SpatialCellChat objects.
+#' @param slot.name The source of the values: `idents`, `net`, or `netP`.
 #'
-#' When slot.name = "idents", 'attribute' should be "idents", which will compute the maximum number of cells per cell group across all datasets
+#' When slot.name = "idents", `attribute` must be `idents`, which computes the
+#'   maximum number of cells per group across objects and datasets.
 #'
-#' When slot.name = "net", 'attribute' can be either "count" or "weight", which will compute he maximum number of interactions (or interaction weights) across all datasets
+#' For `net` or `netP`, `attribute` may be `count` or `weight`. For `net`, it
+#'   may also be `count.merged` or `weight.merged`.
 #'
-#' When slot.name = "net" or "netP", 'attribute' can be a single pathway name or a ligand-receptor pair name
+#' For `net` or `netP`, `attribute` may be a single available signaling-layer
+#'   name. Layer maxima are read from `group$prob` without densifying the full
+#'   three-dimensional array.
 #'
 #' @param attribute the attribute to compute the maximum values. `attribute` should have the same length as `slot.name`.
 #'
-#' `attribute` can only be "count", "weight","count.merged","weight.merged" or a single pathway name or a ligand-receptor pair name
+#' Each `attribute` entry must correspond to the `slot.name` entry at the same
+#'   position.
 #'
 #' @return A numeric vector
 #' @export
 #'
 getMaxWeight <- function(object.list, slot.name = c("idents", "net"), attribute = c("idents", "count")) {
-  weight <- c()
-  for (i in 1:length(slot.name)) {
-    if (slot.name[i] == "idents") {
-      weight.all <- sapply(object.list, function (x) {max(as.numeric(table(slot(x, slot.name[i]))))})
-    } else if ((slot.name[i] == "net") & (attribute[i] %in% c("count", "weight","count.merged","weight.merged"))) {
-      weight.all <- sapply(object.list, function (x) {max(slot(x, slot.name[i])[[attribute[i]]])})
-    } else if (attribute[i] %in% c(object.list[[1]]@DB$interaction$pathway_name, object.list[[1]]@DB$interaction$interaction_name)) {
-      weight.all <- sapply(object.list, function (x) {max(slot(x, slot.name[i])$prob[,,attribute[i]])})
+  if (methods::is(object.list, "SpatialCellChat")) object.list <- list(object.list)
+  if (!is.list(object.list) || !length(object.list) ||
+      !all(vapply(object.list, methods::is, logical(1), class2 = "SpatialCellChat")))
+    stop("object.list must contain SpatialCellChat objects.", call. = FALSE)
+  if (!is.character(slot.name) || !length(slot.name) ||
+      !is.character(attribute) || length(attribute) != length(slot.name) ||
+      anyNA(slot.name) || anyNA(attribute))
+    stop("slot.name and attribute must be non-missing character vectors of equal length.",
+         call. = FALSE)
+
+  records <- function(object) {
+    if (identical(object@misc$.mode, "merged")) {
+      validateSpatialCellChat(object)
+      object@misc$.datasets
+    } else {
+      validateSpatialCellChat(object)
+      list(list(idents = object@idents, net = object@net, netP = object@netP))
     }
-    weight[i] <- max(weight.all)
   }
-  names(weight) <- attribute
-  weight.max <- weight
-  return(weight.max)
+  maxima <- vapply(seq_along(slot.name), function(i) {
+    source <- slot.name[[i]]
+    measure <- attribute[[i]]
+    values <- unlist(lapply(object.list, function(object) {
+      dataset.records <- records(object)
+      unlist(lapply(dataset.records, function(record) {
+        if (identical(source, "idents")) {
+          if (!identical(measure, "idents"))
+            stop("attribute must be 'idents' when slot.name is 'idents'.", call. = FALSE)
+          return(max(as.numeric(table(record$idents))))
+        }
+        if (!source %in% c("net", "netP"))
+          stop("slot.name must be 'idents', 'net', or 'netP'.", call. = FALSE)
+        branch <- record[[source]]$group
+        if (!is.list(branch)) return(numeric())
+        if (measure %in% c("count", "weight", "count.merged", "weight.merged")) {
+          if (measure %in% c("count.merged", "weight.merged") &&
+              !identical(source, "net"))
+            stop("merged group measures are available only in slot.name = 'net'.",
+                 call. = FALSE)
+          value <- branch[[measure]]
+          if (is.null(value)) return(numeric())
+          return(max(value))
+        }
+        prob <- branch$prob
+        if (!inherits(prob, "SparseChatArray") ||
+            !measure %in% dimnames(prob)[[3L]]) return(numeric())
+        max(prob[[measure]])
+      }), use.names = FALSE)
+    }), use.names = FALSE)
+    if (!length(values) || any(!is.finite(values)))
+      stop("no finite values found for slot.name = '", source,
+           "', attribute = '", measure, "'.", call. = FALSE)
+    max(values)
+  }, numeric(1))
+  names(maxima) <- attribute
+  maxima
 }
 
 
 #' Compute the number of interactions/interaction strength between cell types based on their associated cell subpopulations
 #'
-#' @param object CellChat object
-#' @param group.merged a factor defining the group for merging different clusters/subpopulations
+#' @param object A single or merged SpatialCellChat object with group-level
+#'   count and weight matrices already computed.
+#' @param group.merged A factor or character vector mapping every current group
+#'   to a merged group. A named vector is aligned by current group names.
 #'
-#' @return An updated slot `net` by adding three elements:
+#' @return A SpatialCellChat object with the following elements added under
+#'   `net$group` (or each merged dataset snapshot's `net$group`):
 #'
 #' `count.merged`: the number of interactions between cell types (i.e., merged cell groups)
 #'
 #' `weight.merged`: interaction strength between cell types (i.e., merged cell groups)
 #'
-#' `group.merged` the defined group for merging different clusters/subpopulations
+#' `group.merged`: the defined group for merging different clusters/subpopulations.
 #'
 #' @export
 #'
 mergeInteractions <- function(object, group.merged) {
-  if (!is.factor(group.merged)) {
-    group.merged <- factor(group.merged)
+  if (!methods::is(object, "SpatialCellChat"))
+    stop("object must be a SpatialCellChat object.", call. = FALSE)
+  validateSpatialCellChat(object)
+  if (!is.factor(group.merged) && !is.character(group.merged))
+    stop("group.merged must be a factor or character vector.", call. = FALSE)
+
+  group.names <- levels(object@idents)
+  if (length(group.merged) != length(group.names) || anyNA(group.merged))
+    stop("group.merged must contain one non-missing mapping per group.", call. = FALSE)
+  if (!is.null(names(group.merged))) {
+    if (anyNA(names(group.merged)) || anyDuplicated(names(group.merged)) ||
+        !setequal(names(group.merged), group.names))
+      stop("names(group.merged) must match all current group names exactly.", call. = FALSE)
+    group.merged <- group.merged[match(group.names, names(group.merged))]
   }
-  count <- object@net$count
-  count.merged <- matrix(0, nrow = nlevels(group.merged), ncol = nlevels(group.merged))
-  rownames(count.merged) <- levels(group.merged); colnames(count.merged) <- levels(group.merged);
-  weight <- object@net$weight
-  weight.merged <- count.merged
-  dimnames(weight.merged) <- dimnames(count.merged)
-  for (i in levels(group.merged)) {
-    for (j in levels(group.merged)) {
-      count.merged[i, j] <- sum(count[group.merged == i, group.merged == j])
-      weight.merged[i, j] <- sum(weight[group.merged == i, group.merged == j])
-    }
+  group.merged <- factor(as.character(group.merged), levels =
+    if (is.factor(group.merged)) levels(group.merged) else unique(as.character(group.merged)))
+  if (any(!nzchar(levels(group.merged))))
+    stop("merged group labels must be non-empty.", call. = FALSE)
+  names(group.merged) <- group.names
+
+  aggregate.network <- function(network, label) {
+    branch <- network$group
+    if (!is.list(branch) || is.null(branch$count) || is.null(branch$weight))
+      stop(label, " requires group-level count and weight matrices; run aggregateNet() first.",
+           call. = FALSE)
+    if (!identical(rownames(branch$count), group.names) ||
+        !identical(colnames(branch$count), group.names) ||
+        !identical(rownames(branch$weight), group.names) ||
+        !identical(colnames(branch$weight), group.names))
+      stop(label, " group-level matrix axes must match levels(object@idents).", call. = FALSE)
+    membership <- outer(as.character(group.merged), levels(group.merged), `==`) * 1
+    dimnames(membership) <- list(group.names, levels(group.merged))
+    branch$count.merged <- crossprod(membership, as.matrix(branch$count) %*% membership)
+    branch$weight.merged <- crossprod(membership, as.matrix(branch$weight) %*% membership)
+    dimnames(branch$count.merged) <- dimnames(branch$weight.merged) <-
+      list(levels(group.merged), levels(group.merged))
+    branch$group.merged <- group.merged
+    network$group <- branch
+    network
   }
-  object@net$count.merged <- count.merged
-  object@net$weight.merged <- weight.merged
-  object@net$group.merged <- group.merged
-  return(object)
+
+  if (identical(object@misc$.mode, "merged")) {
+    object@misc$.datasets <- lapply(names(object@misc$.datasets), function(dataset) {
+      snapshot <- object@misc$.datasets[[dataset]]
+      snapshot$net <- aggregate.network(snapshot$net, paste0("dataset '", dataset, "'"))
+      snapshot
+    }) |>
+      stats::setNames(names(object@misc$.datasets))
+  } else {
+    object@net <- aggregate.network(object@net, "object")
+  }
+  methods::validObject(object)
+  object
 }
 
 

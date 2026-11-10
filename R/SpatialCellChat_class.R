@@ -595,8 +595,20 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors <- character()
   coordinates <- images$coordinates
   coordinate.system <- images$coordinate.system
+  coordinate.scope <- images$coordinate.scope
+  if (!is.null(coordinate.scope) &&
+      (!is.character(coordinate.scope) || length(coordinate.scope) != 1L ||
+       is.na(coordinate.scope) ||
+       !coordinate.scope %in% c("shared", "dataset-local")))
+    errors <- c(errors, "images$coordinate.scope must be 'shared' or 'dataset-local'")
 
   if (identical(datatype, "spatial")) {
+    if (identical(coordinate.scope, "dataset-local")) {
+      if (!is.null(coordinates) || !is.null(coordinate.system) ||
+          !is.null(images$spatial.factors))
+        errors <- c(errors, paste0("dataset-local coordinates must remain in misc$.datasets snapshots; ",
+                                   "top-level spatial coordinates and calibration must be NULL"))
+    } else {
     # Spatial objects must always have analysis coordinates.  Raster images and
     # FOV geometries are optional because many platforms provide coordinates
     # without a histology image (for example Slide-seq and Stereo-seq).
@@ -617,6 +629,7 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
     errors <- c(errors, .sc_validate_coordinate_system(coordinate.system))
     errors <- c(errors, .sc_validate_spatial_factors(
       images$spatial.factors, coordinate.system))
+    }
   }
   if ("histology" %in% names(images))
     errors <- c(errors, "images$histology is obsolete; store the record in images$rasters")
@@ -664,6 +677,22 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
       errors <- c(errors, .sc_validate_matrix(
         branch[[measure]], c(length(node_names), length(node_names)),
         list(node_names, node_names), paste0(label, "$", resolution, "$", measure)))
+    }
+    if (resolution == "group" && !is.null(branch$group.merged)) {
+      group.merged <- branch$group.merged
+      if (!is.factor(group.merged) || length(group.merged) != length(group_names) ||
+          anyNA(group.merged) || !identical(names(group.merged), group_names)) {
+        errors <- c(errors, paste0(label, "$group$group.merged must be a named factor aligned to group names"))
+      } else {
+        merged.names <- levels(group.merged)
+        for (measure in intersect(c("count.merged", "weight.merged"), names(branch)))
+          errors <- c(errors, .sc_validate_matrix(
+            branch[[measure]], c(length(merged.names), length(merged.names)),
+            list(merged.names, merged.names), paste0(label, "$group$", measure)))
+      }
+    } else if (resolution == "group" &&
+               any(c("count.merged", "weight.merged") %in% names(branch))) {
+      errors <- c(errors, paste0(label, "$group merged matrices require group.merged"))
     }
   }
   errors
@@ -740,6 +769,12 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
     errors <- c(errors, "misc$.mode must be 'single' or 'merged'")
   if (!identical(datatype, "RNA") && !identical(datatype, "spatial"))
     errors <- c(errors, "misc$.datatype must be 'RNA' or 'spatial'")
+  if (identical(object@images$coordinate.scope, "dataset-local") &&
+      !identical(mode, "merged"))
+    errors <- c(errors, "images$coordinate.scope = 'dataset-local' is reserved for merged objects")
+  if (identical(mode, "merged") && identical(datatype, "spatial") &&
+      !identical(object@images$coordinate.scope, "dataset-local"))
+    errors <- c(errors, "merged spatial objects must declare images$coordinate.scope = 'dataset-local'")
   errors <- c(errors, .sc_validate_idents(object@idents, cell_names, mode))
   errors <- c(errors, .sc_validate_images(object@images, cell_names, datatype))
   group_names <- levels(object@idents)

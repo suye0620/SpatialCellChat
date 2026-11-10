@@ -174,35 +174,23 @@
 .sc_merge_images <- function(object.list, cell.names, datatype) {
   images <- list(coordinates = NULL, coordinate.system = NULL,
                  spatial.factors = NULL, rasters = list(), fov = list(),
-                 .distance = list(), .grid = list())
-  if (!identical(datatype, "spatial")) return(images)
-  coordinate.systems <- lapply(object.list, function(object) object@images$coordinate.system)
-  spatial.factors <- lapply(object.list, function(object) object@images$spatial.factors)
-  if (!all(vapply(coordinate.systems, identical, logical(1), coordinate.systems[[1L]])) ||
-      !all(vapply(spatial.factors, identical, logical(1), spatial.factors[[1L]])))
-    stop("spatial datasets must have identical coordinate systems and spatial factors.",
-         call. = FALSE)
-  coordinates <- lapply(seq_along(object.list), function(i) {
-    value <- object.list[[i]]@images$coordinates
-    rownames(value) <- cell.names[[i]]
-    value
-  })
-  images$coordinates <- do.call(rbind, coordinates)
-  images$coordinate.system <- coordinate.systems[[1L]]
-  images$spatial.factors <- spatial.factors[[1L]]
+                 .distance = list(), .grid = list(),
+                 coordinate.scope = if (identical(datatype, "spatial"))
+                   "dataset-local" else "shared")
   images
 }
 
 #' Merge SpatialCellChat objects under the final 11-slot schema.
 #'
-#' @param object.list A named list of at least two single SpatialCellChat objects.
+#' @param object.list A list of at least two single SpatialCellChat objects.
 #' @param add.names Optional dataset names. When NULL, list names are used, then
 #'   `dataset1`, `dataset2`, and so on.
 #' @param merge.data Whether to retain raw and scale assay layers in the merged
 #'   top-level assay. Norm, signaling, and smooth layers are always retained.
-#' @param cell.prefix Whether to prefix cells with their dataset name.
+#' @param cell.prefix Whether to prefix cells with their dataset name. Defaults
+#'   to TRUE to avoid cell-name collisions.
 #' @param show.plot Retained for API compatibility; merged construction never
-#'   opens a plot device.
+#'   opens a plot device. Defaults to TRUE for compatibility.
 #' @return A merged SpatialCellChat object with named `misc$.datasets` snapshots.
 #' @export
 mergeSpatialCellChat <- function(object.list, add.names = NULL, merge.data = FALSE,

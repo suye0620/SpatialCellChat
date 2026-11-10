@@ -188,6 +188,8 @@
     field.grid.max) {
   if (!methods::is(object, "SpatialCellChat"))
     stop("object must be a SpatialCellChat", call. = FALSE)
+  if (exists(".sc_assert_shared_spatial_coordinates", mode = "function"))
+    .sc_assert_shared_spatial_coordinates(object, "netVisual_CommunFlowWidget()")
   if (!is.character(slot.name) || length(slot.name) != 1L ||
       !slot.name %in% c("net", "netP"))
     stop("slot.name must be 'net' or 'netP'", call. = FALSE)

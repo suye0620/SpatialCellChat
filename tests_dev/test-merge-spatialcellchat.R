@@ -24,8 +24,10 @@ source("R/analysis.R")
 Rcpp::sourceCpp("src/SpatialChat_Rcpp.cpp", rebuild = FALSE, showOutput = FALSE)
 source("tests_dev/fixtures/make_simulated_chat.R")
 
+passed <- character()
 check <- function(label, value) {
   if (!isTRUE(value)) stop("[FAIL] ", label, call. = FALSE)
+  passed <<- c(passed, label)
   cat("[PASS] ", label, "\n", sep = "")
 }
 
@@ -37,6 +39,12 @@ two@LR$LRsig <- two@LR$LRsig[-lr.drop, , drop = FALSE]
 two@net$group$count[1, 1] <- two@net$group$count[1, 1] + 1
 two@net$group$weight[1, 1] <- two@net$group$weight[1, 1] + 1
 two@netP$centr[3, 1, 1] <- two@netP$centr[3, 1, 1] + 1
+two@images$coordinates <- two@images$coordinates + 1000
+two@images$.distance <- list()
+two@images$.grid <- list()
+group.map <- c(A = "AB", B = "AB", C = "C", D = "D")
+one <- mergeInteractions(one, group.map)
+two <- mergeInteractions(two, group.map)
 
 merged <- mergeSpatialCellChat(list(sample1 = one, sample2 = two))
 check("producer returns a merged SpatialCellChat", methods::is(merged, "SpatialCellChat") &&
@@ -60,6 +68,40 @@ check("dataset-specific LRsig tables are retained and unioned",
 check("group-level snapshot axes retain group names",
       identical(dimnames(merged@misc$.datasets[[1]]$net$group$prob)[[1]],
                 levels(one@idents)))
+check("merged spatial coordinates stay dataset-local",
+      is.null(merged@images$coordinates) &&
+        identical(merged@images$coordinate.scope, "dataset-local") &&
+        identical(unname(merged@misc$.datasets[[1]]$images$coordinates),
+                  unname(one@images$coordinates)) &&
+        identical(unname(merged@misc$.datasets[[2]]$images$coordinates),
+                  unname(two@images$coordinates)) &&
+        identical(rownames(merged@misc$.datasets[[1]]$images$coordinates),
+                  paste0("sample1_", rownames(one@images$coordinates))) &&
+        identical(rownames(merged@misc$.datasets[[2]]$images$coordinates),
+                  paste0("sample2_", rownames(two@images$coordinates))))
+spatial.plot.error <- tryCatch(spatialDimPlot(merged),
+                               error = function(e) conditionMessage(e))
+check("merged spatial plots reject dataset-local coordinates",
+      is.character(spatial.plot.error) &&
+        grepl("dataset-local coordinates", spatial.plot.error, fixed = TRUE))
+group.map.factor <- factor(unname(group.map), levels = unique(unname(group.map)))
+membership <- outer(as.character(group.map.factor), levels(group.map.factor), `==`) * 1
+expected.one <- crossprod(membership, as.matrix(one@net$group$count) %*% membership)
+dimnames(expected.one) <- list(levels(group.map.factor), levels(group.map.factor))
+check("mergeInteractions aggregates group matrices by the named mapping",
+      isTRUE(all.equal(merged@misc$.datasets$sample1$net$group$count.merged,
+                       expected.one)) &&
+        identical(rownames(merged@misc$.datasets$sample1$net$group$count.merged),
+                  c("AB", "C", "D")))
+check("getMaxWeight reads merged group matrices and sparse probability layers",
+      identical(unname(getMaxWeight(merged, slot.name = "net",
+                                    attribute = "count.merged")),
+                max(merged@misc$.datasets$sample1$net$group$count.merged,
+                    merged@misc$.datasets$sample2$net$group$count.merged)) &&
+        isTRUE(all.equal(unname(getMaxWeight(list(one, two), slot.name = "netP",
+                                               attribute = "P1")),
+                            max(as.matrix(one@netP$group$prob[["P1"]]),
+                                as.matrix(two@netP$group$prob[["P1"]])))))
 check("rankNet comparison consumes the real producer",
       inherits(rankNet(merged, slot.name = "netP", mode = "comparison",
                        comparison = c(1, 2), measure = "count", return.data = TRUE)$gg.obj,
@@ -74,6 +116,12 @@ similarity.merged <- netEmbedding(similarity.merged, slot.name = "netP", type = 
 similarity.merged <- netClustering(similarity.merged, slot.name = "netP", type = "functional", comparison = c(1, 2), k = 2, do.plot = FALSE)
 check("pairwise embedding reads merged snapshots",
       inherits(netVisual_embeddingPairwise(similarity.merged, slot.name = "netP", comparison = c(1, 2), do.label = FALSE, show.legend = FALSE), "ggplot"))
+pairwise.zoom <- netVisual_embeddingPairwiseZoomIn(
+  similarity.merged, slot.name = "netP", comparison = c(1, 2),
+  pathway.remove = character(), do.label = FALSE, show.legend = FALSE
+)
+check("pairwise zoom-in renders probabilities from real producer snapshots",
+      inherits(pairwise.zoom, "ggplot"))
 
 check("signaling role comparison reads snapshot centrality",
       inherits(netAnalysis_diff_signalingRole_scatter(merged, comparison = c(1, 2), do.label = FALSE, show.legend = FALSE), "ggplot"))
@@ -88,6 +136,13 @@ check("merged barplot reads snapshot matrices",
       inherits(netVisual_barplot(merged, comparison = c(1, 2), measure = "count"), "ggplot"))
 check("merged diff interaction reads snapshot matrices",
       inherits(netVisual_diffInteraction(merged, comparison = c(1, 2), measure = "count"), "recordedplot"))
+merged.diff <- .sc_viz_merged_difference(merged, c(1, 2), "count.merged")$value
+expected.diff <- merged@misc$.datasets$sample2$net$group$count.merged -
+  merged@misc$.datasets$sample1$net$group$count.merged
+check("count.merged comparison uses merged group matrices",
+      isTRUE(all.equal(merged.diff, expected.diff)) &&
+        inherits(netVisual_diffInteraction(merged, comparison = c(1, 2),
+                                           measure = "count.merged"), "recordedplot"))
 check("merged bubble reads snapshot communication",
       inherits(netVisual_bubble(merged, comparison = c(1, 2), signaling = "P1", return.data = TRUE)$gg.obj,
                "ggplot"))
@@ -119,4 +174,14 @@ check("lift relabels group axes and invalidates networks",
 check("update validates final-schema objects",
       isTRUE(validateSpatialCellChat(updateSpatialCellChat(one))))
 
+result.dir <- "tests_dev/figures/merged"
+dir.create(result.dir, recursive = TRUE, showWarnings = FALSE)
+writeLines(c(
+  "Merged SpatialCellChat producer regression",
+  paste0("date: ", format(Sys.Date(), "%Y-%m-%d")),
+  paste0("checks: ", length(passed)),
+  "status: PASS",
+  "",
+  passed
+), file.path(result.dir, "summary-simulated-producer.txt"))
 cat("All merged producer checks passed.\n")

@@ -8,21 +8,21 @@ mergeSpatialCellChat(
   object.list,
   add.names = NULL,
   merge.data = FALSE,
-  cell.prefix = FALSE,
-  show.plot = T
+  cell.prefix = TRUE,
+  show.plot = TRUE
 )
 }
 \arguments{
-\item{object.list}{A list of multiple SpatialCellChat objects.}
+\item{object.list}{A list of at least two valid single SpatialCellChat objects.}
 
-\item{add.names}{A vector containing the name of each dataset.}
+\item{add.names}{Optional unique non-empty dataset names. When NULL, list names are used, then generated names.}
 
-\item{merge.data}{Whether to merge the `data` slot for ALL genes. Default only merges the data of signaling genes.}
+\item{merge.data}{Whether to retain raw and scale assay layers in the merged top-level assay. Norm, signaling, and smooth layers are retained.}
 
-\item{cell.prefix}{Whether to prefix cell names.}
+\item{cell.prefix}{Whether to prefix cell names with their dataset name. Defaults to TRUE to avoid collisions.}
 
-\item{show.plot}{Whether to show merged plots.}
+\item{show.plot}{Retained for compatibility; construction does not open a plot device.}
 }
 \description{
-Merge SpatialCellChat objects
+Merge single SpatialCellChat objects into a comparison container with named per-dataset snapshots. Spatial coordinates remain dataset-local and are not combined into one top-level coordinate frame.
 }

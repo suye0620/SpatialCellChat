@@ -9,14 +9,10 @@ liftSpatialCellChat(object, group.new = NULL)
 \arguments{
 \item{object}{A single or merged SpatialCellChat object}
 
-\item{group.new}{A char vector giving the cell labels to lift up. The order of cell labels in the vector will be used for setting the new cell identity.
-
- If the input is a merged SpatialCellChat object and group.new = NULL, it will use the cell labels from one dataset with the maximum number of cell groups
-
- If the input is a single SpatialCellChat object, `group.new` must be defined.}
+\item{group.new}{A named character vector mapping every existing group label to a new label. An unnamed vector is accepted only to reorder all existing labels without relabeling. It must be supplied explicitly for both single and merged objects.}
 }
 \value{
-a updated SpatialCellChat object
+A validated SpatialCellChat object with communication results cleared.
 }
 \description{
 This function is useful when comparing inferred communications across different datasets with different cellular compositions

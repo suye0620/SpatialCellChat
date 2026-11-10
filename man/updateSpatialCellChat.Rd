@@ -2,23 +2,19 @@
 % Please edit documentation in R/SpatialCellChat_class.R
 \name{updateSpatialCellChat}
 \alias{updateSpatialCellChat}
-\title{Update a single SpatialCellChat object}
+\title{Validate a current-schema SpatialCellChat object}
 \usage{
 updateSpatialCellChat(object)
 }
 \arguments{
-\item{object}{SpatialCellChat object}
+\item{object}{A SpatialCellChat object using the current 11-slot schema.}
 }
 \value{
-a updated SpatialCellChat object
+A validated SpatialCellChat object.
 }
 \description{
-Update a single previously calculated SpatialCellChat object (version < 1.6.0)
+Validates an object using the current 11-slot schema. Legacy S4 layouts are rejected explicitly because their old slots cannot be mapped safely without an explicit schema conversion.
 }
 \details{
-version < 0.5.0: `object@var.features` is now `object@var.features$features`; `object@net$sum` is now `object@net$weight` if `aggregateNet` has been run.
-
-version 1.6.0: a `object@images` slot is added and `datatype` is added in `object@options$datatype`
-
-version 2.0.0: `images$scale.factors` is changed to `images$spatial.factors` for spatial transcriptomics data analysis.
+Legacy objects are not guessed or rewritten automatically. Use an explicit migration routine for any pre-11-slot object after its schema has been identified.
 }

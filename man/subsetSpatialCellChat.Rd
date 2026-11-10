@@ -14,17 +14,17 @@ subsetSpatialCellChat(
 )
 }
 \arguments{
-\item{object}{A SpatialCellChat object (either an object from a single dataset or a merged objects from multiple datasets)}
+\item{object}{A SpatialCellChat object from a single dataset or a merged comparison container.}
 
-\item{cells.use}{a char vector giving the cell barcodes to subset. If cells.use = NULL, USER must define `idents.use`}
+\item{cells.use}{A character vector or integer indices giving cells to retain. If NULL, define \code{idents.use}.}
 
-\item{idents.use}{a subset of cell groups used for analysis}
+\item{idents.use}{A subset of cell groups used for analysis.}
 
-\item{group.by}{cell group information; default is `object@idents`; otherwise it should be one of the column names of the meta slot}
+\item{group.by}{Cell-group information. The default is \code{object@idents}; otherwise this must name a column of \code{object@meta}.}
 
-\item{invert}{whether invert the idents.use}
+\item{invert}{Whether to invert the selected cells or identities.}
 
-\item{thresh}{threshold of the p-value for determining significant interaction. A parameter as an input of the function \link{computeCommunProbPathway}}
+\item{thresh}{Retained for API compatibility. Subsetting clears communication results rather than recomputing significance.}
 }
 \description{
 Subset SpatialCellChat object using a portion of cells

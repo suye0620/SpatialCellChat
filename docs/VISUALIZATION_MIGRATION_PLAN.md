@@ -51,7 +51,7 @@
 | `netAnalysis_contribution` | `net$prob/prob.cell` | P2/P3 若使用 contribution 图 |
 | `rankNet` | single/comparison 两分支都读旧槽 | bubble 的 rankNet 模式 |
 
-**更严重**：`mergeCellChat` 在 `R/` 下**没有定义**，但 `analysis.R:2851/3015` 调用它——所有 comparison/merged 功能（diffInteraction、bubble comparison、embeddingPairwise、diff_signalingRole）即使迁移完也没有构建方。这需要单独决策：实现 `mergeCellChat()`，还是把 comparison 系列归档。
+**历史基线（已由后续迁移修正）**：当时 `mergeCellChat` 尚未定义，comparison consumers 因此没有可验证的 producer。当前实现由 `mergeSpatialCellChat()` 作为正式 producer，并保留仅供旧内部调用点使用的 `mergeCellChat()` adapter；实际状态和剩余边界见 [P2 migration issue log](visualization-migration-P2-issues-2026-11-10.md#p2-015-merged-comparison-producer-与空间坐标语义)。
 
 另有两个确定性变量名 bug：`selectK:992`（`data_sr` 应为 `data`）、`netVisual_bubble:3062`（`prob.original` 应为 `df.net$prob.original`）。
 

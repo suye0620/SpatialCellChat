@@ -14,7 +14,7 @@
 
 ## P3-002：pattern 和 similarity 上游仍使用旧 group 概率与 mode
 
-`identifyCommunicationPatterns()`、`computeNetSimilarity()` 从已删除的 `slot$prob` 读三维数组；`netEmbedding()`、`netClustering()` 访问已删除的 `options` slot。结果是 river/dot 和 embedding 即使只修绘图入口，也无法通过现有生产链生成输入。应将 group 的各 SparseChatArray 层按原轴顺序还原为小规模 group×group×signal 数组，保留 NMF、相似度、SNN、UMAP 和聚类的原算法；mode 对齐 `misc$.mode`。这些迁移不应将 cell×cell 稀疏矩阵稠密化。比较模式仍受 P2-015 限制。
+`identifyCommunicationPatterns()`、`computeNetSimilarity()` 从已删除的 `slot$prob` 读三维数组；`netEmbedding()`、`netClustering()` 访问已删除的 `options` slot。结果是 river/dot 和 embedding 即使只修绘图入口，也无法通过现有生产链生成输入。应将 group 的各 SparseChatArray 层按原轴顺序还原为小规模 group×group×signal 数组，保留 NMF、相似度、SNN、UMAP 和聚类的原算法；mode 对齐 `misc$.mode`。这些迁移不应将 cell×cell 稀疏矩阵稠密化。comparison producer 与消费者现已在 P2 回归中覆盖；空间图仍受 dataset-local 坐标约束。
 
 ## P3-003：单对象 embedding 绘图读取旧概率，且可能按位置错配
 

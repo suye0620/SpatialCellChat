@@ -69,6 +69,7 @@ spatialDimPlotPoints <- function(object, color.use = NULL, group.by = NULL,
                                  legend.position = "right", legend.spacing = c(0, -8),
                                  ncol = 1, byrow = FALSE, plot_coordinates = NULL,
                                  raster = NULL, image.alpha = 0.5, coord_limits = NULL) {
+  .sc_assert_shared_spatial_coordinates(object, "spatialDimPlotPoints()")
   coordinates <- plot_coordinates %||% object@images$coordinates
   if (is.null(coordinates) || NCOL(coordinates) != 2L)
     stop("coordinates must be a two-column matrix", call. = FALSE)
@@ -244,6 +245,7 @@ spatialDimPlot <- function(object, color.use = NULL, group.by = NULL,
                            legend.size = 3, legend.text.size = 8,
                            legend.position = "right", legend.spacing = c(0, -8),
                            ncol = 1, byrow = FALSE) {
+  .sc_assert_shared_spatial_coordinates(object, "spatialDimPlot()")
   rasters <- object@images$rasters
   raster <- NULL
   image.name <- NULL
@@ -389,6 +391,7 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
                                point.size = 1, legend.size = 3, legend.text.size = 8, shape.by = 16, ncol = NULL,
                                show.legend = TRUE, show.legend.combined = FALSE){
   object <- .sc_assert_spatial_cell_chat(object)
+  .sc_assert_shared_spatial_coordinates(object, "spatialFeaturePlot()")
   slot.name <- match.arg(slot.name)
   layer <- switch(slot.name, data.signaling = "signaling", data = "norm", slot.name)
   if (!layer %in% names(object@assay) || is.null(object@assay[[layer]])) {
@@ -656,6 +659,7 @@ spatialVisual_scoring <- function(object, signaling, method = "centrality", meas
                                   do.binary = FALSE, color.use = NULL,
                                   point.size = 0.8, legend.size = 3, legend.text.size = 8, legend.spacing = c(0, -8), shape.by = 16, ncol = NULL,
                                   combined = TRUE, show.legend = TRUE, show.legend.combined = FALSE){
+  .sc_assert_shared_spatial_coordinates(object, "spatialVisual_scoring()")
   coords <- object@images$coordinates
   for (i in 1:length(measure)) {
     if (measure[i] == "outdeg") {
@@ -986,6 +990,8 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
                       group = NULL,cell.order = NULL,small.gap = 1, big.gap = 10, scale = FALSE, reduce = -1, show.legend = FALSE, legend.pos.x = 20,legend.pos.y = 20, nCol = NULL,
                       ...) {
   layout <- match.arg(layout)
+  if (identical(layout, "spatial"))
+    .sc_assert_shared_spatial_coordinates(object, "netVisual(layout = 'spatial')")
   if (!is.null(vertex.size)) {
     warning("'vertex.size' is deprecated. Use `vertex.weight`")
   }
@@ -1278,7 +1284,8 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
 }
 
 .sc_viz_merged_group_matrix <- function(object, dataset, slot.name = "net",
-                                        measure = c("count", "weight"),
+                                        measure = c("count", "weight", "count.merged",
+                                                    "weight.merged"),
                                         thresh = 0.05) {
   measure <- match.arg(measure)
   record <- object@misc$.datasets[[dataset]]
@@ -1288,6 +1295,20 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
   if (!is.list(branch))
     stop("merged dataset snapshot is missing its group network.", call. = FALSE)
   value <- branch[[measure]]
+  if (measure %in% c("count.merged", "weight.merged")) {
+    value <- branch[[measure]]
+    if (is.null(value))
+      stop("dataset '", dataset, "' has no `", measure,
+           "`; run mergeInteractions() on each input before merging.", call. = FALSE)
+    expected.groups <- if (is.factor(branch$group.merged))
+      levels(branch$group.merged) else NULL
+    if (is.null(expected.groups) ||
+        !identical(rownames(value), expected.groups) ||
+        !identical(colnames(value), expected.groups))
+      stop("dataset '", dataset, "' has invalid `", measure,
+           "` group axes.", call. = FALSE)
+    return(as.matrix(value))
+  }
   if (is.null(value)) {
     prob <- branch$prob
     if (!inherits(prob, "SparseChatArray"))
@@ -1312,14 +1333,26 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
   value
 }
 
+.sc_assert_shared_spatial_coordinates <- function(object, caller) {
+  if (methods::is(object, "SpatialCellChat") &&
+      identical(object@images$coordinate.scope, "dataset-local"))
+    stop(caller, " cannot plot a merged object with dataset-local coordinates. ",
+         "Plot the original single-dataset objects separately; a shared spatial frame ",
+         "must be established before spatial comparison.", call. = FALSE)
+  invisible(object)
+}
+
 .sc_viz_merged_difference <- function(object, comparison, measure, thresh = 0.05) {
   datasets <- .sc_viz_merged_dataset_names(object)
   comparison <- .sc_viz_merged_index(comparison, datasets)
-  measure.base <- sub("\\.merged$", "", measure)
+  if (length(comparison) != 2L)
+    stop("comparison must select exactly two datasets.", call. = FALSE)
   first <- .sc_viz_merged_group_matrix(object, datasets[[comparison[[1L]]]],
-                                        measure = measure.base, thresh = thresh)
+                                        measure = measure, thresh = thresh)
   second <- .sc_viz_merged_group_matrix(object, datasets[[comparison[[2L]]]],
-                                         measure = measure.base, thresh = thresh)
+                                         measure = measure, thresh = thresh)
+  if (!identical(dimnames(first), dimnames(second)))
+    stop("compared group matrices must have identical named axes.", call. = FALSE)
   list(value = second - first, datasets = datasets[comparison], comparison = comparison)
 }
 .sc_viz_group_lr <- function(object, signaling, thresh, pairLR.use = NULL) {
@@ -4447,6 +4480,13 @@ netVisual_embeddingPairwise <- function(object, slot.name = "netP", type = c("fu
 
   Y <- methods::slot(object, slot.name)$similarity[[type]]$dr[[comparison.name]]
   clusters <- methods::slot(object, slot.name)$similarity[[type]]$group[[comparison.name]]
+  if (is.null(Y) || is.null(clusters))
+    stop("run netEmbedding() and netClustering() for this comparison before plotting.",
+         call. = FALSE)
+  if (is.null(rownames(Y)) || length(clusters) != nrow(Y) ||
+      !identical(names(clusters), rownames(Y)))
+    stop("pairwise embedding coordinates and clusters must share identical pathway names.",
+         call. = FALSE)
   object.names <- dataset.names[comparison]
   prob <- lapply(object.names, function(dataset.name)
     .sc_viz_snapshot_group_prob_array(object, slot.name, dataset.name))
@@ -4457,6 +4497,9 @@ netVisual_embeddingPairwise <- function(object, slot.name = "netP", type = c("fu
 
   if (is.null(pathway.remove)) {
     similarity <- methods::slot(object, slot.name)$similarity[[type]]$matrix[[comparison.name]]
+    if (is.null(similarity) || !nrow(similarity))
+      stop("pairwise similarity matrix is missing or empty for this comparison.",
+           call. = FALSE)
     pathway.remove <- rownames(similarity)[which(colSums(similarity) == 1)]
     # pathway.remove <- sub("--.*", "", pathway.remove)
   }
@@ -4467,7 +4510,7 @@ netVisual_embeddingPairwise <- function(object, slot.name = "netP", type = c("fu
       pathway.remove.idx <- which(paste0(dimnames(probi)[[3]],"--",object.names[i]) %in% pathway.remove)
       #  pathway.remove.idx <- which(dimnames(probi)[[3]] %in% pathway.remove)
       if (length(pathway.remove.idx) > 0) {
-        probi <- probi[ , , -pathway.remove.idx]
+        probi <- probi[, , -pathway.remove.idx, drop = FALSE]
       }
       prob[[i]] <- probi
     }
@@ -4476,11 +4519,23 @@ netVisual_embeddingPairwise <- function(object, slot.name = "netP", type = c("fu
   signalingAll <- c()
   for (i in 1:length(prob)) {
     probi <- prob[[i]]
-    prob_sum.each[[i]] <- apply(probi, 3, sum)
+    prob_sum.each[[i]] <- if (dim(probi)[3L] == 1L) {
+      stats::setNames(sum(probi[, , 1L]), dimnames(probi)[[3L]])
+    } else {
+      apply(probi, 3, sum)
+    }
     signalingAll <- c(signalingAll, paste0(names(prob_sum.each[[i]]),"--",object.names[i]))
   }
   prob_sum <- unlist(prob_sum.each)
+  if (!length(prob_sum) || any(!is.finite(prob_sum)) || max(prob_sum) <= 0)
+    stop("no positive pathway communication remains after pathway.remove filtering.",
+         call. = FALSE)
   names(prob_sum) <- signalingAll
+  if (!setequal(names(prob_sum), rownames(Y)))
+    stop("pairwise embedding pathways do not match snapshot pathway layers.",
+         call. = FALSE)
+  prob_sum <- prob_sum[rownames(Y)]
+  clusters <- clusters[rownames(Y)]
 
   group <- sub(".*--", "", names(prob_sum))
   labels = sub("--.*", "", names(prob_sum))
@@ -4554,11 +4609,20 @@ netVisual_embeddingPairwiseZoomIn <- function(object, slot.name = "netP", type =
   type <- match.arg(type)
   dataset.names <- .sc_viz_merged_dataset_names(object)
   comparison <- .sc_viz_merged_index(comparison, dataset.names)
+  if (length(comparison) != 2L)
+    stop("comparison must select exactly two datasets.", call. = FALSE)
   cat("2D visualization of signaling networks from datasets", as.character(comparison), '\n')
   comparison.name <- paste(comparison, collapse = "-")
 
   Y <- methods::slot(object, slot.name)$similarity[[type]]$dr[[comparison.name]]
   clusters <- methods::slot(object, slot.name)$similarity[[type]]$group[[comparison.name]]
+  if (is.null(Y) || is.null(clusters))
+    stop("run netEmbedding() and netClustering() for this comparison before plotting.",
+         call. = FALSE)
+  if (is.null(rownames(Y)) || length(clusters) != nrow(Y) ||
+      !identical(names(clusters), rownames(Y)))
+    stop("pairwise embedding coordinates and clusters must share identical pathway names.",
+         call. = FALSE)
   object.names <- dataset.names[comparison]
   prob <- lapply(object.names, function(dataset.name)
     .sc_viz_snapshot_group_prob_array(object, slot.name, dataset.name))
@@ -4569,6 +4633,9 @@ netVisual_embeddingPairwiseZoomIn <- function(object, slot.name = "netP", type =
 
   if (is.null(pathway.remove)) {
     similarity <- methods::slot(object, slot.name)$similarity[[type]]$matrix[[comparison.name]]
+    if (is.null(similarity) || !nrow(similarity))
+      stop("pairwise similarity matrix is missing or empty for this comparison.",
+           call. = FALSE)
     pathway.remove <- rownames(similarity)[which(colSums(similarity) == 1)]
     # pathway.remove <- sub("--.*", "", pathway.remove)
   }
@@ -4589,11 +4656,23 @@ netVisual_embeddingPairwiseZoomIn <- function(object, slot.name = "netP", type =
   signalingAll <- c()
   for (i in 1:length(prob)) {
     probi <- prob[[i]]
-    prob_sum.each[[i]] <- apply(probi, 3, sum)
+    prob_sum.each[[i]] <- if (dim(probi)[3L] == 1L) {
+      stats::setNames(sum(probi[, , 1L]), dimnames(probi)[[3L]])
+    } else {
+      apply(probi, 3, sum)
+    }
     signalingAll <- c(signalingAll, paste0(names(prob_sum.each[[i]]),"--",object.names[i]))
   }
   prob_sum <- unlist(prob_sum.each)
+  if (!length(prob_sum) || any(!is.finite(prob_sum)) || max(prob_sum) <= 0)
+    stop("no positive pathway communication remains after pathway.remove filtering.",
+         call. = FALSE)
   names(prob_sum) <- signalingAll
+  if (!setequal(names(prob_sum), rownames(Y)))
+    stop("pairwise embedding pathways do not match snapshot pathway layers.",
+         call. = FALSE)
+  prob_sum <- prob_sum[rownames(Y)]
+  clusters <- clusters[rownames(Y)]
 
   group <- sub(".*--", "", names(prob_sum))
   labels = sub("--.*", "", names(prob_sum))
@@ -5412,6 +5491,7 @@ netVisual_CommunField <- function(
     plot.title.name = NULL,
     plot.title.text.size = 8
 ){
+  .sc_assert_shared_spatial_coordinates(object, "netVisual_CommunField()")
   pattern <- match.arg(pattern)
   if (pattern == "outgoing") {
     arrow.ends = "last"
@@ -5753,6 +5833,7 @@ netVisual_CommunFieldGrid <- function(
     legend.text.size = 8,
     title.name = NULL
 ){
+  .sc_assert_shared_spatial_coordinates(object, "netVisual_CommunFieldGrid()")
   pattern <- match.arg(pattern)
   grid.field.mean <- match.arg(grid.field.mean)
   arrow.line.width <- .sc_resolve_arrow_width(arrow.line.width)
@@ -6102,6 +6183,7 @@ netVisual_CommunFlow <- function(
     legend.text.size = 8,
     title.name = NULL
 ){
+  .sc_assert_shared_spatial_coordinates(object, "netVisual_CommunFlow()")
   pattern <- match.arg(pattern)
   arrow.line.width <- .sc_resolve_arrow_width(arrow.line.width)
   grid.field.mean <- match.arg(grid.field.mean)
@@ -6404,6 +6486,7 @@ netVisual_CommunFieldZoomIn <- function(
     plot.title.name = NULL,
     plot.title.text.size = 8
 ) {
+  .sc_assert_shared_spatial_coordinates(object, "netVisual_CommunFieldZoomIn()")
   gg1 <-
     netVisual_CommunField(
       object = object,
@@ -7071,6 +7154,7 @@ spatialTopicPlot <- function(
     show.legend = TRUE,
     show.legend.combined = FALSE
 ){
+  .sc_assert_shared_spatial_coordinates(object, "spatialTopicPlot()")
   pattern <- match.arg(pattern)
   pattern.res <- methods::slot(object, slot.name)$topic[[pattern]]
   if (is.null(pattern.res) || is.null(pattern.res$cell)) {
@@ -7217,6 +7301,7 @@ plotly_spatialLRpairPlot <- function (
     do.plot=T
 ){
   object <- .sc_assert_spatial_cell_chat(object)
+  .sc_assert_shared_spatial_coordinates(object, "plotly_spatialLRpairPlot()")
   coords <- object@images$coordinates
   if (ncol(coords) == 2) {
     colnames(coords) <- c("x_cent", "y_cent")
@@ -8048,6 +8133,7 @@ plotly_spatialDimPlot <- function(
     legend.group.title = "labels",
     three.dim.z = 0
 ) {
+  .sc_assert_shared_spatial_coordinates(object, "plotly_spatialDimPlot()")
   method <- match.arg(method)
   coordinates <- object@images$coordinates
   if (is.null(coordinates))
@@ -8296,6 +8382,7 @@ spatialLeePlot <- function(
     row.show = NULL,
     col.show = NULL
 ){
+  .sc_assert_shared_spatial_coordinates(object, "spatialLeePlot()")
   # get coordinates
   coords <- object@images$coordinates
   distance.coordinates <- coords
@@ -8768,6 +8855,7 @@ spatialGiPlot <- function(
     return.object = T,
     show.plot = T
 ) {
+  .sc_assert_shared_spatial_coordinates(object, "spatialGiPlot()")
   for (i in 1:length(measure)) {
     if (measure[i] == "outdeg") {
       measure.name[i] = "outgoing"

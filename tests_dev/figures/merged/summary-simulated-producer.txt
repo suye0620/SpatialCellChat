@@ -1,0 +1,32 @@
+Merged SpatialCellChat producer regression
+date: 2026-11-10
+checks: 27
+status: PASS
+
+producer returns a merged SpatialCellChat
+merged object validates
+dataset metadata and prefixed cells align
+snapshot names and cell-level sparse axes align
+dataset-specific LRsig tables are retained and unioned
+group-level snapshot axes retain group names
+merged spatial coordinates stay dataset-local
+merged spatial plots reject dataset-local coordinates
+mergeInteractions aggregates group matrices by the named mapping
+getMaxWeight reads merged group matrices and sparse probability layers
+rankNet comparison consumes the real producer
+pairwise similarity consumes snapshot probabilities
+pairwise embedding reads merged snapshots
+pairwise zoom-in renders probabilities from real producer snapshots
+signaling role comparison reads snapshot centrality
+signaling change comparison reads snapshot centrality
+merged subsetCommunication returns named snapshots
+merged barplot reads snapshot matrices
+merged diff interaction reads snapshot matrices
+count.merged comparison uses merged group matrices
+merged bubble reads snapshot communication
+merged heatmap reads snapshot matrices
+group mismatch is rejected
+single subset keeps aligned assay and metadata
+merged subset retains both datasets and clears stale networks
+lift relabels group axes and invalidates networks
+update validates final-schema objects

@@ -98,15 +98,21 @@
 
 处理：数据选择复用逐 LR 的既有阈值逻辑；spatial 分支按全部 LR 构造 ggplot 列表并组合，再导出 individual/aggregate 文件，分别使用对应边权上限。对超多 LR 的大尺寸位图和 PDF 设备限制仍需专项验证。
 
-## P2-015：比较图缺少新结构的对象生产者
+## P2-015：merged comparison producer 与空间坐标语义
 
-已实现的 11-slot 契约将模式与样本归档放在 `misc$.mode` / `misc$.datasets`；当前源码未找到 `mergeCellChat()` 或其他设置 merged 模式的生产者，也未找到 `.datasets` 内部数据的完整可执行读写契约。`netVisual_diffInteraction`、merged heatmap/barplot/bubble 和 pairwise embedding 仍访问旧的 `net[[dataset]]` 布局。三个测试对象均是 single，不能把任意两个对象伪装成已有 merged 结果并宣布比较图通过；需要先核定真实生产者与数据契约，再迁移和验收。
+状态：comparison producer 已实现，不再是“缺少生产者”。`mergeSpatialCellChat()` 将各输入的通讯结果保留在 `misc$.datasets` 快照，并同步带前缀的 cell 轴；真实 producer 的模拟对象回归覆盖 `rankNet`、`subsetCommunication`、差异图、heatmap/barplot/bubble、pairwise embedding、signaling-role analysis，以及 subset/lift/update 生命周期。
+
+仍须注意两个边界。第一，`count.merged`/`weight.merged` 是按 `mergeInteractions()` 提供的 group 映射聚合出的独立矩阵，不是普通 `count`/`weight` 的别名；输入对象应先分别调用 `mergeInteractions()`，缺少聚合矩阵时 comparison 会报错。第二，空间数据集的坐标通常是各自局部坐标。merged 顶层不再拼接这些坐标，而以 `images$coordinate.scope = "dataset-local"` 标记并将坐标保留在快照；空间图入口明确拒绝把 merged 容器当作统一组织平面。
+
+当前 producer-specific 回归使用两个独立生成的 simulated objects。它验证新 producer 和 comparison 消费者的契约，不等同于三个原始测试 object（simulated、Visium、Slide-seq）的 merged biological comparison。三套 single object 的既定绘图迁移产物仍按各自测试结果检查；需要共同空间坐标的 merged spatial plot 不在当前支持范围。
+
+验收记录位于 `tests_dev/test-merge-spatialcellchat.R`。重跑该测试、原 analysis/P2/P3/P4 迁移脚本、`R CMD INSTALL` 和 `git diff --check`；若环境缺失 R 或某项失败，须保留为显式未验收项。
 
 ## P2-016：绘图函数关闭整个 R 会话的警告
 
 hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn = -1)` 后不恢复，导致后续操作的警告也被隐藏。迁移期间移除这些全局选项更改，保留绘图和统计计算；测试需重新运行以观察此前可能被掩盖的警告。
 
-## P2-017：contribution 和 rankNet 的单对象路径已迁移，comparison 仍待真实 merged producer
+## P2-017：contribution 和 rankNet 的稀疏 slot 迁移
 
 位置：`R/analysis.R` 的 `netAnalysis_contribution()` 和 `rankNet()`。此前这两个入口分别读取旧的 `net$prob` / `net$pval`、`net$prob.cell` 以及旧 comparison 容器；新对象的概率现在从 `net` 或 `netP` 下的 `group$prob` / `group$pval` 和 `cell$prob` 逐层读取。
 
@@ -114,6 +120,6 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 
 当前结果：`netAnalysis_contribution()` 的 group、cell 和 receiver 分面，以及 `rankNet()` 的 `netP` weight/count、`net` cell count 已切换到 `SparseChatArray` 新 slot；三套真实 fixture（simulated、Visium 905 spots、完整 Slide-seq 29,536 cells）均已成功出图。回归脚本为 `tests_dev/test-analysis-network-migration.R`，产物和摘要分别位于 `tests_dev/figures/P2/<dataset>/` 与 `tests_dev/figures/summary-all-P2-*.csv`。
 
-剩余边界：`rankNet()` 已能读取文档约定的 `misc$.datasets` 快照并通过合成镜像测试，但项目中仍缺少真正的 `mergeSpatialCellChat()` producer。因此 comparison 还没有真实 merged object 的三对象验收；该边界不能用手工设置 `.mode = "merged"` 的测试替代。
+当前结果：single-object 数值路径保留原有 LR 选择、p-value 门控、归一化及 count/weight 语义；comparison 路径现由 `mergeSpatialCellChat()` 提供真实快照，并在 `tests_dev/test-merge-spatialcellchat.R` 中通过 producer 驱动回归。该回归是两个 simulated object 的合成对比，不代表真实样本间的生物学比较，也不替代三套 single-object 图像验收。
 
-修复方向：先实现并验证 `mergeSpatialCellChat()` 的名称对齐、cell 名重写、稀疏层同步和对象有效性检查，再迁移 `netVisual_diffInteraction()`、heatmap/barplot/bubble comparison、pairwise embedding 及其分析消费者。comparison 的数值和图形验收应在真实 producer 完成后进行。
+剩余边界：对真实 Visium/Slide-seq 数据是否存在可解释的共同空间坐标系，不能由相同单位或像素比例推断。merged 空间对象因此保留 dataset-local 快照并拒绝顶层空间绘图；非空间 comparison 可正常消费 merged 快照。

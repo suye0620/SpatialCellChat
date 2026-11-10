@@ -21,7 +21,8 @@ Implement `mergeSpatialCellChat()` as the only supported producer for merged `Sp
 ## Constraints and invariants
 
 - Inputs must be valid `SpatialCellChat` objects in `single` mode; dataset names must be unique and non-empty.
-- `datatype` must be identical across inputs. Spatial coordinate systems and rasters are preserved only inside per-dataset snapshots unless a common coordinate frame is explicitly available; no silent geometric concatenation is allowed.
+- `datatype` must be identical across inputs. Spatial coordinate systems, coordinates, rasters, and spatial factors are preserved only inside per-dataset snapshots unless a common coordinate frame is explicitly available; the merged top-level object uses `images$coordinate.scope = "dataset-local"` and does not expose concatenated coordinates.
+- Spatial plotting entry points reject a merged object with dataset-local coordinates; users plot the original single-dataset objects separately unless a shared transform is explicitly established.
 - Group labels are aligned by name, not position. This first implementation requires identical group levels and fails clearly otherwise.
 - Cell identifiers are unique in the merged object. If `cell.prefix = TRUE`, every snapshot cell-level matrix uses the same prefixed names as the merged assay and metadata; group-level matrices retain group names.
 - Sparse communication layers remain `SparseChatArray` objects. No full cell-by-cell-by-LR dense tensor may be materialized.
@@ -56,8 +57,10 @@ The merged producer makes comparison paths constructible and gives downstream co
 ## Acceptance criteria
 
 1. `mergeSpatialCellChat()` rejects invalid object lists, duplicate dataset names, datatype mismatches, group-level mismatches, and duplicate resulting cell identifiers with actionable errors.
-2. Two or more valid objects produce a valid merged object with aligned metadata, idents, assay layers, embeddings where safe, `meta$datasets`, and named `misc$.datasets` snapshots.
+2. Two or more valid objects produce a valid merged object with aligned metadata, idents, assay layers, embeddings where safe, `meta$datasets`, and named `misc$.datasets` snapshots; spatial coordinates remain snapshot-local and are never concatenated at top level.
 3. Cell-level `SparseChatArray` layers have synchronized prefixed dimnames without dense expansion; group-level layers retain group names; LR layer names are unchanged.
-4. A producer-specific regression test passes on simulated objects and exercises the real `rankNet(..., mode = "comparison")` path.
-5. `validObject()` and `validateSpatialCellChat()` pass on the returned object; the package source defines every exported function needed for installation.
-6. The Note remains `proposed` until comparison consumers and the documented acceptance checks have been implemented and verified; it must not be described as a completed merged-comparison migration before then.
+4. A producer-specific regression test passes on simulated objects and exercises real comparison consumers, including `rankNet(..., mode = "comparison")`, pairwise zoom-in, and `count.merged` after explicit `mergeInteractions()` aggregation.
+5. `count.merged` and `weight.merged` preserve the group mapping and have named axes matching its levels; comparison consumers never silently fall back to ordinary `count`/`weight`.
+6. Spatial merged objects have no top-level analysis coordinates, validate with a dataset-local coordinate marker, and spatial plotting APIs reject them with an actionable error.
+7. `validObject()` and `validateSpatialCellChat()` pass on the returned object; the package source defines every exported function needed for installation.
+8. The Note remains `proposed` until all named acceptance checks have been implemented and verified; it must not be described as a completed merged-comparison migration before then.
