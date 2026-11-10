@@ -2,3 +2,4 @@
 *.pdf binary
 tests_dev/figures/**/*.html binary
 tests_dev/figures/**/*_files/** binary
+tests_dev/figures/recheck-449c181/P4/**/lib/** binary

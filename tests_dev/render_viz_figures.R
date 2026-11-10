@@ -9,6 +9,7 @@
 #   Rscript tests_dev/render_viz_figures.R --dataset=slideseq  # one dataset
 #   Rscript tests_dev/render_viz_figures.R --phase=P0          # one phase
 #   Rscript tests_dev/render_viz_figures.R --only=spatialC2CDistPlot
+#   Rscript tests_dev/render_viz_figures.R --output-dir=tests_dev/figures/recheck
 
 setwd(local({
   a <- commandArgs(FALSE)
@@ -48,7 +49,8 @@ FRESH.fixture <- identical(get_arg("fresh", "false"), "true")
 for (f in list.files("tests_dev/fixtures", pattern = "[.]R$", full.names = TRUE))
   source(f)
 
-FIG.root <- "tests_dev/figures"
+FIG.root <- get_arg("output-dir", "tests_dev/figures")
+if (!nzchar(FIG.root)) stop("--output-dir must not be empty", call. = FALSE)
 dir.create(FIG.root, showWarnings = FALSE, recursive = TRUE)
 
 # dataset chat builders (cached; built on first use)
@@ -388,15 +390,24 @@ for (spec in FIGURES) {
     status <- "VISUAL-REVIEW"
     detail <- "complete 88-LR pathway; sector labels overlap"
   } else if (status == "PASS" && identical(spec$dataset, "slideseq") &&
-      spec$name %in% c("netVisual_CommunFieldGrid", "netVisual_CommunFlow")) {
+      spec$name %in% c("netVisual_CommunFieldGrid", "netVisual_CommunFlow",
+                       "netVisual_CommunFieldGrid-adjusted", "netVisual_CommunFlow-adjusted")) {
     status <- "VISUAL-REVIEW"
-    detail <- paste(state$note, "default dense background obscures vectors; flow integration warning requires review", sep = "; ")
+    review.reason <- if (grepl("-adjusted$", spec$name)) {
+      "adjusted display requires visual review"
+    } else if (identical(spec$name, "netVisual_CommunFlow")) {
+      "default background and flow integration require review"
+    } else {
+      "default background and arrow visibility require review"
+    }
+    detail <- paste(state$note, review.reason, sep = "; ")
   } else if (status == "PASS" && nzchar(state$note)) detail <- state$note
   cat("   -> ", status, if (nzchar(detail)) paste0(" | ", detail) else "", " (",
       round(as.numeric(Sys.time() - t0, units = "secs"), 1), "s)\n", sep = "")
   results[[tag]] <- list(status = status, detail = detail, pdf = out.pdf)
 }
 
+if (!length(results)) stop("No figures matched the requested filters", call. = FALSE)
 df <- do.call(rbind, lapply(names(results), function(k) {
   data.frame(figure = k, status = results[[k]]$status, detail = results[[k]]$detail)
 }))
@@ -406,6 +417,10 @@ summary.name <- paste(c("summary", DATASET.filter, PHASE.filter,
                         if (!is.null(ONLY.filter)) ONLY.filter,
                         if (FRESH.fixture) "fresh"), collapse = "-")
 utils::write.csv(df, file.path(FIG.root, paste0(summary.name, ".csv")), row.names = FALSE)
-fails <- sum(df$status != "PASS")
-cat("total:", nrow(df), "| pass:", nrow(df) - fails, "| fail:", fails, "\n")
-if (fails > 0) quit(status = 1)
+passed <- sum(df$status == "PASS")
+review <- sum(df$status == "VISUAL-REVIEW")
+errors <- sum(!df$status %in% c("PASS", "VISUAL-REVIEW"))
+cat("total:", nrow(df), "| pass:", passed, "| visual review:", review,
+    "| errors:", errors, "\n")
+# Keep the nonzero exit for an incomplete review, as in previous runs.
+if (review + errors > 0) quit(status = 1)

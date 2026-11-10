@@ -1,0 +1,126 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== P2/slideseq/netAnalysis_contribution
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netAnalysis_contribution.pdf
+   -> PASS (32.2s)
+== P2/slideseq/rankNet-netP
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/rankNet-netP.pdf
+   -> PASS (0.5s)
+== P2/slideseq/rankNet-net
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/rankNet-net.pdf
+   -> PASS (2.8s)
+== P2/slideseq/netVisual_heatmap
+Do heatmap based on a single object
+
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_heatmap.pdf
+   -> PASS (0.8s)
+== P2/slideseq/netVisual_barplot
+Show number of interactions based on a single object
+
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_barplot.pdf
+   -> PASS (0.4s)
+== P2/slideseq/netVisual_bubble
+Comparing communications on a single object
+
+   bubble PDF size: 10.5 x 6 inches
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_bubble.pdf
+   -> PASS (1.2s)
+== P2/slideseq/netVisual_chord_cell
+Plot the aggregated cell-cell communication network at the signaling pathway level
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_chord_cell.pdf
+   -> PASS (0.9s)
+== P2/slideseq/netVisual_chord_gene
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_chord_gene.pdf
+   -> PASS (3.6s)
+== P2/slideseq/netVisual-export-circle
+   export pathway: AGRN | LR layers: 1
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual-export-circle_circle_individual.pdf, tests_dev/figures/recheck-449c181/P2/slideseq/netVisual-export-circle_circle_aggregate.pdf
+   -> PASS | pathway=AGRN; LR layers=1 (0.4s)
+== P2/slideseq/netVisual_aggregate-circle
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_aggregate-circle.pdf
+   -> PASS (0.1s)
+== P2/slideseq/netVisual_individual-circle
+   complete LR panels: 16 | PDF size: 9 x 28 inches
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_individual-circle.pdf
+   -> PASS (0.4s)
+== P2/slideseq/netVisual-export-hierarchy
+   export pathway: AGRN | LR layers: 1
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual-export-hierarchy_hierarchy_individual.pdf, tests_dev/figures/recheck-449c181/P2/slideseq/netVisual-export-hierarchy_hierarchy_aggregate.pdf
+   -> PASS | pathway=AGRN; LR layers=1 (0.3s)
+== P2/slideseq/netVisual_aggregate-hierarchy
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_aggregate-hierarchy.pdf
+   -> PASS (0s)
+== P2/slideseq/netVisual_individual-hierarchy
+   complete LR panels: 16 | PDF size: 9 x 56 inches
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_individual-hierarchy.pdf
+   -> PASS (0.5s)
+== P2/slideseq/netVisual-export-spatial
+   export pathway: AGRN | LR layers: 1
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual-export-spatial_spatial_individual.pdf, tests_dev/figures/recheck-449c181/P2/slideseq/netVisual-export-spatial_spatial_aggregate.pdf
+   -> PASS | pathway=AGRN; LR layers=1 (2.2s)
+== P2/slideseq/netVisual_aggregate-spatial
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_aggregate-spatial.pdf
+   -> PASS (1s)
+== P2/slideseq/netVisual_individual-spatial
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_individual-spatial.pdf
+   -> PASS (15.5s)
+== P2/slideseq/netVisual-export-chord
+   export pathway: AGRN | LR layers: 1
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual-export-chord_chord_individual.pdf, tests_dev/figures/recheck-449c181/P2/slideseq/netVisual-export-chord_chord_aggregate.pdf
+   -> PASS | pathway=AGRN; LR layers=1 (0.7s)
+== P2/slideseq/netVisual_aggregate-chord
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_aggregate-chord.pdf
+   -> PASS (0.4s)
+== P2/slideseq/netVisual_individual-chord
+   complete LR panels: 16 | PDF size: 9 x 28 inches
+   saved: tests_dev/figures/recheck-449c181/P2/slideseq/netVisual_individual-chord.pdf
+   -> PASS (5.6s)
+Warning messages:
+1: `legend_height` you specified is too small, use the default minimal
+height.
+2: `legend_height` you specified is too small, use the default minimal
+height.
+3: `legend_height` you specified is too small, use the default minimal
+height.
+4: `aes_string()` was deprecated in ggplot2 3.0.0.
+i Please use tidy evaluation idioms with `aes()`.
+i See also `vignette("ggplot2-in-packages")` for more information.
+5: The `<scale>` argument of `guides()` cannot be `FALSE`. Use "none" instead as
+of ggplot2 3.3.4.
+6: `add.vertex.shape()` was deprecated in igraph 2.0.0.
+i Please use `add_shape()` instead.
+7: `get.edgelist()` was deprecated in igraph 2.0.0.
+i Please use `as_edgelist()` instead.
+8: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+i Please use `linewidth` instead.
+
+==== summary ====
+   figure                                     status detail
+1  P2/slideseq/netAnalysis_contribution       PASS
+2  P2/slideseq/rankNet-netP                   PASS
+3  P2/slideseq/rankNet-net                    PASS
+4  P2/slideseq/netVisual_heatmap              PASS
+5  P2/slideseq/netVisual_barplot              PASS
+6  P2/slideseq/netVisual_bubble               PASS
+7  P2/slideseq/netVisual_chord_cell           PASS
+8  P2/slideseq/netVisual_chord_gene           PASS
+9  P2/slideseq/netVisual-export-circle        PASS   pathway=AGRN; LR layers=1
+10 P2/slideseq/netVisual_aggregate-circle     PASS
+11 P2/slideseq/netVisual_individual-circle    PASS
+12 P2/slideseq/netVisual-export-hierarchy     PASS   pathway=AGRN; LR layers=1
+13 P2/slideseq/netVisual_aggregate-hierarchy  PASS
+14 P2/slideseq/netVisual_individual-hierarchy PASS
+15 P2/slideseq/netVisual-export-spatial       PASS   pathway=AGRN; LR layers=1
+16 P2/slideseq/netVisual_aggregate-spatial    PASS
+17 P2/slideseq/netVisual_individual-spatial   PASS
+18 P2/slideseq/netVisual-export-chord         PASS   pathway=AGRN; LR layers=1
+19 P2/slideseq/netVisual_aggregate-chord      PASS
+20 P2/slideseq/netVisual_individual-chord     PASS
+total: 20 | pass: 20 | fail: 0

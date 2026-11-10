@@ -1,0 +1,67 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== P1/simulated/spatialFeaturePlot
+   saved: tests_dev/figures/recheck-449c181/P1/simulated/spatialFeaturePlot.pdf
+   -> PASS (0.7s)
+== P1/simulated/spatialVisual_scoring
+
+-- netAnalysis_computeCentrality --
+
+i Input: 20 nodes x 2 signaling layers; 5 centrality measures
+v Centrality computed: 2 layers; 1.02s
+   saved: tests_dev/figures/recheck-449c181/P1/simulated/spatialVisual_scoring.pdf
+   -> PASS (4.9s)
+== P1/simulated/spatialTopicPlot
+'as(<dgTMatrix>, "dgCMatrix")' is deprecated.
+Use 'as(., "CsparseMatrix")' instead.
+See help("Deprecated") and help("Matrix-deprecated").
+   saved: tests_dev/figures/recheck-449c181/P1/simulated/spatialTopicPlot.pdf
+   -> PASS | outgoing; topic rank=2; pathways=P1,P2 (0.6s)
+== P1/simulated/spatialGiPlot
+   saved: tests_dev/figures/recheck-449c181/P1/simulated/spatialGiPlot.pdf
+   -> PASS (1.5s)
+== P1/simulated/spatialLeePlot
+[1] "lw.type = Itself"
+   saved: tests_dev/figures/recheck-449c181/P1/simulated/spatialLeePlot.pdf
+   -> PASS (0.6s)
+Warning messages:
+1: In spdep::knearneigh(df_score[c("x", "y")], k = n, longlat = FALSE,  :
+  k greater than one-third of the number of data points
+2: In spdep::knearneigh(df_score[c("x", "y")], k = n, longlat = FALSE,  :
+  k greater than one-third of the number of data points
+3: In spdep::knearneigh(df_score[c("x", "y")], k = n, longlat = FALSE,  :
+  k greater than one-third of the number of data points
+4: In spdep::knearneigh(df_score[c("x", "y")], k = n, longlat = FALSE,  :
+  k greater than one-third of the number of data points
+5: In sn2listw(df, style = style, zero.policy = zero.policy, from_mat2listw = TRUE) :
+  neighbour object has 20 sub-graphs
+6: In spdep::mat2listw(weight.Mat, style = "B") :
+  neighbour object has 20 sub-graphs
+7: `legend_height` you specified is too small, use the default minimal
+height.
+8: `legend_height` you specified is too small, use the default minimal
+height.
+9: `legend_height` you specified is too small, use the default minimal
+height.
+
+==== summary ====
+  figure                             status
+1 P1/simulated/spatialFeaturePlot    PASS
+2 P1/simulated/spatialVisual_scoring PASS
+3 P1/simulated/spatialTopicPlot      PASS
+4 P1/simulated/spatialGiPlot         PASS
+5 P1/simulated/spatialLeePlot        PASS
+  detail
+1
+2
+3 outgoing; topic rank=2; pathways=P1,P2
+4
+5
+total: 5 | pass: 5 | fail: 0

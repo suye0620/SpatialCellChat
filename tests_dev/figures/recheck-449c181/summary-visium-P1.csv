@@ -1,0 +1,6 @@
+"figure","status","detail"
+"P1/visium/spatialFeaturePlot","PASS",""
+"P1/visium/spatialVisual_scoring","PASS",""
+"P1/visium/spatialTopicPlot","PASS","outgoing; topic rank=2; pathways=COLLAGEN,THBS"
+"P1/visium/spatialGiPlot","PASS",""
+"P1/visium/spatialLeePlot","PASS",""

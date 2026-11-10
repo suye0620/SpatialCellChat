@@ -1,0 +1,15 @@
+[PASS] simulated/plotly_spatialDimPlot_2d.html traces=4 points=20 cells=20 z=0
+[PASS] simulated/plotly_spatialDimPlot_3d.html traces=4 points=20 cells=20 z=20
+[PASS] simulated/plotly_spatialStackPlot.html traces=2 points=60 cells=20 z=60
+[PASS] simulated/plotly_spatialLRpairPlot.html traces=3 points=20 cells=20 z=0
+[PASS] simulated/spatialGiPlot_3d.html traces=3 points=20 cells=0 z=21
+[PASS] visium/plotly_spatialDimPlot_2d.html traces=6 points=905 cells=905 z=0
+[PASS] visium/plotly_spatialDimPlot_3d.html traces=6 points=905 cells=905 z=905
+[PASS] visium/plotly_spatialStackPlot.html traces=2 points=2715 cells=905 z=2715
+[PASS] visium/plotly_spatialLRpairPlot.html traces=3 points=905 cells=905 z=0
+[PASS] visium/spatialGiPlot_3d.html traces=3 points=905 cells=0 z=906
+[PASS] slideseq/plotly_spatialDimPlot_2d.html traces=8 points=29536 cells=29536 z=0
+[PASS] slideseq/plotly_spatialDimPlot_3d.html traces=8 points=29536 cells=29536 z=29536
+[PASS] slideseq/plotly_spatialStackPlot.html traces=2 points=88608 cells=29536 z=88608
+[PASS] slideseq/plotly_spatialLRpairPlot.html traces=3 points=29536 cells=29536 z=0
+[PASS] slideseq/spatialGiPlot_3d.html traces=3 points=29536 cells=0 z=29537

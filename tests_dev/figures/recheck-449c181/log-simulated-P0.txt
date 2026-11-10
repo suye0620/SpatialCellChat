@@ -1,0 +1,50 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== P0/simulated/spatialC2CDistPlot
+
+-- createSpatialCellChat --
+
+i Input: "norm" expression layer, "spatial" mode
+v Object created: 7 genes x 20 cells; 4 groups
+
+-- computeCommunProbPathway --
+
+i Input: 3 LR annotations; 3 candidate pathways
+v computeCommunProbPathway done: 2 group-level and 3 cell-level pathways
+
+-- aggregateNet --
+
+i Input: 4 groups; 3 group-level LR layers; p-value threshold = 0.05
+v aggregateNet done: 4 source x 4 target groups; cell-level network = TRUE
+
+-- netAnalysis_computeCentrality --
+
+i Input: 4 nodes x 3 signaling layers; 5 centrality measures
+v Centrality computed: 3 layers; 1.84s
+
+-- netAnalysis_computeCentrality --
+
+i Input: 4 nodes x 2 signaling layers; 5 centrality measures
+v Centrality computed: 2 layers; 1.34s
+   saved: tests_dev/figures/recheck-449c181/P0/simulated/spatialC2CDistPlot.pdf
+   -> PASS (8.5s)
+== P0/simulated/spatialC2CDistPlot-geometry
+   saved: tests_dev/figures/recheck-449c181/P0/simulated/spatialC2CDistPlot-geometry.pdf
+   -> PASS (0.3s)
+== P0/simulated/spatialDimPlot
+   saved: tests_dev/figures/recheck-449c181/P0/simulated/spatialDimPlot.pdf
+   -> PASS (0.3s)
+
+==== summary ====
+  figure                                   status detail
+1 P0/simulated/spatialC2CDistPlot          PASS
+2 P0/simulated/spatialC2CDistPlot-geometry PASS
+3 P0/simulated/spatialDimPlot              PASS
+total: 3 | pass: 3 | fail: 0

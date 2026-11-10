@@ -21,7 +21,11 @@ source("R/modeling.R")
 source("R/analysis.R")
 source("R/visualization.R")
 Rcpp::sourceCpp("src/SpatialChat_Rcpp.cpp", rebuild = FALSE, showOutput = FALSE)
-out.dir <- "tests_dev/figures/P0/slideseq"
+args <- commandArgs(TRUE)
+output.arg <- grep("^--output-dir=", args, value = TRUE)
+output.root <- if (length(output.arg)) sub("^--output-dir=", "", output.arg[[1L]]) else "tests_dev/figures"
+if (!nzchar(output.root)) stop("--output-dir must not be empty", call. = FALSE)
+out.dir <- file.path(output.root, "P0", "slideseq")
 dir.create(out.dir, recursive = TRUE, showWarnings = FALSE)
 out <- file.path(out.dir, "spatialC2CDistPlot.pdf")
 status <- "PASS"
@@ -30,6 +34,7 @@ detail <- tryCatch({
   if (file.exists(checkpoint)) {
     chat <- readRDS(checkpoint)
     .sc_c2c_inference_cache(chat)
+    inference.source <- "reused verified pre-filter checkpoint"
     cat("Using verified fresh pre-filter checkpoint\n")
   } else {
     obj <- readRDS("tests_dev/test_data/MBM05Chat_pre_inference.rds")
@@ -47,17 +52,18 @@ detail <- tryCatch({
                               scale.distance = 9, nthreads = 4L, verbose = TRUE)
     .sc_c2c_inference_cache(chat)
     saveRDS(chat, checkpoint, compress = FALSE)
+    inference.source <- "new inference from pre-inference object"
     cat("Saved fresh pre-filter checkpoint:", checkpoint, "\n")
   }
   chat <- filterProbability(chat)
   plot <- spatialC2CDistPlot(chat, split.by = "annotation", mode = "communication")
   ggplot2::ggsave(out, plot, width = 7, height = 5.5, dpi = 150)
   if (!file.exists(out) || file.info(out)$size <= 1000L) stop("PDF missing or empty")
-  paste0("fresh inference; cells=", nrow(chat@meta), "; LR layers=",
+  paste0(inference.source, "; cells=", nrow(chat@meta), "; LR layers=",
          dim(chat@net$cell$prob)[3L], "; n=1; interaction.range=250; scale.distance=9")
 }, error = function(e) { status <<- "FAIL"; conditionMessage(e) })
 result <- data.frame(figure = "P0/slideseq/spatialC2CDistPlot", status = status,
                      detail = detail, file = out)
-write.csv(result, "tests_dev/figures/summary-slideseq-P0-spatialC2CDistPlot-fresh.csv", row.names = FALSE)
+write.csv(result, file.path(output.root, "summary-slideseq-P0-spatialC2CDistPlot-fresh.csv"), row.names = FALSE)
 print(result)
 if (status != "PASS") quit(status = 1L)

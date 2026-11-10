@@ -1,0 +1,39 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== visium plotly_spatialDimPlot_2d
+HTML-WRITTEN
+== visium plotly_spatialDimPlot_3d
+HTML-WRITTEN
+== visium plotly_spatialStackPlot
+HTML-WRITTEN
+== visium plotly_spatialLRpairPlot
+HTML-WRITTEN
+== visium spatialGiPlot_3d
+
+-- netAnalysis_computeCentrality --
+
+i Input: 905 nodes x 1 signaling layers; 5 centrality measures
+v Centrality computed: 1 layers; 0.74s
+HTML-WRITTEN
+Warning messages:
+1: In spdep::knn2nb(.) : neighbour object has 2 sub-graphs
+2: In spdep::knn2nb(.) : neighbour object has 2 sub-graphs
+  dataset                   figure cells     feature       status detail
+1  visium plotly_spatialDimPlot_2d   905             HTML-WRITTEN
+2  visium plotly_spatialDimPlot_3d   905             HTML-WRITTEN
+3  visium  plotly_spatialStackPlot   905             HTML-WRITTEN
+4  visium plotly_spatialLRpairPlot   905 MIR1302-2HG HTML-WRITTEN
+5  visium         spatialGiPlot_3d   905             HTML-WRITTEN
+                                                                       file
+1 tests_dev/figures/recheck-449c181/P4/visium/plotly_spatialDimPlot_2d.html
+2 tests_dev/figures/recheck-449c181/P4/visium/plotly_spatialDimPlot_3d.html
+3  tests_dev/figures/recheck-449c181/P4/visium/plotly_spatialStackPlot.html
+4 tests_dev/figures/recheck-449c181/P4/visium/plotly_spatialLRpairPlot.html
+5         tests_dev/figures/recheck-449c181/P4/visium/spatialGiPlot_3d.html

@@ -1,0 +1,19 @@
+production_git_commit: 449c18163c1f32f2063707cd031c707b0d5fe646
+production_R_src_diff: none
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+R: R version 4.4.3 (2025-02-28 ucrt)
+Matrix 1.7.4
+ggplot2 4.0.3
+metR 0.19.0
+plotly 4.12.0
+htmlwidgets 1.6.4
+ComplexHeatmap 2.26.1
+igraph 2.3.2
+sf 1.1.2
+uwot 0.2.4
+NMF 0.28

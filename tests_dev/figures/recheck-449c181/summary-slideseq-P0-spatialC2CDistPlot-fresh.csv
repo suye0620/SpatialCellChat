@@ -1,0 +1,2 @@
+"figure","status","detail","file"
+"P0/slideseq/spatialC2CDistPlot","PASS","reused verified pre-filter checkpoint; cells=29536; LR layers=1563; n=1; interaction.range=250; scale.distance=9","tests_dev/figures/recheck-449c181/P0/slideseq/spatialC2CDistPlot.pdf"

@@ -1,0 +1,6 @@
+"figure","status","detail"
+"P1/simulated/spatialFeaturePlot","PASS",""
+"P1/simulated/spatialVisual_scoring","PASS",""
+"P1/simulated/spatialTopicPlot","PASS","outgoing; topic rank=2; pathways=P1,P2"
+"P1/simulated/spatialGiPlot","PASS",""
+"P1/simulated/spatialLeePlot","PASS",""

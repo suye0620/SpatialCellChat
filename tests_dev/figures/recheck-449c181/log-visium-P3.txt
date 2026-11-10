@@ -1,0 +1,104 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== P3/visium/netVisual_CommunField
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netVisual_CommunField.pdf
+   -> PASS | pathway=COLLAGEN; outgoing field (2.5s)
+== P3/visium/netVisual_CommunFieldZoomIn
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netVisual_CommunFieldZoomIn.pdf
+   -> PASS | pathway=COLLAGEN; outgoing field (0.8s)
+== P3/visium/netVisual_CommunFieldGrid
+
+-- Communication field grid ----------------------------------------------------
+Cellsize source: "nearest-neighbor"; effective=526 and 526; resolution=2
+Calibration: ratio=0.37911718561305; physical cellsize=199.415639632464 and
+199.415639632464
+Grid: "square"/"polygons"; generated=560; occupied=266; empty=294
+v Assignment: 905 assigned; 0 unassigned; 0 multi-grid points
+Arrow sampling: skip=4 interpolated locations between displayed arrows
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netVisual_CommunFieldGrid.pdf
+   -> PASS | pathway=COLLAGEN; outgoing field (1.9s)
+== P3/visium/netVisual_CommunFlow
+
+-- Communication flow grid -----------------------------------------------------
+Cellsize source: "nearest-neighbor"; effective=526 and 526; resolution=2
+Calibration: ratio=0.37911718561305; physical cellsize=199.415639632464 and
+199.415639632464
+Grid: "square"/"polygons"; generated=560; occupied=266; empty=294
+v Assignment: 905 assigned; 0 unassigned; 0 multi-grid points
+Flow rendering: length=2104; min.length=131.5; seeds per axis=12
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netVisual_CommunFlow.pdf
+   -> PASS | pathway=COLLAGEN; outgoing field (1.8s)
+== P3/visium/netAnalysis_river
+Please make sure you have load `library(ggalluvial)` when running this function
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netAnalysis_river.pdf
+   -> PASS | outgoing; NMF rank=2 (4.3s)
+== P3/visium/netAnalysis_dot
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netAnalysis_dot.pdf
+   -> PASS | outgoing; NMF rank=2 (0.4s)
+== P3/visium/netVisual_embedding
+Manifold learning of the signaling networks for a single dataset
+Classification learning of the signaling networks for a single dataset
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netVisual_embedding.pdf
+   -> PASS | functional; pathways=160; kmeans k=2 (3.5s)
+== P3/visium/netVisual_embeddingZoomIn
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netVisual_embeddingZoomIn.pdf
+   -> PASS | functional; pathways=160; kmeans k=2 (1.2s)
+== P3/visium/netVisual_TopicComposition
+
+-- netAnalysis_computeCentrality --
+
+i Input: 905 nodes x 2 signaling layers; 5 centrality measures
+v Centrality computed: 2 layers; 1.71s
+'as(<dgTMatrix>, "dgCMatrix")' is deprecated.
+Use 'as(., "CsparseMatrix")' instead.
+See help("Deprecated") and help("Matrix-deprecated").
+The rownames of the input `y.group` are  Topic_1, Topic_2  which will be used as group names.
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netVisual_TopicComposition.pdf
+   -> PASS | outgoing; topic rank=2; pathways=COLLAGEN,THBS (4.3s)
+== P3/visium/netVisual_TopicSignaling
+`geom_line()`: Each group consists of only one observation.
+i Do you need to adjust the group aesthetic?
+`geom_line()`: Each group consists of only one observation.
+i Do you need to adjust the group aesthetic?
+   saved: tests_dev/figures/recheck-449c181/P3/visium/netVisual_TopicSignaling.pdf
+   -> PASS | outgoing; topic rank=2; pathways=COLLAGEN,THBS (0.7s)
+== P3/visium/plotGeneExpression
+Scale for colour is already present.
+Adding another scale for colour, which will replace the existing scale.
+   saved: tests_dev/figures/recheck-449c181/P3/visium/plotGeneExpression.pdf
+   -> PASS (1.1s)
+There were 11 warnings (use warnings() to see them)
+
+==== summary ====
+   figure                                status
+1  P3/visium/netVisual_CommunField       PASS
+2  P3/visium/netVisual_CommunFieldZoomIn PASS
+3  P3/visium/netVisual_CommunFieldGrid   PASS
+4  P3/visium/netVisual_CommunFlow        PASS
+5  P3/visium/netAnalysis_river           PASS
+6  P3/visium/netAnalysis_dot             PASS
+7  P3/visium/netVisual_embedding         PASS
+8  P3/visium/netVisual_embeddingZoomIn   PASS
+9  P3/visium/netVisual_TopicComposition  PASS
+10 P3/visium/netVisual_TopicSignaling    PASS
+11 P3/visium/plotGeneExpression          PASS
+   detail
+1  pathway=COLLAGEN; outgoing field
+2  pathway=COLLAGEN; outgoing field
+3  pathway=COLLAGEN; outgoing field
+4  pathway=COLLAGEN; outgoing field
+5  outgoing; NMF rank=2
+6  outgoing; NMF rank=2
+7  functional; pathways=160; kmeans k=2
+8  functional; pathways=160; kmeans k=2
+9  outgoing; topic rank=2; pathways=COLLAGEN,THBS
+10 outgoing; topic rank=2; pathways=COLLAGEN,THBS
+11
+total: 11 | pass: 11 | fail: 0

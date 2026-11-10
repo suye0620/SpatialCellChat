@@ -1,0 +1,136 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== P3/slideseq/netVisual_CommunFieldGrid-adjusted
+
+-- Communication field grid ----------------------------------------------------
+Cellsize source: "nearest-neighbor"; effective=13.5070352039224 and
+13.5070352039224; resolution=2
+Calibration: ratio=0.7335; physical cellsize=9.90741032207705 and
+9.90741032207705
+Grid: "square"/"polygons"; generated=122138; occupied=28821; empty=93317
+v Assignment: 29536 assigned; 0 unassigned; 0 multi-grid points
+Arrow sampling: skip=4 interpolated locations between displayed arrows
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_CommunFieldGrid-adjusted.pdf
+   -> VISUAL-REVIEW | pathway=LAMININ; outgoing field; point.size=0.22; image.alpha=0.4; adjusted display requires visual review (116.6s)
+== P3/slideseq/netVisual_CommunFlow-adjusted
+
+-- Communication flow grid -----------------------------------------------------
+Cellsize source: "nearest-neighbor"; effective=13.5070352039224 and
+13.5070352039224; resolution=2
+Calibration: ratio=0.7335; physical cellsize=9.90741032207705 and
+9.90741032207705
+Grid: "square"/"polygons"; generated=122138; occupied=28821; empty=93317
+v Assignment: 29536 assigned; 0 unassigned; 0 multi-grid points
+Flow rendering: length=54.0281408156894; min.length=3.37675880098059; seeds per
+axis=12
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_CommunFlow-adjusted.pdf
+   -> VISUAL-REVIEW | pathway=LAMININ; outgoing field; point.size=0.22; image.alpha=0.4; res=8; adjusted display requires visual review (64.8s)
+== P3/slideseq/netVisual_CommunField
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_CommunField.pdf
+   -> PASS | pathway=LAMININ; outgoing field (1.8s)
+== P3/slideseq/netVisual_CommunFieldZoomIn
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_CommunFieldZoomIn.pdf
+   -> PASS | pathway=LAMININ; outgoing field (2.7s)
+== P3/slideseq/netVisual_CommunFieldGrid
+
+-- Communication field grid ----------------------------------------------------
+Cellsize source: "nearest-neighbor"; effective=13.5070352039224 and
+13.5070352039224; resolution=2
+Calibration: ratio=0.7335; physical cellsize=9.90741032207705 and
+9.90741032207705
+Grid: "square"/"polygons"; generated=122138; occupied=28821; empty=93317
+v Assignment: 29536 assigned; 0 unassigned; 0 multi-grid points
+Arrow sampling: skip=4 interpolated locations between displayed arrows
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_CommunFieldGrid.pdf
+   -> VISUAL-REVIEW | pathway=LAMININ; outgoing field; default background and arrow visibility require review (63.6s)
+== P3/slideseq/netVisual_CommunFlow
+
+-- Communication flow grid -----------------------------------------------------
+Cellsize source: "nearest-neighbor"; effective=13.5070352039224 and
+13.5070352039224; resolution=2
+Calibration: ratio=0.7335; physical cellsize=9.90741032207705 and
+9.90741032207705
+Grid: "square"/"polygons"; generated=122138; occupied=28821; empty=93317
+v Assignment: 29536 assigned; 0 unassigned; 0 multi-grid points
+Flow rendering: length=54.0281408156894; min.length=3.37675880098059; seeds per
+axis=12
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_CommunFlow.pdf
+   -> VISUAL-REVIEW | pathway=LAMININ; outgoing field; default background and flow integration require review (64s)
+== P3/slideseq/netAnalysis_river
+Please make sure you have load `library(ggalluvial)` when running this function
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netAnalysis_river.pdf
+   -> PASS | outgoing; NMF rank=2 (4.4s)
+== P3/slideseq/netAnalysis_dot
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netAnalysis_dot.pdf
+   -> PASS | outgoing; NMF rank=2 (0.4s)
+== P3/slideseq/netVisual_embedding
+Manifold learning of the signaling networks for a single dataset
+Classification learning of the signaling networks for a single dataset
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_embedding.pdf
+   -> PASS | functional; pathways=133; kmeans k=2 (3.8s)
+== P3/slideseq/netVisual_embeddingZoomIn
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_embeddingZoomIn.pdf
+   -> PASS | functional; pathways=133; kmeans k=2 (1.5s)
+== P3/slideseq/netVisual_TopicComposition
+
+-- netAnalysis_computeCentrality --
+
+i Input: 29536 nodes x 2 signaling layers; 5 centrality measures
+v Centrality computed: 2 layers; 6.55s
+'as(<dgTMatrix>, "dgCMatrix")' is deprecated.
+Use 'as(., "CsparseMatrix")' instead.
+See help("Deprecated") and help("Matrix-deprecated").
+The rownames of the input `y.group` are  Topic_1, Topic_2  which will be used as group names.
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_TopicComposition.pdf
+   -> PASS | outgoing; topic rank=2; pathways=LAMININ,COLLAGEN (9.1s)
+== P3/slideseq/netVisual_TopicSignaling
+`geom_line()`: Each group consists of only one observation.
+i Do you need to adjust the group aesthetic?
+`geom_line()`: Each group consists of only one observation.
+i Do you need to adjust the group aesthetic?
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/netVisual_TopicSignaling.pdf
+   -> PASS | outgoing; topic rank=2; pathways=LAMININ,COLLAGEN (0.6s)
+== P3/slideseq/plotGeneExpression
+Scale for colour is already present.
+Adding another scale for colour, which will replace the existing scale.
+   saved: tests_dev/figures/recheck-449c181/P3/slideseq/plotGeneExpression.pdf
+   -> PASS (1.6s)
+There were 14 warnings (use warnings() to see them)
+
+==== summary ====
+   figure                                         status
+1  P3/slideseq/netVisual_CommunFieldGrid-adjusted VISUAL-REVIEW
+2  P3/slideseq/netVisual_CommunFlow-adjusted      VISUAL-REVIEW
+3  P3/slideseq/netVisual_CommunField              PASS
+4  P3/slideseq/netVisual_CommunFieldZoomIn        PASS
+5  P3/slideseq/netVisual_CommunFieldGrid          VISUAL-REVIEW
+6  P3/slideseq/netVisual_CommunFlow               VISUAL-REVIEW
+7  P3/slideseq/netAnalysis_river                  PASS
+8  P3/slideseq/netAnalysis_dot                    PASS
+9  P3/slideseq/netVisual_embedding                PASS
+10 P3/slideseq/netVisual_embeddingZoomIn          PASS
+11 P3/slideseq/netVisual_TopicComposition         PASS
+12 P3/slideseq/netVisual_TopicSignaling           PASS
+13 P3/slideseq/plotGeneExpression                 PASS
+   detail
+1  pathway=LAMININ; outgoing field; point.size=0.22; image.alpha=0.4; adjusted display requires visual review
+2  pathway=LAMININ; outgoing field; point.size=0.22; image.alpha=0.4; res=8; adjusted display requires visual review
+3  pathway=LAMININ; outgoing field
+4  pathway=LAMININ; outgoing field
+5  pathway=LAMININ; outgoing field; default background and arrow visibility require review
+6  pathway=LAMININ; outgoing field; default background and flow integration require review
+7  outgoing; NMF rank=2
+8  outgoing; NMF rank=2
+9  functional; pathways=133; kmeans k=2
+10 functional; pathways=133; kmeans k=2
+11 outgoing; topic rank=2; pathways=LAMININ,COLLAGEN
+12 outgoing; topic rank=2; pathways=LAMININ,COLLAGEN
+13
+total: 13 | pass: 9 | visual review: 4 | errors: 0

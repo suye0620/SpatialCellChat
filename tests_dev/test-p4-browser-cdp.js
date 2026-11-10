@@ -9,7 +9,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { once } = require("events");
 
-const root = path.resolve(__dirname, "figures", "P4");
+const root = path.resolve(process.env.SC_P4_ROOT || path.join(__dirname, "figures", "P4"));
 const port = Number(process.env.SC_P4_HTTP_PORT || 8765);
 const debugPort = Number(process.env.SC_P4_CDP_PORT || 9229);
 const chrome = process.env.CHROME_PATH ||
@@ -216,7 +216,7 @@ async function main() {
       throw new Error("Refusing to remove an unexpected Chrome profile path");
     fs.rmSync(resolvedUserData, { recursive: true, force: true });
   }
-  const out = path.resolve(__dirname, "figures", "P4", "browser-summary-2026-11-10.csv");
+  const out = path.join(root, "browser-summary-2026-11-10.csv");
   const header = Object.keys(results[0]).join(",");
   const csv = [header, ...results.map(row => Object.keys(results[0]).map(key => JSON.stringify(row[key] ?? "")).join(","))].join("\n") + "\n";
   fs.writeFileSync(out, csv);

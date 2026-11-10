@@ -1,0 +1,6 @@
+"dataset","figure","cells","feature","status","detail","file"
+"simulated","plotly_spatialDimPlot_2d",20,"","HTML-WRITTEN","","tests_dev/figures/recheck-449c181/P4/simulated/plotly_spatialDimPlot_2d.html"
+"simulated","plotly_spatialDimPlot_3d",20,"","HTML-WRITTEN","","tests_dev/figures/recheck-449c181/P4/simulated/plotly_spatialDimPlot_3d.html"
+"simulated","plotly_spatialStackPlot",20,"","HTML-WRITTEN","","tests_dev/figures/recheck-449c181/P4/simulated/plotly_spatialStackPlot.html"
+"simulated","plotly_spatialLRpairPlot",20,"G1","HTML-WRITTEN","","tests_dev/figures/recheck-449c181/P4/simulated/plotly_spatialLRpairPlot.html"
+"simulated","spatialGiPlot_3d",20,"","HTML-WRITTEN","","tests_dev/figures/recheck-449c181/P4/simulated/spatialGiPlot_3d.html"

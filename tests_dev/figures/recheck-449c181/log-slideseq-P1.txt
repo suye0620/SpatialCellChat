@@ -1,0 +1,53 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== P1/slideseq/spatialFeaturePlot
+   saved: tests_dev/figures/recheck-449c181/P1/slideseq/spatialFeaturePlot.pdf
+   -> PASS (32.1s)
+== P1/slideseq/spatialVisual_scoring
+
+-- netAnalysis_computeCentrality --
+
+i Input: 29536 nodes x 2 signaling layers; 5 centrality measures
+v Centrality computed: 2 layers; 5.64s
+   saved: tests_dev/figures/recheck-449c181/P1/slideseq/spatialVisual_scoring.pdf
+   -> PASS (11.1s)
+== P1/slideseq/spatialTopicPlot
+'as(<dgTMatrix>, "dgCMatrix")' is deprecated.
+Use 'as(., "CsparseMatrix")' instead.
+See help("Deprecated") and help("Matrix-deprecated").
+   saved: tests_dev/figures/recheck-449c181/P1/slideseq/spatialTopicPlot.pdf
+   -> PASS | outgoing; topic rank=2; pathways=LAMININ,COLLAGEN (2.2s)
+== P1/slideseq/spatialGiPlot
+   saved: tests_dev/figures/recheck-449c181/P1/slideseq/spatialGiPlot.pdf
+   -> PASS (40.8s)
+== P1/slideseq/spatialLeePlot
+[1] "lw.type = Itself"
+   saved: tests_dev/figures/recheck-449c181/P1/slideseq/spatialLeePlot.pdf
+   -> PASS (7s)
+Warning messages:
+1: In sn2listw(df, style = style, zero.policy = zero.policy, from_mat2listw = TRUE) :
+  neighbour object has 29536 sub-graphs
+2: In spdep::mat2listw(weight.Mat, style = "B") :
+  neighbour object has 29536 sub-graphs
+
+==== summary ====
+  figure                            status
+1 P1/slideseq/spatialFeaturePlot    PASS
+2 P1/slideseq/spatialVisual_scoring PASS
+3 P1/slideseq/spatialTopicPlot      PASS
+4 P1/slideseq/spatialGiPlot         PASS
+5 P1/slideseq/spatialLeePlot        PASS
+  detail
+1
+2
+3 outgoing; topic rank=2; pathways=LAMININ,COLLAGEN
+4
+5
+total: 5 | pass: 5 | visual review: 0 | errors: 0

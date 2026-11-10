@@ -1,0 +1,103 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== P3/simulated/netVisual_CommunField
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netVisual_CommunField.pdf
+   -> PASS | pathway=P1; outgoing field (1.3s)
+== P3/simulated/netVisual_CommunFieldZoomIn
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netVisual_CommunFieldZoomIn.pdf
+   -> PASS | pathway=P1; outgoing field (0.6s)
+== P3/simulated/netVisual_CommunFieldGrid
+
+-- Communication field grid ----------------------------------------------------
+Cellsize source: "nearest-neighbor"; effective=20 and 20; resolution=2
+Calibration: ratio=1; physical cellsize=20 and 20
+Grid: "square"/"polygons"; generated=4; occupied=4; empty=0
+v Assignment: 20 assigned; 0 unassigned; 8 multi-grid points
+Arrow sampling: skip=3 interpolated locations between displayed arrows
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netVisual_CommunFieldGrid.pdf
+   -> PASS | pathway=P1; outgoing field (1.5s)
+== P3/simulated/netVisual_CommunFlow
+
+-- Communication flow grid -----------------------------------------------------
+Cellsize source: "nearest-neighbor"; effective=20 and 20; resolution=2
+Calibration: ratio=1; physical cellsize=20 and 20
+Grid: "square"/"polygons"; generated=4; occupied=4; empty=0
+v Assignment: 20 assigned; 0 unassigned; 8 multi-grid points
+Flow rendering: length=80; min.length=5; seeds per axis=3
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netVisual_CommunFlow.pdf
+   -> PASS | pathway=P1; outgoing field (1.6s)
+== P3/simulated/netAnalysis_river
+Please make sure you have load `library(ggalluvial)` when running this function
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netAnalysis_river.pdf
+   -> PASS | outgoing; NMF rank=2 (2.5s)
+== P3/simulated/netAnalysis_dot
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netAnalysis_dot.pdf
+   -> PASS | outgoing; NMF rank=2 (0.3s)
+== P3/simulated/netVisual_embedding
+Manifold learning of the signaling networks for a single dataset
+Classification learning of the signaling networks for a single dataset
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netVisual_embedding.pdf
+   -> PASS | functional; pathways=2; kmeans k=1 (2.1s)
+== P3/simulated/netVisual_embeddingZoomIn
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netVisual_embeddingZoomIn.pdf
+   -> PASS | functional; pathways=2; kmeans k=1 (0.3s)
+== P3/simulated/netVisual_TopicComposition
+
+-- netAnalysis_computeCentrality --
+
+i Input: 20 nodes x 2 signaling layers; 5 centrality measures
+v Centrality computed: 2 layers; 1.66s
+'as(<dgTMatrix>, "dgCMatrix")' is deprecated.
+Use 'as(., "CsparseMatrix")' instead.
+See help("Deprecated") and help("Matrix-deprecated").
+The rownames of the input `y.group` are  Topic_1, Topic_2  which will be used as group names.
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netVisual_TopicComposition.pdf
+   -> PASS | outgoing; topic rank=2; pathways=P1,P2 (4.2s)
+== P3/simulated/netVisual_TopicSignaling
+`geom_line()`: Each group consists of only one observation.
+i Do you need to adjust the group aesthetic?
+`geom_line()`: Each group consists of only one observation.
+i Do you need to adjust the group aesthetic?
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/netVisual_TopicSignaling.pdf
+   -> PASS | outgoing; topic rank=2; pathways=P1,P2 (0.6s)
+== P3/simulated/plotGeneExpression
+Warning: Scaling data with a low number of groups may produce misleading results
+Scale for colour is already present.
+Adding another scale for colour, which will replace the existing scale.
+   saved: tests_dev/figures/recheck-449c181/P3/simulated/plotGeneExpression.pdf
+   -> PASS (0.5s)
+There were 11 warnings (use warnings() to see them)
+
+==== summary ====
+   figure                                   status
+1  P3/simulated/netVisual_CommunField       PASS
+2  P3/simulated/netVisual_CommunFieldZoomIn PASS
+3  P3/simulated/netVisual_CommunFieldGrid   PASS
+4  P3/simulated/netVisual_CommunFlow        PASS
+5  P3/simulated/netAnalysis_river           PASS
+6  P3/simulated/netAnalysis_dot             PASS
+7  P3/simulated/netVisual_embedding         PASS
+8  P3/simulated/netVisual_embeddingZoomIn   PASS
+9  P3/simulated/netVisual_TopicComposition  PASS
+10 P3/simulated/netVisual_TopicSignaling    PASS
+11 P3/simulated/plotGeneExpression          PASS
+   detail
+1  pathway=P1; outgoing field
+2  pathway=P1; outgoing field
+3  pathway=P1; outgoing field
+4  pathway=P1; outgoing field
+5  outgoing; NMF rank=2
+6  outgoing; NMF rank=2
+7  functional; pathways=2; kmeans k=1
+8  functional; pathways=2; kmeans k=1
+9  outgoing; topic rank=2; pathways=P1,P2
+10 outgoing; topic rank=2; pathways=P1,P2
+11
+total: 11 | pass: 11 | fail: 0

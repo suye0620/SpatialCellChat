@@ -1,0 +1,21 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+Using verified fresh pre-filter checkpoint
+
+-- filterProbability --
+
+i Input: 29536 cells; 1563 LR pairs; 100 sampled cells per LR; quantile = 0.95
+v filterProbability done: 1563 LR layers retained at quantile 0.95
+                          figure status
+1 P0/slideseq/spatialC2CDistPlot   PASS
+                                                                                                            detail
+1 reused verified pre-filter checkpoint; cells=29536; LR layers=1563; n=1; interaction.range=250; scale.distance=9
+                                                                  file
+1 tests_dev/figures/recheck-449c181/P0/slideseq/spatialC2CDistPlot.pdf

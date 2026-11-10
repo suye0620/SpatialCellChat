@@ -1,0 +1,6 @@
+"figure","status","detail"
+"P1/slideseq/spatialFeaturePlot","PASS",""
+"P1/slideseq/spatialVisual_scoring","PASS",""
+"P1/slideseq/spatialTopicPlot","PASS","outgoing; topic rank=2; pathways=LAMININ,COLLAGEN"
+"P1/slideseq/spatialGiPlot","PASS",""
+"P1/slideseq/spatialLeePlot","PASS",""

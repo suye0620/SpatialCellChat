@@ -1,0 +1,17 @@
+- The project is out-of-sync -- use `renv::status()` for details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed
+2: Setting LC_CTYPE=C.UTF-8 failed
+3: Setting LC_MONETARY=C.UTF-8 failed
+4: Setting LC_TIME=C.UTF-8 failed
+Warning message:
+In normalizePath(path.expand(path), winslash, mustWork) :
+  path[1]="D:/AIProjects/SpatialCellChat/src/../inst/include": 系统找不到指定的文件。
+== P0/slideseq/spatialC2CDistPlot-geometry
+   saved: tests_dev/figures/recheck-449c181/P0/slideseq/spatialC2CDistPlot-geometry.pdf
+   -> PASS (43.4s)
+
+==== summary ====
+  figure                                  status detail
+1 P0/slideseq/spatialC2CDistPlot-geometry PASS
+total: 1 | pass: 1 | visual review: 0 | errors: 0

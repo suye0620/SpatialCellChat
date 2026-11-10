@@ -76,6 +76,88 @@ def main():
                 for path in paths:
                     add(path, rel(summary), status, 'pdf')
 
+    # Final-code recheck: keep this batch separate from the historical figures.
+    # PASS means an invocation wrote its PDF, not visual or scientific approval.
+    recheck = FIGURES / 'recheck-449c181'
+    expected = {
+        'summary-simulated-P0-fresh.csv': 3,
+        'summary-visium-P0-fresh.csv': 3,
+        'summary-slideseq-P0-spatialC2CDistPlot-fresh.csv': 1,
+        'summary-slideseq-P0-spatialC2CDistPlot-geometry.csv': 1,
+        'summary-slideseq-P0-spatialDimPlot.csv': 1,
+    }
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        expected[f'summary-{dataset}-P1.csv'] = 5
+        expected[f'summary-{dataset}-P2.csv'] = 20
+        expected[f'summary-{dataset}-P3.csv'] = 13 if dataset == 'slideseq' else 11
+    for filename, expected_count in expected.items():
+        summary = recheck / filename
+        if not summary.is_file():
+            errors.append(f'missing recheck summary: {rel(summary)}')
+            continue
+        result_rows = rows(summary)
+        if len(result_rows) != expected_count:
+            errors.append(f'{rel(summary)}: expected {expected_count} entries, got {len(result_rows)}')
+        for row in result_rows:
+            status = row.get('status', '')
+            if status not in ('PASS', 'VISUAL-REVIEW'):
+                errors.append(f'{rel(summary)}: {row.get("figure")} has status {status}')
+                continue
+            if row.get('file'):
+                paths = [ROOT / row['file']]
+            else:
+                base = recheck / row['figure']
+                paths = sorted(base.parent.glob(base.name + '*.pdf')) if 'netVisual-export-' in base.name else [base.with_suffix('.pdf')]
+                if 'netVisual-export-' in base.name and len(paths) != 2:
+                    errors.append(f'{rel(summary)}: expected two exports for {row["figure"]}, got {len(paths)}')
+            for path in paths:
+                add(path, rel(summary), status, 'pdf')
+
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        summary = recheck / 'P4' / dataset / 'summary.csv'
+        if not summary.is_file():
+            errors.append(f'missing P4 recheck summary: {rel(summary)}')
+            continue
+        result_rows = rows(summary)
+        if len(result_rows) != 5:
+            errors.append(f'{rel(summary)}: expected 5 entries, got {len(result_rows)}')
+        for row in result_rows:
+            if row.get('status') != 'HTML-WRITTEN':
+                errors.append(f'{rel(summary)}: {row.get("figure")} has status {row.get("status")}')
+                continue
+            path = ROOT / row['file']
+            add(path, rel(summary), 'HTML-WRITTEN', 'html')
+            if not path.is_file():
+                continue
+            html = AssetParser()
+            html.feed(path.read_text(encoding='utf-8'))
+            for url in html.assets:
+                parsed = urlsplit(url)
+                if parsed.scheme or parsed.netloc or url.startswith('#'):
+                    continue
+                asset = path.parent / unquote(parsed.path)
+                add(asset, rel(path), 'LOCAL-ASSET', 'asset')
+                if asset.name in ('plotly-latest.min.js', 'typedarray.min.js'):
+                    add(asset.parent / 'LICENSE', rel(asset), 'LICENSE', 'license')
+
+    browser = recheck / 'P4' / 'browser-summary-2026-11-10.csv'
+    if not browser.is_file():
+        errors.append(f'missing P4 browser summary: {rel(browser)}')
+    else:
+        browser_rows = rows(browser)
+        expected_pages = {(dataset, name + '.html')
+                          for dataset in ('simulated', 'visium', 'slideseq')
+                          for name in ('plotly_spatialDimPlot_2d', 'plotly_spatialDimPlot_3d',
+                                       'plotly_spatialStackPlot', 'plotly_spatialLRpairPlot', 'spatialGiPlot_3d')}
+        actual_pages = {(row['dataset'], row['file']) for row in browser_rows}
+        if len(browser_rows) != 15 or actual_pages != expected_pages:
+            errors.append(f'{rel(browser)}: browser case coverage is incomplete or duplicated')
+        for row in browser_rows:
+            if row.get('status') != 'PASS':
+                errors.append(f'{rel(browser)}: browser failure for {row.get("dataset")}/{row.get("file")}')
+            if row.get('screenshotPath'):
+                add(recheck / 'P4' / row['screenshotPath'], rel(browser), 'BROWSER-SMOKE', 'image')
+
     for summary in sorted(FIGURES.glob('summary-all-P2-*.csv')):
         for row in rows(summary):
             if row.get('status') == 'PASS':
