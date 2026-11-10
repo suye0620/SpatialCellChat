@@ -1,0 +1,3 @@
+"case","warning"
+"simulated default construction","st_centroid assumes attributes are constant over geometries"
+"simulated res8 construction","st_centroid assumes attributes are constant over geometries"

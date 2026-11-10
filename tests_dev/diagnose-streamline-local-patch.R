@@ -47,6 +47,9 @@ for (case in c('exact', 'near', 'opposite_diagonal')) {
   components <- matrix(rep(c(value,1),each=length(cells)),ncol=2,dimnames=list(cells,c('x','y')))
   chat@netP$cell$field$outgoing <- SparseChatArray(list(signal=as(components,'dgCMatrix')),dimnames=list(cells,c('x','y'),'signal'))
   baseline <- capture.warnings(paste0(case,'-construction'), netVisual_CommunFlow(chat,signaling='signal',pattern='outgoing',cellsize=1,grid.resolution=1,L=2,min.L=0,res=8,start=data.frame(x=2,y=-2),jitter=0))
+  # Compare with the original dependency, independently of the production guard.
+  baseline$layers[[2L]] <- ggplot2::ggproto(NULL, baseline$layers[[2L]])
+  baseline$layers[[2L]]$stat <- metR::StatStreamline
   fixed <- baseline
   fixed$layers[[2L]] <- ggplot2::ggproto(NULL, baseline$layers[[2L]])
   fixed$layers[[2L]]$stat <- patched.stat

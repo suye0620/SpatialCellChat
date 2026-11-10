@@ -1,0 +1,3 @@
+"dataset","signal","cells","res","interpolated_points","nonzero_points","cancelling_grid_points","original_rows","adapted_rows","identical_drawn_layer"
+"slideseq","LAMININ",29536,0.5,2401,540,0,228,228,TRUE
+"slideseq","LAMININ",29536,8,2401,540,0,464,464,TRUE

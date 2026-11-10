@@ -32,3 +32,7 @@ causes, retained scientific semantics, and reproducibility limitations.
 ## Merged comparison figure follow-up
 
 Ten comparison consumers now have actual PDFs under `merged/producer-comparison/`, generated from the real merge producer using a simulated fixture and an intentionally modified copy. The separate `merged/heatmap-edgecases/` cases check signed cancellation and isolate handling. These are rendering and contract checks, not biological comparisons or manual visual acceptance.
+
+## Streamline compatibility follow-up, 2026-11-11
+
+The default Flow layer now has a guarded correction for the metR 0.19.0 nonzero-diagonal filtering defect. The synthetic and producer-field comparisons, their limits, and the remaining zero-field warning and Slide-seq display issues are recorded in P3-020. The six three-object/resolution comparisons and their original/adapted PDFs are in `P3/streamline-production-comparison-2026-11-11/`. These are not visual or biological acceptance.

@@ -1,0 +1,7 @@
+"case","warning"
+"slideseq default construction","st_centroid assumes attributes are constant over geometries"
+"slideseq default original-build","Performing only 1 integration step, please consider increasing the resolution."
+"slideseq default adapted-build","Performing only 1 integration step, please consider increasing the resolution."
+"slideseq default original pdf","Performing only 1 integration step, please consider increasing the resolution."
+"slideseq default adapted pdf","Performing only 1 integration step, please consider increasing the resolution."
+"slideseq res8 construction","st_centroid assumes attributes are constant over geometries"

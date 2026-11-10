@@ -6195,6 +6195,94 @@ netVisual_CommunFieldGrid <- function(
 }
 
 
+# Verify metR's zero-vector handling without changing the caller's random state.
+.sc_streamline_probe <- function(stat, dy) {
+  had.seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  if (had.seed) saved.seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  on.exit({
+    if (had.seed) {
+      assign(".Random.seed", saved.seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
+  }, add = TRUE)
+  input <- expand.grid(x = 0:4, y = 0:4)
+  input$dx <- 1
+  input$dy <- dy
+  warnings <- character()
+  result <- tryCatch(withCallingHandlers({
+    plot <- ggplot2::ggplot(input, ggplot2::aes(x = x, y = y, dx = dx, dy = dy)) +
+      metR::geom_streamline(stat = stat, L = 2, min.L = 0, res = 8,
+                            dt = 0.05, S = 12, start = data.frame(x = 2, y = 2), jitter = 0)
+    ggplot2::ggplot_build(plot)$data[[1L]]
+  }, warning = function(w) {
+    warnings <<- c(warnings, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  }), error = function(e) e)
+  if (inherits(result, "error") || length(warnings)) {
+    detail <- if (inherits(result, "error")) conditionMessage(result) else paste(warnings, collapse = "; ")
+    stop("Could not verify metR streamline integration: ", detail, call. = FALSE)
+  }
+  result
+}
+
+# Clone only the vetted affected integrator; do not modify metR's namespace.
+.sc_resolve_streamline_stat <- function(base.stat, version, namespace, probe = .sc_streamline_probe) {
+  exact <- probe(base.stat, -1)
+  near <- probe(base.stat, -0.999)
+  if (!nrow(near)) stop("Could not verify metR streamline integration on the control field.", call. = FALSE)
+  if (nrow(exact) > 0L) return(base.stat)
+  if (version != package_version("0.19.0")) {
+    stop("This metR version drops nonzero diagonal streamlines and has not been verified for the local compatibility correction. Install a corrected metR version or use metR 0.19.0.", call. = FALSE)
+  }
+  corrected <- tryCatch({
+    original.memoised <- get("streamline.f", envir = namespace, inherits = FALSE)
+    original.integrator <- get("_f", envir = environment(original.memoised), inherits = FALSE)
+    compute.group <- get("f", envir = environment(base.stat$compute_group), inherits = FALSE)
+    if (!is.function(original.integrator) || !is.function(compute.group)) stop("unexpected metR function structure")
+    count <- 0L
+    rewrite <- function(x) {
+      if (identical(x, quote(dx + dy != 0))) {
+        count <<- count + 1L
+        return(quote(abs(dx) + abs(dy) != 0))
+      }
+      if (is.call(x)) return(as.call(lapply(as.list(x), rewrite)))
+      x
+    }
+    patched.body <- rewrite(body(original.integrator))
+    if (count != 2L) stop("expected exactly two zero-vector predicates")
+    patched.integrator <- eval(call("function", formals(original.integrator), patched.body), envir = environment(original.integrator))
+    stat.env <- new.env(parent = environment(compute.group))
+    stat.env$streamline.f <- memoise::memoise(patched.integrator)
+    patched.group <- eval(call("function", formals(compute.group), body(compute.group)), envir = stat.env)
+    ggplot2::ggproto(NULL, base.stat, compute_group = patched.group)
+  }, error = function(e) {
+    stop("The installed metR streamline implementation cannot be safely corrected: ", conditionMessage(e), call. = FALSE)
+  })
+  corrected.exact <- probe(corrected, -1)
+  corrected.near <- probe(corrected, -0.999)
+  if (!nrow(corrected.exact) || !isTRUE(all.equal(near, corrected.near, tolerance = 0, check.attributes = TRUE))) {
+    stop("The local metR streamline correction did not pass its compatibility checks.", call. = FALSE)
+  }
+  corrected
+}
+
+.sc_streamline_compat_stat <- local({
+  cached <- NULL
+  function() {
+    if (is.null(cached)) {
+      cached <<- .sc_resolve_streamline_stat(metR::StatStreamline,
+        utils::packageVersion("metR"), asNamespace("metR"))
+    }
+    cached
+  }
+})
+
+.sc_guard_streamline_layer <- function(layer) {
+  if (identical(layer$stat, metR::StatStreamline)) layer$stat <- .sc_streamline_compat_stat()
+  layer
+}
+
 #' @title netVisual_CommunFlow
 #' @description
 #' Aggregate and plot communication streamlines on a spatial grid.
@@ -6209,6 +6297,13 @@ netVisual_CommunFieldGrid <- function(
 #' `grid.resolution` is a positive finite multiplier. When
 #' `images$spatial.factors$ratio` is unavailable, coordinates remain in raw
 #' units and no physical scale is reported.
+#'
+#' For the default streamline layer, the installed metR implementation is
+#' checked for a zero-vector filtering defect. The affected metR 0.19.0
+#' implementation receives a locally guarded correction; an affected,
+#' unverified implementation produces an error. The stored field and the
+#' metR namespace are not modified. Zero fields may still produce a warning
+#' from metR. An explicitly supplied custom stat is not replaced.
 #'
 #' @param object SpatialCellChat object
 #' @param signaling a signaling pathway or ligand-receptor pair to visualize
@@ -6497,7 +6592,7 @@ netVisual_CommunFlow <- function(
     geom_point(data = df.field,mapping = aes(x=x_cent,y=-y_cent,color=labels),size=point.size,alpha=image.alpha)+
     scale_color_manual(values = color.use)+
     # ggnewscale::new_scale_color()+
-    metR::geom_streamline(
+    .sc_guard_streamline_layer(metR::geom_streamline(
       mapping = aes(
         x = lon,
         y = -lat,
@@ -6522,7 +6617,7 @@ netVisual_CommunFlow <- function(
       res = res,
       n = n,
       jitter = jitter
-    ) +
+    )) +
     scale_linewidth_continuous(range = arrow.line.width, guide = "none") +
 
     # geom_sf(data =current.gridded.na,mapping = aes(geometry=square_grid),color="white",fill="white",linewidth=0)+

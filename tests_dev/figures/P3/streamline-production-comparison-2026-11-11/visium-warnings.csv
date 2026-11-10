@@ -1,0 +1,3 @@
+"case","warning"
+"visium default construction","st_centroid assumes attributes are constant over geometries"
+"visium res8 construction","st_centroid assumes attributes are constant over geometries"

@@ -26,6 +26,9 @@ for (value in c(1, .999)) {
   case <- if (value == 1) 'exact-cancellation' else 'near-cancellation'
   plot <- capture.warnings(paste0(case, '-construction'), netVisual_CommunFlow(chat, signaling='signal', pattern='outgoing', cellsize=1,
     grid.resolution=1, L=2, min.L=0, res=8, start=data.frame(x=2,y=-2), jitter=0))
+  # Keep the historical baseline explicit after the production adapter is enabled.
+  plot$layers[[2L]] <- ggplot2::ggproto(NULL, plot$layers[[2L]])
+  plot$layers[[2L]]$stat <- metR::StatStreamline
   uv <- plot$layers[[2]]$data
   lines <- capture.warnings(paste0(case, '-build'), ggplot2::ggplot_build(plot)$data[[2]])
   file <- file.path(out.dir, paste0(case, '.pdf'))

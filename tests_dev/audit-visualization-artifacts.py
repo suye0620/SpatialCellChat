@@ -115,6 +115,18 @@ def main():
         for row in rows(summary):
             add(ROOT / row['file'], rel(summary), 'DIAGNOSTIC', 'pdf')
 
+    # Producer-derived flow comparisons use the same field for both stats.
+    production = FIGURES / 'P3' / 'streamline-production-comparison-2026-11-11'
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        summary = production / f'{dataset}-summary.csv'
+        if not summary.is_file():
+            errors.append(f'missing production comparison summary: {rel(summary)}')
+            continue
+        for row in rows(summary):
+            tag = 'default' if float(row['res']) == 0.5 else 'res8'
+            for kind in ('original', 'adapted'):
+                add(production / f'{dataset}-{tag}-{kind}.pdf', rel(summary), 'DIAGNOSTIC', 'pdf')
+
     # Browser screenshots and explicitly documented visual-review previews are
     # included as supporting evidence, separate from PASS or visual acceptance.
     for phase in ('P0', 'P2', 'P3', 'P4'):
