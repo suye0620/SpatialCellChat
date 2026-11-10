@@ -185,3 +185,11 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 实验：`tests_dev/diagnose-chord-label-spacing.R` 在测试进程中复制绘图函数，只替换标签绘制调用，保留同一网络、扇区、连边和参数，比较原版与 `circlize::circos.labels()` 自动避让；结果在 `tests_dev/figures/P2/visium/chord-label-experiment-2026-11-11/`。两张 20×20 英寸 PDF 均可生成，但自动避让的标签被放在 chord 连线区域内，字体很小且与连线混杂，仍不可作为可读结果。PDF 的 PNG 预览转换还报告本机缺少 ArialUnicode 字体。
 
 处理方向：需要研究可控的外部标签布局或保留全部关系的分图策略，并验证标签与扇区、细胞群、颜色和连接关系一一对应；不能简单隐藏标签、删除 LR 或把实验结果标记为视觉通过。本次未修改生产 chord 布局，图像仍待用户人工验收。
+
+## P2-025：高密度 chord 圆外标签原型及剩余限制
+
+位置：`netVisual_chord_gene()` 的扇区标签绘制；隔离实验脚本为 `tests_dev/diagnose-chord-external-prototype.R`，未改动生产函数。针对 P2-024，以扇区中角和网格外缘为引线起点，将左右半圆的标签按纵坐标排序后分别排在圆外两列。原图和实验图均为 24×16 英寸，`lab.cex=0.7`、`small.gap=0.25`、不显示图例；数据为 Visium 的完整 COLLAGEN pathway。
+
+证据：两次传给 `chordDiagram()` 的输入边表、权重、扇区顺序、颜色及其他参数完全相同，均有 2,344 条输入边和 111 个扇区；111 个扇区与 source/target 群映射逐项唯一，左右分别 58 和 53 个标签。实验仅对本设备和字号检查了相邻标签的测量高度与水平边界，均满足间距约束。改变 `canvas.xlim` 后，circlize 对原有 `strwidth` 的求值得到不同预留轨道高度（约 0.191 与 0.265），所以不能声称绘图几何逐项相同。输入快照、映射、坐标、汇总及两张 PDF 在 `tests_dev/figures/P2/visium/chord-external-prototype-2026-11-11/`。PNG 转换提示本机缺少 ArialUnicode 字体，PDF 是主要产物。
+
+剩余问题：这是一个可供比较的原型，不是生产修复或视觉验收。图需要较大画布，密集引线和中间的 2,344 条连线仍不易追踪；文本和图例可能在其他设备、字号或数据集上溢出，尚未覆盖其他对象、`show.legend=TRUE`、自定义参数和不同的扇区数，也未量化引线交叉。圆外画布及标签布局应根据设备尺寸和标签长度设计可验证的边界行为，并检查不同图形设备及既有 `...` 参数的兼容性。完成这些验证前不改变公开 API 或默认输出。
