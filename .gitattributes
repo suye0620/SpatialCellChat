@@ -1,1 +1,4 @@
 *.html -linguist-detectable
+*.pdf binary
+tests_dev/figures/**/*.html binary
+tests_dev/figures/**/*_files/** binary
