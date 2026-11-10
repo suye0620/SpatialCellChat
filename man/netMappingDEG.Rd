@@ -2,20 +2,25 @@
 % Please edit documentation in R/analysis.R
 \name{netMappingDEG}
 \alias{netMappingDEG}
-\title{Mapping the differential expressed genes (DEG) information onto the inferred cell-cell communications}
+\title{Map differential expression results onto inferred communications}
 \usage{
 netMappingDEG(object, features.name, thresh = 0.05)
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{A single or merged SpatialCellChat object.}
 
-\item{features.name}{a char name used for extracting the DEG table in `object@misc$.var.features[[paste0(features.name, ".info")]]`}
+\item{features.name}{Name of the marker result. Single objects read
+\code{misc$.var.features[[paste0(features.name, ".info")]]}; merged objects
+use a table with a \code{datasets} column or the matching dataset snapshot.}
 
-\item{thresh}{threshold of the p-value for determining significant interaction}
+\item{thresh}{P-value threshold passed to \code{subsetCommunication()}.}
 }
 \value{
-a data frame of the inferred cell-cell communications, consisting of source, target, interaction_name, pathway_name, prob and other CellChatDB information as well as DEG information
+A data frame of inferred communications annotated with ligand and receptor DEG
+columns. Merged results include a \code{datasets} column.
 }
 \description{
-This function returns a data frame consisting of all the inferred cell-cell communications with mapped DEG information
+Single objects use their own marker table. Merged objects use a dataset-tagged
+merged marker table when available, or the corresponding source snapshot's
+marker table. Unstratified merged marker tables are not reused across datasets.
 }

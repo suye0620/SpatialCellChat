@@ -2,6 +2,9 @@ PASS: netP explicit pathway selection returns pathway rows
 PASS: merged netP explicit pathway selection returns one table per snapshot
 PASS: selectK reads sparse group layers and honors a small rank range
 PASS: netMappingDEG reads misc var.features and maps DEG columns
+PASS: merged DEG mapping uses the matching dataset snapshot
+PASS: merged tagged DEG table is filtered by dataset
+PASS: merged DEG mapping rejects missing dataset-aligned evidence
 PASS: single-feature and multi-feature bar expression plots render
 PASS: aggregate and individual spatial network layouts render
 PASS: signaling-role network, scatter, and heatmap consumers render

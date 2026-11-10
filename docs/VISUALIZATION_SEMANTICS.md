@@ -2,12 +2,12 @@
 
 ## 阅读边界与证据级别
 
-本页是迁移前的科学语义审阅材料，不是已完成迁移、已修复缺陷或已验证可运行的 API 手册。决策边界见 [下游通讯分析与可视化语义契约（proposed）](../.agents/notes/proposed/2026-10-20-downstream-communication-semantics-contract.md)；父迁移审计仍为 proposed。分析量的定义、NMF/topic 分解、中心性、相似性和生产者前置条件见 [分析语义卡](ANALYSIS_SEMANTICS.md)，本页只补充图形消费时发生的选择、变换和解释。
+本页起源于迁移前的科学语义审阅材料，仍保留未决的科学解释和兼容边界；它不再代表所有入口都未迁移。2026-11-10 的 P0-P5 回归已覆盖主要空间图、网络图、场/分解图、交互图和表达图，具体以 `tests_dev/test-*.R` 与 `tests_dev/figures/summary-*.txt` 为准。决策边界见 [下游通讯分析与可视化语义契约（proposed）](../.agents/notes/proposed/2026-10-20-downstream-communication-semantics-contract.md)；分析量的定义、NMF/topic 分解、中心性、相似性和生产者前置条件见 [分析语义卡](ANALYSIS_SEMANTICS.md)，本页只补充图形消费时发生的选择、变换和解释。
 
 - **源码事实**：具名函数和行范围支持的实际读取、计算、绘图调用和返回分支。记录旧字段不表示最终 11-slot 对象已经支持该入口。
 - **[INFERENCE]**：静态推导的科学解释、故障风险或预期差异，不是运行结果。
 - **建议/未决**：第 9 节 V-* 问题需维护者裁定；当前缺陷不是必须保留的兼容性基线。本页不批准修改默认值、统计方法、签名或缓存布局。
-- 每卡固定八项。**第八项都是尚未执行的入口级验收设计**，不是测试结果。本页作者没有运行 R、build、tests、lint、formatter 或浏览器检查。
+- 每卡固定八项。第八项保留原始判别场景；已由 P0-P5 回归覆盖的入口不再以本页文字替代测试结果，未覆盖的场景仍是验收设计。本页不替代 R/build/浏览器的可执行证据。
 - 主代理本次完成的孤立数值/helper/公式探针集中在 [分析文档第 8 节](ANALYSIS_SEMANTICS.md#8-本次运行证据与未验证范围)。它们支持局部机制审阅，不构成任何图形入口、整条分析链或浏览器交互的通过证据；既有审计中的历史运行结果也不计为本次验收。
 - **2026-10-21 PP1 调用方增补**：[PP1 下游重构与测试方案](PP1_DOWNSTREAM_REFACTORING_PLAN.md) 明确 Gi metadata→热点类别→Lee、group/cell 层选择、niche/Seurat、场图与文件导出的实际调用契约；补充最终 matrix 坐标下 Gi wrapper 的已观察失败，以及评分图/角色热图的实际观察。本页既有判别反例仍是待验收设计。
 
@@ -76,7 +76,7 @@
 
 ### 2.1 `netVisual_aggregate`
 
-依据：[完整入口](../R/visualization.R#L1440-L1545)、[pathway 生产者](../R/modeling.R#L1680-L1767)。
+依据：[完整入口](../R/visualization.R#L1483-L1605)、[pathway 生产者](../R/modeling.R#L1680-L1767)。
 
 1. **科学问题**：一个 pathway 所属、当前绘图筛选后的 LR 在群间汇总成什么有向网络；不是从 pathway 缓存机械取一层。
 2. **输入单位与轴**：`LR$LRsig` 按 pathway 查找 LR，与旧 `net$prob` 第三轴取交集；矩阵行 sender 群、列 receiver 群。没有 cell 分辨率参数。
@@ -84,12 +84,12 @@
 4. **视觉编码**：circle/hierarchy 用有向边宽；chord 用带宽；spatial 用群中位数位置间弧线。节点默认等大；`vertex.weight=NULL` 使用群细胞数；spatial 的 incoming/outgoing 字符选项另取 `netP$centr`，不保证与本次 LR 门控同一时点。
 5. **信息损失**：求和隐藏 LR 组成、相反变化与各 LR 证据差异；group 早已丢失单细胞路由。图上群间大边可能由一个 LR 或多个较弱 LR 贡献。
 6. **统计边界**：阈值只过滤既有 LR p 值；求和不产生 pathway p 值、因果效应或独立重复。`p==thresh` 在本入口保留，与 pathway producer 和 bubble 可能不同（V-002）。
-7. **前置计算及返回**：需群 LR 网络、p 值和注释；spatial 需坐标/idents，centrality 权重选项另需相应缓存。hierarchy/circle/chord 返回 recordedplot；spatial 返回 ggplot。当前旧字段及 vector `vertex.weight` 条件判断需迁移审阅（V-001、V-006）。
+7. **前置计算及返回**：需群 LR 网络、p 值和注释；spatial 需坐标/idents，centrality 权重选项另需相应缓存。hierarchy/circle/chord 返回 recordedplot；spatial 返回 ggplot。当前实现已从 group 稀疏 LR 层读取并保留实时 LR 门控语义；`vertex.weight` 与可选 renderer 的视觉边界仍按 V-001、V-006 审阅。
 8. **判别反例（未执行）**：两条 LR 的 p 分别恰等于阈值、严格小于阈值，比较实时 LR 求和与先前 `netP` 缓存；再保持汇总矩阵不变交换 LR 贡献，aggregate 图应相同而 individual 图不同。
 
 ### 2.2 `netVisual_individual`
 
-依据：[完整入口](../R/visualization.R#L1604-L1738)。
+依据：[完整入口](../R/visualization.R#L1616-L1782)。
 
 1. **科学问题**：同一 pathway 中各个 LR 的群间网络有何差异；**individual 指 LR 对，不指单个细胞**。
 2. **输入单位与轴**：与 aggregate 相同的旧 group LR 张量，可再由 `pairLR.use` 取子集；每面板是一层 LR，节点仍是群。
@@ -97,7 +97,7 @@
 4. **视觉编码**：标题为 LR 展示名，边/带宽为该 LR 群间权重；四种布局差异见 2.3。circle/chord/空间面板列表与 hierarchy 的双 receiver 分区不是同一种组合图对象。
 5. **信息损失**：仍无细胞间路由，p 值仅作门控而不直接编码；弱 LR 可因共享宽度范围显得不明显，但这不等于不显著。
 6. **统计边界**：无 LR 间差异检验；逐图比较边宽需保持共同上限与同样筛选。独立调用各自自动取最大值时，最粗边不能直接比较。
-7. **前置计算及返回**：需同 aggregate；hierarchy 返回一个 recordedplot，circle/chord 返回 recordedplot 的 list；spatial 分支尝试返回 ggplot 的 list，但引用本函数未定义的 `labels`、`idents.use`，不能承诺实际运行成功（V-006）。roxygen 的单一 recordedplot 返回描述不覆盖全部分支。
+7. **前置计算及返回**：需同 aggregate；hierarchy 返回一个 recordedplot，circle/chord 返回 recordedplot 的 list；spatial 分支返回 ggplot 的 list。P5 回归已覆盖 simulated spatial individual；多 LR 面板画布尺寸和跨数据集视觉比较仍需按 V-006 的边界单独验收。
 8. **判别反例（未执行）**：两个 LR 使用不同 sender→receiver 路由却有相同总权重，逐 LR 图应区分；扩大每群的细胞数但保持群网络固定，不应把新增细胞画成 individual 网络节点。空间分支须单独运行并检查坐标与标注。
 
 ### 2.3 Renderer：`netVisual_circle` / `netVisual_hierarchy1/2` / `netVisual_chord_cell_internal` / `netVisual_spatial`
@@ -228,12 +228,12 @@
 依据：[基础场图](../R/visualization.R#L5477-L5740)、[ZoomIn 委托](../R/visualization.R#L6460-L6537)、[场生产者](../R/analysis.R#L4016-L4168)。
 
 1. **科学问题**：每个 cell/spot 的某信号在局部主要向哪个方向输出/输入；ZoomIn 是同一场的总览与局部裁切，不是另一尺度重新推断。
-2. **输入单位与轴**：场是 cell × 2 分量 × signaling；outgoing 向量位于 sender，incoming 位于 receiver，但两者指向都沿 sender→receiver 的方向。旧基础入口读 `slot$field`；当前生产者实际写 `slot$cell$field`，两者尚未切换一致（V-013）。
+2. **输入单位与轴**：场是 cell × 2 分量 × signaling；outgoing 向量位于 sender，incoming 位于 receiver，但两者指向都沿 sender→receiver 的方向。当前生产者与基础入口均通过 cell-level field 路径消费；空间坐标仍必须按 cell name 对齐（V-013）。
 3. **计算定义**：生产者对每节点的有限正边按权重降序排列，以累计权重占比选边：`sparse=TRUE` 保留累计量严格 `< top × 总量` 的前缀，空选且 top>0 时取第一条；FALSE 在正边不超过两条时全取，否则用 `<=`。这不是 renderer 的 top 分位数。对选中边把“通讯权重 × 单位位移向量”求和，零长度位移不贡献向量。绘图只选 signaling，交换场与坐标两列，计算模长，去掉零模箭头；ZoomIn 调两次基础图，分别高亮网格窗口、裁切该窗口，不重算场。
 4. **视觉编码**：箭头表示净方向与显示缩放后的模长，颜色通常为 sender/receiver 节点类别；背景为 cell/spot 标签。零向量点可有背景但无箭头。y 与 dy 的绘图变换必须一起观察；zoom anchor 是显示窗口参数。
 5. **信息损失**：方向求和丢失每条边、邻居数与路径；等权相反方向会抵消，**有正通讯强度也可无箭头**。场不是传输总量，也不是组织中真实迁移路线。
 6. **统计边界**：不产生新 p 值；top 与 min.mag 是选边/显示参数，非显著性检验。方向模长不能代替 row/column sum；缺箭头不证明无通讯。
-7. **前置计算及返回**：先算 cell 网络及 `computeCommunField()`；需坐标、idents 同序。基础返回 ggplot，ZoomIn 返回 cowplot 组合的 ggplot 类对象；旧字段及 `my_as_sparse3Darray()` 路径仍须迁移，不能保证最终 schema 可直接运行。
+7. **前置计算及返回**：先算 cell 网络及 `computeCommunField()`；需坐标、idents 同序。基础返回 ggplot，ZoomIn 返回 cowplot 组合的 ggplot 类对象；P3 回归已覆盖基础图、ZoomIn、Grid 和 Flow 的主要路径；可选 widget/browser 证据仍需独立记录。
 8. **判别反例（未执行）**：中心点等权连向左右两点，保留全部边时总 outgoing 为正而净向量为零；只留右边后应向右。缩放/裁切不能把零净向量解释成无通讯，也不能把 window 外的贡献悄悄从场中重算删除。
 
 ### 5.2 `netVisual_CommunFieldGrid` / `netVisual_CommunFlow`
@@ -343,12 +343,12 @@
 4. **视觉编码**：位置是相似性嵌入、颜色是网络 cluster、大小是归一化层总权重；pairwise 形状是 dataset。ZoomIn 每 cluster 一面板，重新适配坐标范围，不能跨面板目测距离作定量比较。
 5. **信息损失**：二维嵌入压缩网络差异，丢失边及 LR 组成；相对大小抹去绝对总量单位。相邻点不必总量相同，颜色相同不等于信号功能已被生物学证明一致。
 6. **统计边界**：没有 cluster 显著性、距离置信区间或跨条件检验；top.label 是标注控制，不是显著性选择。不同独立嵌入坐标的旋转/布局不能当生物变化。
-7. **前置计算及返回**：先算对应 similarity、embedding、clustering，且 dr/group/prob 的 layer 名称必须对齐。single/pairwise 返回 ggplot，zoom 返回 cowplot 组合图；pairwise 仍读旧 dataset 网络列表。源码按位置拼接数据，single top.label<1 的 data.label 分支、single zoom 未 match.arg(type) 及缺层删除需单独审阅（V-017）。
+7. **前置计算及返回**：先算对应 similarity、embedding、clustering，且 dr/group/prob 的 layer 名称必须对齐。single/pairwise 返回 ggplot，zoom 返回 cowplot 组合图；pairwise 读取 merged 对象的 `misc$.datasets` 快照。源码按名称拼接 layer–dataset 实例；single top.label<1 的 data.label 分支、single zoom 未 match.arg(type) 及缺层删除仍需单独审阅（V-017）。
 8. **判别反例（未执行）**：置换 prob 层序但保持带名 dr 不变，正确对应的点大小/标签应不变；同总权重不同路由的网络可点同大但位置不同。缺一层、孤立层及两个 dataset 重名 pathway 必须分别定位，不得用补零或行位置假装已对齐。
 
-## 8. 后续视觉验收门禁（未执行）
+## 8. 后续视觉验收门禁与未覆盖范围
 
-本页八字段卡和数值探针只定义后续迁移的可证伪标准，不宣称当前全链可运行。每批只验证其受影响路径，但不能用一种布局替代其他返回/渲染分支。
+本页八字段卡和数值探针定义可证伪标准；P0-P5 已对受影响的主要路径执行回归，但不能用一种布局替代其他返回/渲染分支。下列项目仍是补充验收或科学语义审阅范围。
 
 1. **数据与轴**：从最终 11-slot 对象运行实际入口；核对 layer、cell/group、dataset 名称与顺序。包含名称置换、缺层、零/NA、p 等于阈值、缓存阈值不同的场景。`SparseChatArray` 必须逐层/稀疏归约，不能物化 cell×cell×layer 稠密张量；`marginSums(...,3)` 是跨层矩阵和，不是逐层总量。
 2. **返回契约**：实际观察 list、ggplot、patchwork、recordedplot、Heatmap/draw 返回、SpatialCellChat 更新对象、plotly/htmlwidget 的差别；检查数据字段语义，不能只断言继承某个 class。新数据接口或返回变化需另行决策，不在本卡自动批准。
@@ -367,7 +367,7 @@ V-* 是本页稳定引用标识，不表示已修复，也不是已批准的新�
 | V-002 | [aggregate `p>`](../R/visualization.R#L1469-L1476)、[pathway `p>=`](../R/modeling.R#L1691-L1698)、[bubble table `p>=`](../R/analysis.R#L2431-L2445)。实时 LR、生产缓存和表过滤不同。 | aggregate/individual、heatmap、bubble、所有 pathway 图。 | 明示筛选时点及阈值等号，做同输入数值/图形对照。 | 统一阈值属于科学语义更正；本轮不预先选择保留 `>` 还是 `>=`，也不批准 aggregate 改读 netP。 |
 | V-003 | `extractEnrichedLR_internal` 按 `LR.sig` 缓存选 pathway，`spatialFeaturePlot` 的显式 LR 则按当前 prob 和可用 p 值选择；前者不重新按 `thresh` 筛选。空交集返回空 LR 和空基因已修复。 | spatialFeaturePlot 的 signaling、plotGeneExpression 及 LR 选择消费链。 | 维持现有定义并在文档中区分两种来源。 | 暂不改变缓存/阈值语义；不同入口的筛选结果可能不同。 |
 | V-004 | 连续图展开 complex 亚基，binary 图计算 complex 几何均值；plotly 直接匹配基因且依赖固定 trace 下标。`spatialFeaturePlot(ncol=1)` 丢失后续面板已修复。 | spatialFeaturePlot、plotly_spatialLRpairPlot、plotFeatures、Shiny adapter。 | 明确“亚基表达/complex 量/缺 partner”三者，继续核对 plotly trace 与 cell id。 | 修复不能悄悄把表达换成通讯量。plotly 仍需实际浏览器核对全/空高亮。 |
-| V-005 | wrapper 的 meta 改名不重排问题已在 [plotGeneExpression](../R/visualization.R#L6545-L6588) 中改为按 cell name 对齐并有回归测试；[bar matrix 与最后 df.use](../R/visualization.R#L6918-L6936) 风险仍在。[INFERENCE] 后者可能展示前一个基因或失败。 | barPlot 及相关教程；plotGeneExpression 的 bar 分支。 | 分别验证 assay 层和 bar 多基因结果；不回退 cell-name 对齐。 | 先确认来源矩阵是否归一化和 Seurat 版本层行为；不是借文档更换表达统计量。 |
+| V-005 | wrapper 的 meta 改名不重排问题已在 [plotGeneExpression](../R/visualization.R#L6545-L6588) 中改为按 cell name 对齐并有回归测试；[bar matrix 与最后 df.use](../R/visualization.R#L6898-L6975) 已修复并由 P5 单/多 feature 回归覆盖。 | barPlot 及相关教程；plotGeneExpression 的 bar 分支。 | 分别验证 assay 层和 bar 多基因结果；不回退 cell-name 对齐。 | 先确认来源矩阵是否归一化和 Seurat 版本层行为；不是借文档更换表达统计量。 |
 | V-006 | [individual spatial 未定义 labels/idents.use](../R/visualization.R#L1714-L1719)、[hierarchy2 外部 object](../R/visualization.R#L2004-L2024)、[spatial weight 条件](../R/visualization.R#L1516-L1528)；chord 与其他 renderer 不共享 top 过滤。 | aggregate/individual 四布局及直接 renderer。 | 逐布局确认局部参数来源、过滤时点、返回类及向量权重处理，不靠调用者全局变量。 | 是否统一 top 支持、返回 list 与组合图是 API 决定；群中位数路线解释必须保留其摘要性质。 |
 | V-007 | [diff 孤立判定](../R/visualization.R#L2616-L2624)、[heatmap 零总和拒绝](../R/visualization.R#L2891-L2897)。有符号边缘和/全局和可抵消。 | diffInteraction、比较 heatmap。 | 区分“没有非零边”和“净变化为零”，名称对齐后再比较。 | 修复空网络判定不能变成新的差异显著性检验；正确断言需包含正负相抵但非空矩阵。 |
 | V-008 | [heatmap 重复删点](../R/visualization.R#L2834-L2843)、[按列构建行注释](../R/visualization.R#L2880-L2889)、[列聚类用错参数](../R/visualization.R#L2898-L2901)。 | netVisual_heatmap 子集、remove.isolate、cluster.cols。 | 独立行列名称和索引，修复重复删除与参数失效。 | 非方形子集、单行/单列与全零场景都需实际 draw；侧栏的绝对变化和文案需核定。 |

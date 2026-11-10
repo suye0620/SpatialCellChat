@@ -2,14 +2,14 @@
 
 ## 阅读边界与证据级别
 
-本页是迁移前的科学语义审阅材料，不是已完成迁移或已验证可运行的 API 手册。对应决策为 [下游通讯分析与可视化语义契约（proposed）](../.agents/notes/proposed/2026-10-20-downstream-communication-semantics-contract.md)；图形端的完整编码、空间解释与交互边界见 [可视化语义卡](VISUALIZATION_SEMANTICS.md)。父迁移审计仍为 proposed。本页不批准更改统计方法、签名、默认值或缓存位置。
+本页起源于迁移前的科学语义审阅材料；它仍保留未决的科学裁定，但不再代表所有入口都未迁移。2026-11-10 的 P0-P5 回归已覆盖主要分析/可视化消费者；当前运行证据见 `tests_dev/test-*.R` 与 `tests_dev/figures/summary-*.txt`。对应决策为 [下游通讯分析与可视化语义契约（proposed）](../.agents/notes/proposed/2026-10-20-downstream-communication-semantics-contract.md)；图形端的完整编码、空间解释与交互边界见 [可视化语义卡](VISUALIZATION_SEMANTICS.md)。本页不批准更改统计方法、签名、默认值或缓存位置。
 
 - **文档意图**：源码 roxygen 声明的用途；与执行语句不同时分别列出。
 - **源码事实**：下列具名函数及源码行范围直接支持的读取、计算和返回行为。旧字段路径仍按源码记录，不能据此推定最终 11-slot 对象可以直接运行这些入口。
 - **[INFERENCE]**：静态推导的解释、风险或预期区分，不是运行结果。
 - **建议/未决**：问题表中的方向需维护者裁定；已知缺陷不应成为必须保持的黄金输出。
 - **2026-10-21 调用方增补**：[PP1 下游重构与测试方案](PP1_DOWNSTREAM_REFACTORING_PLAN.md) 将本页语义落实到 `visium_PP1.R` 的实际 IO、默认参数、metadata/CSV/Seurat 消费链；包含 Visium 混合权重与硬标签聚合的区别、现有 topic/community 生产者与 Seurat 桥接契约，以及新的真实输入/最终 schema 探针。该增补不改变 A-* 的未决状态。
-- 每张卡固定八项。第八项均为**拟议的迁移验收场景，尚未作为相应入口的验收检查执行**；不是测试结果，也不提供看似可直接运行的占位代码。2026-10-20 的孤立数值/公式探针单列于第 8 节；2026-10-21 的 PP1 子链与 Seurat 探针见上述调用方方案的运行证据节，均不代表整张卡或函数链已经验收。
+- 每张卡固定八项。第八项保留原始判别场景；其中已被 P0-P5 回归覆盖的入口，以对应测试脚本为准，未覆盖的场景仍是待验收设计。2026-10-20 的孤立数值/公式探针单列于第 8 节；2026-10-21 的 PP1 子链与 Seurat 探针见上述调用方方案的运行证据节。
 
 ## 轴、量纲与共同前提
 
@@ -72,7 +72,7 @@
 4. **视觉编码**：自身不画图；`plotGeneExpression` 等消费返回基因画表达，颜色/点大小属于表达量或表达比例，不能改称本次通讯显著性。
 5. **信息损失**：丢失具体 sender–receiver 边、权重、p 值及 dataset 来源；并集掩盖条件特异性。复合物拆基因也不证明所有亚基同时形成有效复合物。
 6. **统计边界**：`thresh` 参数不保证改变返回 LR；缓存生成时点决定 enrichment 选择。空交集分支只发消息而未清空 `pairLR`，随后仍可提取候选基因；[INFERENCE] 空 LR 与非空基因不应被解释为已证实的信号（A-02）。
-7. **前置计算及返回**：enriched 路径要求 `aggregateNet` 生成缓存；helper 返回 `list(geneLR, pairLR.name.use)`，wrapper 文档约定返回 LR data.frame，或 `list(pairLR, geneLR)`。`enriched.only=FALSE` 的 helper 初始 `pairLR.name.use` 是 data.frame，而 TRUE 分支变为向量；wrapper 的字符转换须单独核定，不能仅凭文案保证内容一致。mode 仍读旧 `options$mode`。
+7. **前置计算及返回**：enriched 路径要求 `aggregateNet` 生成缓存；helper 返回 `list(geneLR, pairLR.name.use)`，wrapper 文档约定返回 LR data.frame，或 `list(pairLR, geneLR)`。`enriched.only=FALSE` 的 helper 初始 `pairLR.name.use` 是 data.frame，而 TRUE 分支变为向量；wrapper 的字符转换须单独核定，不能仅凭文案保证内容一致。当前 mode 从 `misc$.mode` 读取，参数仍通过 `misc$.param` 访问。
 8. **判别反例（未执行）**：缓存在 `0.05` 生成，某 LR 的唯一边 `p=0.04`；本次 `thresh=0.01`。源码缓存选择仍可能返回该 LR，实时重筛应排除它。再构造缓存交集为空，核对 LR 与基因是否同为空，而不只检查返回对象形状。
 
 ### 1.4 `subsetCommunication` / `subsetCommunication_internal`
@@ -306,7 +306,7 @@
 
 ### 5.1 `netMappingDEG`
 
-依据：[R/analysis.R:3283–3387](../R/analysis.R#L3283-L3387)、[DEG 对照定义](../R/utilities.R#L1503-L1533)、[统计列及筛选](../R/utilities.R#L1534-L1587)、[当前存储位置](../R/utilities.R#L1624-L1636)。
+依据：[R/analysis.R:3540–3610](../R/analysis.R#L3540-L3610)、[DEG 对照定义](../R/utilities.R#L1503-L1533)、[统计列及筛选](../R/utilities.R#L1534-L1587)、[当前存储位置](../R/utilities.R#L1624-L1636)。
 
 1. **科学问题**：把 ligand 所在 source 群和 receptor 所在 target 群的表达差异证据注释到已推断通讯行；不是推断新的通讯差异或因果效应。
 2. **输入单位与轴**：通讯行是 source–target–LR，DEG 行是 cluster–gene；来源是 `features.name + ".info"`。上游 Wilcoxon 可比较群内指定 dataset 对其余 dataset，或某群对其它细胞；必须保留实际对照定义。Moran's I 等空间特征统计不能假装含同样的 logFC/pct DEG 列。
@@ -314,7 +314,7 @@
 4. **视觉编码**：自身不画图，返回表供 subsetCommunication 的 DEG 过滤及差异展示消费；通讯 `pval` 与 ligand/receptor 的 `pvalues` 必须区分。
 5. **信息损失**：复合物均值掩盖亚基方向不一致、缺失和极端限制；一条 DEG 统计可能复制到很多通讯边，不增加独立证据数。仅 cluster–gene 键不包含 dataset，不能把合并后的行标签当作已解决对照身份。
 6. **统计边界**：上游同时产生 raw `pvalues` 和 Bonferroni `pvalues.adj`，本函数映射的是 raw 列；复合物 p 值均值不是复合物联合显著性检验，平均 logFC 也不证明复合物功能同步变化（A-14）。DEG 的不显著/未保留基因产生缺失，不等于零变化。
-7. **前置计算及返回**：需合适的 DEG 统计表、LR 注释、group 通讯。文档意图返回附八个 ligand/receptor 统计列的 data.frame；当前读取旧 `object@var.features`，而上游已写 `misc$.var.features`，还需核定 single data.frame 与 merged list 的分支区分，不能仅迁移字段就宣布端到端可用（A-01/A-14）。
+7. **前置计算及返回**：需合适的 DEG 统计表、LR 注释、group 通讯。single 返回附八个 ligand/receptor 统计列的 data.frame；merged 按 dataset 对齐快照或带 `datasets` 列的合并表后返回带 `datasets` 的 data.frame。当前实现已读取 `misc$.var.features`，并拒绝把未分层的 merged 表静默复用到所有数据集；仍需保持 DEG 对照身份与通讯 dataset 一致（A-01/A-14）。
 8. **判别反例（未执行）**：复合物两个亚基 logFC 为 `+2/−2`，平均为零，却不是“两个都不变”；p 值为 `0.001/0.9` 的均值也不是该复合物显著性。source 与 target 互换但基因不变，应映射到不同群的 DEG，防止只按基因名连接。
 
 ## 6. 待裁定问题与迁移前置门禁
@@ -355,7 +355,7 @@
 
 ## 8. 本次运行证据与未验证范围
 
-本节记录 **2026-10-20** 主代理回传的运行结果：**stdin 数值探针退出码 0**；环境为 R 4.4.3、项目 renv 库，Matrix 1.7.4、igraph 2.3.2、dplyr 1.2.1；加载 `R/SpatialCellChat_class.R`、`R/utilities.R`、`R/modeling.R`、`R/analysis.R`、`R/database.R`。以下区分实际函数调用与仅复现源码公式；没有新增 R 实现、测试文件或持久探针脚本。后续 PP1 子链的实际图形观察与新失败证据另见 [PP1 方案的运行证据](PP1_DOWNSTREAM_REFACTORING_PLAN.md#7-本轮运行证据与限制)，不扩大本节探针的覆盖范围。
+本节保留 **2026-10-20** 的局部探针记录，并补充 2026-11-10 的 P0-P5 集成回归索引。局部探针不等同于整包验收；新的源码、测试和生成物以 `tests_dev/test-*.R`、`tests_dev/figures/summary-*.txt` 和 `docs/remaining-migration-issues-2026-11-10.md` 为准。后续 PP1 子链的实际图形观察与新失败证据另见 [PP1 方案的运行证据](PP1_DOWNSTREAM_REFACTORING_PLAN.md#7-本轮运行证据与限制)。
 
 | 编号与证据类型 | 输入/调用范围 | 主代理报告的实际观察 | 可支持与不能支持的结论 |
 |---|---|---|---|
@@ -366,4 +366,4 @@
 | P-05：仅源码归一化公式 | 全正 2×2×2 数组，两层分别全为 1 和全为 2；[对应公式](../R/analysis.R#L296-L308) | raw 份额为 `1/3,2/3`，min–max 后为 `0,1` | 支持 min–max 可改变 LR 份额；**未运行** netAnalysis_contribution 或其图形/返回分区分支 |
 | P-06：仅源码保留条件公式 | 差值向量 `(2,−2)`；[对应过滤](../R/analysis.R#L3087-L3089) | “任一方向改变”为 TRUE，但 `rowSums!=0` 保留条件为 FALSE | 支持 A-13 的等幅相反变化丢失；**未运行** netAnalysis_signalingChanges_scatter |
 
-上述退出码只说明该批探针完成，不等于全部 A-* 问题已解决。尚未提供各分析入口的完整迁移回归、NMF/UMAP 实际拟合、rankNet 统计分支、真实返回图形、recordedplot 重放、空间点位方向或浏览器交互证据；这些仍须随受影响实现批次补充。所有卡片的判别场景仍是待实施的验收设计，不能因相近局部机制已被探针观察就宣称整张卡通过。
+上述局部探针不等于全部 A-* 问题已解决。P0-P5 已补充主要分析入口、NMF/UMAP、rankNet、真实返回图形和 merged producer 的回归；仍未覆盖的可选包、完整浏览器交互、真实三对象的全部组合和尚未裁定的科学语义，继续留在 issue log 与各卡片的未决场景中。

@@ -4,6 +4,8 @@
 > 输入：docs/VISUALIZATION_AUDIT.md、docs/VISUALIZATION_SEMANTICS.md（V-001…V-018）。
 > 判定口径：**OK** = 11-slot 全新槽可跑；**partial** = 主路径新、分支旧；**broken** = 读已删字段；**helper** = 不直接碰对象。
 
+> **2026-11-10 状态校正：** §1-§3 的 broken/partial 数量和部分行号是 2026-11-04 的迁移前快照，不是当前验收状态。当前已通过 P0-P5 的核心回归：group LR 网络、空间 aggregate/individual、analysis network、embedding、CommunField、topic、plotly/Shiny、merged producer，以及 P5 的 netP 筛选、selectK、netMappingDEG、barPlot 和 signaling-role 图。详见 `tests_dev/test-*.R`、`tests_dev/figures/summary-*.txt` 和 `docs/remaining-migration-issues-2026-11-10.md`。
+
 ## 1. 规模
 
 | 文件 | 顶层函数 | broken | partial | OK/keep | helper |
@@ -22,23 +24,23 @@
 | `netVisual` | 964 | migrated | 逐 LR 使用 `net$group$prob/pval` 的稀疏层；空间分支显式传入 coordinates/idents | V-001/006 | P2 |
 | `netVisual_aggregate` | 1353 | migrated | 逐 LR 使用 `net$group$prob/pval`，保留本次 `pval > thresh` 聚合语义 | V-001/002 | P2 |
 | `netVisual_individual` | 1517 | migrated | 同上；空间分支使用对象 `@idents` 与坐标 | V-001/006 | P2 |
-| `netVisual_diffInteraction` | 2485 | broken | `@net[[comparison]][[measure]]` 旧 merged 布局 | V-001/007 | P2 |
-| `netVisual_heatmap` | 2647 | broken | `@options$mode`、`net[[i]][[measure]]`、remove.isolate 重复删两次、cluster 参数错位 | V-001/007/008 | P2 |
-| `netVisual_barplot` | 2844 | broken | 旧 merged 检测与旧容器 | V-001 | P2 |
-| `netVisual_bubble` | 2992 | partial | 主路径走 `subsetCommunication`（已适配）；L3062 `prob.original` 裸变量 bug | V-001/009 | P2 |
+| `netVisual_diffInteraction` | 2485 | migrated | `@net[[comparison]][[measure]]` 旧 merged 布局 | V-001/007 | P2 |
+| `netVisual_heatmap` | 2647 | migrated | `@options$mode`、`net[[i]][[measure]]`、remove.isolate 重复删两次、cluster 参数错位 | V-001/007/008 | P2 |
+| `netVisual_barplot` | 2844 | migrated | 旧 merged 检测与旧容器 | V-001 | P2 |
+| `netVisual_bubble` | 2992 | migrated | 主路径走 `subsetCommunication`（已适配）；`prob.original` 已改为显式列引用 | V-001/009 | P2 |
 | `netVisual_chord_cell` | 3360 | migrated | 复用稀疏 group LR 层；保留 netP 分支实时 LR 聚合语义 | V-001/006 | P2 |
 | `netVisual_chord_gene` | 3651 | migrated | 逐层读取稀疏 group LR 网络，按 `pval > thresh` 门控并关联 LR 注释 | V-001 | P2 |
-| `netVisual_embedding` | 4250 | broken | similarity 新、点大小读旧 `netP$prob` | V-001/017 | P3 |
-| `netVisual_embeddingZoomIn` | 4344 | broken | 同上 | V-001/017 | P3 |
-| `netVisual_embeddingPairwise` | 4431 | broken | 旧 merged 嵌套 | V-001/017 | P3 |
-| `netVisual_embeddingPairwiseZoomIn` | 4546 | broken | 同上 | V-001/017 | P3 |
-| `netVisual_CommunField` | 5390 | broken | 旧 `slot$field` 路径（V-013） | V-013 | P3 |
-| `netVisual_CommunFieldZoomIn` | 6373 | broken | 随基础图失效，修 CommunField 后自动恢复 | V-013 | P3 |
+| `netVisual_embedding` | 4250 | migrated | similarity 新、点大小读旧 `netP$prob` | V-001/017 | P3 |
+| `netVisual_embeddingZoomIn` | 4344 | migrated | 同上 | V-001/017 | P3 |
+| `netVisual_embeddingPairwise` | 4431 | migrated | 旧 merged 嵌套 | V-001/017 | P3 |
+| `netVisual_embeddingPairwiseZoomIn` | 4546 | migrated | 同上 | V-001/017 | P3 |
+| `netVisual_CommunField` | 5390 | migrated | 旧 `slot$field` 路径（V-013） | V-013 | P3 |
+| `netVisual_CommunFieldZoomIn` | 6373 | migrated | 随基础图失效，修 CommunField 后自动恢复 | V-013 | P3 |
 | `plotGeneExpression` | 6545 | migrated | 读取 `assay$signaling`；bar 分支支持单/多 feature | V-003/005 | P3 |
-| `plotly_spatialLRpairPlot` | 7202 | broken | `@data` + `apply(prob>0,3,sum)` 稠密膨胀 | V-001/004 | P4 |
-| `plotly_spatialLRpairPlot_shiny` | 7831 | broken | 启动即崩 + observer 累积 | V-001 | P4 |
-| `netVisual_TopicComposition` | 4679 | partial | SCC meta 读 `@meta.data`（错）、remove.isolate 错轴 | V-014 | P3 |
-| `netVisual_TopicSignaling` | 4985 | partial | SCC 主路径可跑、Seurat 分支必崩 | V-015 | P3 |
+| `plotly_spatialLRpairPlot` | 7202 | migrated | `@data` + `apply(prob>0,3,sum)` 稠密膨胀 | V-001/004 | P4 |
+| `plotly_spatialLRpairPlot_shiny` | 7831 | migrated | 启动即崩 + observer 累积 | V-001 | P4 |
+| `netVisual_TopicComposition` | 4679 | migrated | SCC meta 读 `@meta.data`（错）、remove.isolate 错轴 | V-014 | P3 |
+| `netVisual_TopicSignaling` | 4985 | migrated | SCC 主路径可跑、Seurat 分支必崩 | V-015 | P3 |
 
 ## 3. 上游报告（约束 5：本轮不擅改，需你裁定）
 
@@ -95,10 +97,6 @@ keep ≠ 不动：本批仍要做**包用法核查**（`element_line(size=)`、`
 
 ## 8. 批次划分（更新）
 
-- **P1 静态点图**：`spatialFeaturePlot`（migrate）+ 5 个 keep 函数的包核查与 helper 收敛；
-- **P2 网络图**：9 个 broken/partial + renderer keep + 语法修复（依赖：extractEnrichedLR 上游修复或绕过）；
-- **P3 场与分解**：CommunField×2（依赖 V-013 上游）、Topic×2（refactor）、embedding×4（migrate）、river/dot（依赖 identifyCommunicationPatterns 上游修复）；
-- **P4 交互**：plotly 3 个 + shiny + Gi 3d + 3D stack 生产化；
-- **P5 收尾**：全量 PDF 回归 + 文档刷新。
-
-依赖关系决定：**P1 可以独立开工**；P2 需要 `extractEnrichedLR` 上游决策；P3 需要 `identifyCommunicationPatterns` 与 V-013 决策；P4 的 comparison 功能需要 `mergeCellChat` 决策。
+- **P1-P4**：已完成对应核心入口迁移和三类 fixture 的图形/交互回归；
+- **P5 收尾**：已完成 netP 显式筛选、selectK、netMappingDEG（含 merged dataset 对齐）、barPlot 和 signaling-role 消费者的回归；
+- **下一步**：完成 package install、源码 parse、diff check，处理 issue log 中仍未覆盖的可选入口/科学语义边界。

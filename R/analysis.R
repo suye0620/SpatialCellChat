@@ -3437,43 +3437,16 @@ netAnalysis_signalingRole_heatmap <- function(object, signaling = NULL, pattern 
 
 
 
-#' Mapping the differential expressed genes (DEG) information onto the inferred cell-cell communications
-#'
-#' This function returns a data frame consisting of all the inferred cell-cell communications with mapped DEG information
-#'
-#' @param object CellChat object
-#' @param features.name a char name used for extracting the DEG table in
-#'   `object@misc$.var.features[[paste0(features.name, ".info")]]`
-#' @param thresh threshold of the p-value for determining significant interaction
-#' @importFrom  dplyr select
-#'
-#' @return a data frame of the inferred cell-cell communications, consisting of source, target, interaction_name, pathway_name, prob and other CellChatDB information as well as DEG information
-#'
-#' @export
-#'
-netMappingDEG <- function(object, features.name, thresh = 0.05) {
-  object <- .sc_assert_spatial_cell_chat(object)
-  features.name <- paste0(features.name, ".info")
-  var.features <- object@misc$.var.features
-  if (!is.list(var.features) || !(features.name %in% names(var.features))) {
-    stop("The input features.name does not exist in `names(object@misc$.var.features)`. Please first run `identifyOverExpressedGenes`! ", call. = FALSE)
+# Map one communication table with one already aligned DEG table.
+.sc_map_deg_to_net <- function(net, DEG, geneInfo, complex_input) {
+  required.deg <- c("clusters", "features", "pvalues", "logFC", "pct.1", "pct.2")
+  if (!is.data.frame(DEG) || !all(required.deg %in% names(DEG))) {
+    stop("DEG table must contain columns: ", paste(required.deg, collapse = ", "),
+         call. = FALSE)
   }
-  DEG <- var.features[[features.name]]
-  geneInfo <- object@DB$geneInfo
-  complex_input <- object@DB$complex
-
-  df.net <- subsetCommunication(object, thresh = thresh)
-  # A data.frame is also a list in base R; only merged output from
-  # subsetCommunication() should enter the dataset-list branch.
-  if (is.list(df.net) && !is.data.frame(df.net)) {
-    net <- data.frame()
-    for (ii in 1:length(df.net)) {
-      df.net[[ii]]$datasets <- names(df.net)[ii]
-      net <- rbind(net, df.net[[ii]])
-    }
-  } else {
-    net <- df.net
-  }
+  if (!is.data.frame(net))
+    stop("communication data must be a data frame", call. = FALSE)
+  if (!nrow(net)) return(net)
   net$source.ligand <- paste0(net$source,".", net$ligand)
   net$target.receptor <- paste0(net$target,".", net$receptor)
 
@@ -3547,6 +3520,63 @@ netMappingDEG <- function(object, features.name, thresh = 0.05) {
   }
   # net <- dplyr::select[net, -c("source.ligand", "target.receptor")]
   return(net)
+}
+
+#' Map differential expression results onto inferred communications
+#'
+#' Single objects use their own marker table. Merged objects use a dataset-tagged
+#' merged marker table when available, or the corresponding source snapshot's
+#' marker table. Unstratified merged marker tables are not reused across datasets.
+#'
+#' @param object A single or merged SpatialCellChat object.
+#' @param features.name Name of the marker result. Single objects read
+#'   `misc$.var.features[[paste0(features.name, ".info")]]`. Merged objects use
+#'   a table with a `datasets` column from the merged object, or the matching
+#'   dataset snapshot's marker table.
+#' @param thresh P-value threshold passed to `subsetCommunication()`.
+#' @return A data frame of inferred communications annotated with ligand and
+#'   receptor DEG columns. Merged results include a `datasets` column.
+#' @export
+netMappingDEG <- function(object, features.name, thresh = 0.05) {
+  object <- .sc_assert_spatial_cell_chat(object)
+  info.name <- paste0(features.name, ".info")
+  geneInfo <- object@DB$geneInfo
+  complex_input <- object@DB$complex
+
+  if (identical(object@misc$.mode, "merged")) {
+    df.net <- subsetCommunication(object, thresh = thresh)
+    if (!is.list(df.net) || is.data.frame(df.net))
+      stop("merged subsetCommunication() must return one table per dataset",
+           call. = FALSE)
+    merged.DEG <- object@misc$.var.features[[info.name]]
+    mapped <- lapply(names(df.net), function(dataset) {
+      snapshot <- object@misc$.datasets[[dataset]]
+      if (is.data.frame(merged.DEG) && "datasets" %in% names(merged.DEG)) {
+        DEG <- merged.DEG[as.character(merged.DEG$datasets) == dataset, , drop = FALSE]
+      } else {
+        var.features <- snapshot$misc$.var.features
+        DEG <- if (is.list(var.features)) var.features[[info.name]] else NULL
+      }
+      if (is.null(DEG) || !is.data.frame(DEG) || !nrow(DEG)) {
+        stop("Dataset '", dataset, "' has no `misc$.var.features[['", info.name,
+             "']]` and no dataset-tagged merged marker table; run ",
+             "`identifyOverExpressedGenes()` on the source dataset or provide ",
+             "a merged table with a `datasets` column.", call. = FALSE)
+      }
+      net <- df.net[[dataset]]
+      net$datasets <- dataset
+      .sc_map_deg_to_net(net, DEG, geneInfo, complex_input)
+    })
+    names(mapped) <- names(df.net)
+    return(do.call(rbind, mapped))
+  }
+
+  var.features <- object@misc$.var.features
+  if (!is.list(var.features) || !(info.name %in% names(var.features))) {
+    stop("The input features.name does not exist in `names(object@misc$.var.features)`. Please first run `identifyOverExpressedGenes`! ", call. = FALSE)
+  }
+  df.net <- subsetCommunication(object, thresh = thresh)
+  .sc_map_deg_to_net(df.net, var.features[[info.name]], geneInfo, complex_input)
 }
 
 

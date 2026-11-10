@@ -43,11 +43,13 @@ Tips: Please run `computeGridSize` to get a proper `cellsize`.the unit of the `c
 
 \item{square}{Boolean. If FALSE, create hexagonal grid. See details in [sf::st_make_grid()]}
 
-\item{data.use}{a customed data matrix. Default: data.use = NULL and the expression matrix in the slot 'data.signaling' is used}
+\item{data.use}{a custom data matrix. By default, \code{assay$signaling} is used.}
 
 \item{selection.method}{Method for selecting (spatially) variable features.}
 
-\item{features.name}{a char name used for storing the over-expressed signaling genes in `object@var.features[[features.name]]`}
+\item{features.name}{a name under \code{object@misc$.var.features}; the selected
+gene vector is stored at \code{features.name} and its statistics table at
+\code{paste0(features.name, ".info")}.}
 
 \item{group.by}{cell group information; default is `object@idents`; otherwise it should be one of the column names of the meta slot}
 
@@ -72,11 +74,15 @@ Tips: Please run `computeGridSize` to get a proper `cellsize`.the unit of the `c
 \item{thresh.p}{Threshold of p-values}
 }
 \value{
-A CellChat object or a data frame. If returning a CellChat object, two new elements named 'features.name' and paste0(features.name, ".info") will be added into the list `object@var.features`
-`object@var.features[[features.name]]` is a vector consisting of the identified over-expressed signaling genes;
-`object@var.features[[paste0(features.name, ".info")]]` is a data frame returned from the differential expression analysis / the simple filtering
+A SpatialCellChat object or a data frame. If returning an object, two elements
+named \code{features.name} and \code{paste0(features.name, ".info")} are added
+to \code{object@misc$.var.features}. The first is the selected gene vector;
+the second is the differential-expression or spatial-statistics table.
 }
 \description{
-USERS can use customized gene set as over-expressed signaling genes by setting `object@var.features[[features.name]] <- features.sig`
-The Bonferroni corrected/adjusted p value can be obtained via `object@var.features[[paste0(features.name, ".info")]]`. Note that by default `features.name = "features"`
+Users can provide a customized selected gene vector through the
+\code{features} argument. The Bonferroni-adjusted p value, when produced by
+the selection method, is available in
+\code{object@misc$.var.features[[paste0(features.name, ".info")]]}. The default
+\code{features.name} is \code{"features"}.
 }

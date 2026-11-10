@@ -69,3 +69,15 @@ Impact: Requested column clustering settings were silently ignored, changing pre
 Fix: Pass `cluster.cols` to `cluster_columns`; no data or scoring semantics change.
 
 Acceptance: The P5 render test exercises both signaling-role consumers after the correction.
+
+## P5-006: merged `netMappingDEG()` needed dataset-aligned marker evidence
+
+Location: `R/analysis.R::netMappingDEG()` and `R/merging.R::mergeSpatialCellChat()`.
+
+Cause: merged construction intentionally leaves top-level `misc$.var.features` empty, while preserving each source object's marker tables inside `misc$.datasets[[dataset]]`. A single-table lookup therefore either failed on a valid merged object or risked applying one dataset's DEG evidence to every dataset.
+
+Impact: DEG-based communication filtering could not be used safely after merged construction, even though the source snapshots retained the required evidence.
+
+Fix: map each named communication table with its matching snapshot marker table; when a merged marker table has a `datasets` column, filter that table by dataset first. Unstratified merged marker tables are not silently reused. Missing evidence reports the dataset name and the required producer.
+
+Acceptance: The P5 regression covers snapshot-local mapping with distinct values, dataset-tagged merged tables, missing-evidence failure, and the existing single-object path.

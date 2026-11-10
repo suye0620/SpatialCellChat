@@ -3,15 +3,17 @@
 > 生成日期：2026-10-26　范围：`R/` 下 10 个脚本、300 个函数　基线：pinned upstream `be88f30`（`renv/library/windows/R-4.4/.../SpatialCellChat`）
 
 > 2026-10-26 更新：§4 中 A 组的 15 个函数已归档至 `R/legacy/expression-toolchain.R`，并从 `NAMESPACE` 摘除导出；`R/modeling.R` 与 `R/utilities.R` 的行号已随之下移，本表保留归档前快照。决策记录见 `.agents/notes/implemented/2026-10-26-archive-expression-toolchain.md`。
+>
+> 2026-11-10 状态校正：本文的函数数量、行号、逐函数标签和依赖表仍是 2026-10-26 的历史审计快照，不应作为当前“未迁移”结论。P0-P5 的当前验收入口、真实 producer 和生成物以 `docs/VISUALIZATION_MIGRATION_PLAN.md`、`tests_dev/test-*.R`、`tests_dev/figures/summary-*.txt` 和 `docs/remaining-migration-issues-2026-11-10.md` 为准。
 
 本清单是**逐函数事实档案**，用于评估 11-slot 重构进度；不改变任何代码，也不代表迁移验收通过。
 
 ## 0. 关键结论
 
 1. **历史基线中的安装阻塞已修复。** 本文记录的 `undefined exports` 是早期审计状态；`mergeSpatialCellChat`、`subsetSpatialCellChat`、`liftSpatialCellChat`、`updateSpatialCellChat` 已在源码中实现。本轮仍须以当前源码重跑 `R CMD INSTALL`，不能把旧的 source-only 测试结果当作安装验收。
-2. **进度分布不均。** 300 个函数中，`迁移11slot` 24 个、`新增(11slot)` 51 个、`部分迁移` 9 个、`重构` 23 个、`新增` 54 个、`未动` 139 个。迁移集中在类定义、建模主链路与分析聚合层；**可视化层几乎没动**。
-3. **计算链路已闭环，展示与下游未闭环。** `computeCommunProb` → `filterProbability` → `computeAvgCommunProb` → `computeCommunProbPathway` → `aggregateNet` 全部只读写新槽；但 `netVisual_*` 家族仍读 `net$prob` / `net$pval`，在新对象上直接失效。
-4. **死代码与兼容层仍在。** 明确不可达 4 个，疑似 40 个，主要来自 `@data` / `@var.features` / `net$prob.cell` 等已删槽位的旧工具链。
+2. **历史进度分布不均。** 下表的 300 函数分类是旧基线统计：`迁移11slot` 24 个、`新增(11slot)` 51 个、`部分迁移` 9 个、`重构` 23 个、`新增` 54 个、`未动` 139 个。后续 P1-P5 已迁移并回归了主要空间图、网络图、场/分解图、交互图及分析消费者；不要用这组旧计数判断当前状态。
+3. **当前主链路已按批次闭环。** `computeCommunProb` → `filterProbability` → `computeAvgCommunProb` → `computeCommunProbPathway` → `aggregateNet` 与 P1-P5 的主要分析/可视化消费者均已切换到 11-slot 稀疏层；尚未纳入完整验收的入口仍以迁移总表和 issue log 标注为准。
+4. **历史死代码审计仍需复核。** 明确不可达/疑似项来自旧字段和兼容层，但部分调用者已在 P1-P5 中迁移；剩余删除或弃用属于独立 API 清理，不应在本批次无证据删除。
 5. **依赖可分三类。** 函数引用的外部包共 55 个，均已安装；未装的 Suggests 包 15 个（`RcppML`, `SNFtool`, `SingleCellExperiment`, `SummarizedExperiment`, `callr`, `gg.gap`, `metR`, `oce`, `pryr`, `raster`, `rliger`, `rstudioapi`, `scatterpie`, `spdep`, `wordcloud`），只影响少数分析/可视化的可选分支。
 
 ## 1. 口径
@@ -219,7 +221,7 @@
 | `rankNet`                                | 445  | 未动       | 按信息流或互作数排序信号网络  | 可视化  | 入口  | ↑ 用户; ↓ ggPalette, CellChat_theme_opts                                        | ggplot2, gg.gap(!)                     | —   |
 | `extractEnrichedLR`                      | 856  | 未动       | 提取通路显著富集的LR对及基因 | 分析   | 入口  | ↑ plotGeneExpression, spatialFeaturePlot; ↓ extractEnrichedLR_internal        | BiocGenerics, methods                  | —   |
 | `extractEnrichedLR_internal`             | 913  | 未动       | 按通路筛显著LR对并取其基因  | 分析   | 主流程 | ↑ extractEnrichedLR; ↓ searchPair, extractGeneSubset                          | dplyr                                  | —   |
-| `selectK`                                | 971  | 未动       | 用NMF稳定性曲线选择模式数  | 分析   | 入口  | ↑ 用户; ↓ —                                                                     | NMF, ggplot2                           | 疑似  |
+| `selectK`                                | 971  | 迁移11slot | 用NMF稳定性曲线选择模式数  | 分析   | 入口  | ↑ 用户; ↓ —                                                                     | NMF, ggplot2                           | —  |
 | `suggestK`                               | 1044 | 未动       | 扫描k值评估iNMF目标误差  | 分析   | 入口  | ↑ 用户; ↓ .plotSuggestK                                                         | cli, rliger(!)                         | —   |
 | `.plotSuggestK`                          | 1109 | 未动       | 绘制k值误差与方差诊断图    | 可视化  | 子模块 | ↑ suggestK, suggestK1; ↓ CellChat_theme_opts                                  | dplyr, ggplot2                         | —   |
 | `.H_to_conn_mat`                         | 1191 | 未动       | 由H矩阵构建细胞连通矩阵    | 基础设施 | 子模块 | ↑ —（仅注释）; ↓ max_factor_rcpp（未定义）                                              | Matrix                                 | 是   |
@@ -248,7 +250,7 @@
 | `netAnalysis_diff_signalingRole_scatter` | 2847 | 迁移11slot | 绘制两组收发角色差异散点图   | 可视化  | 入口  | ↑ 用户; ↓ mergeCellChat（未定义）                                                    | ggplot2, ggrepel, grid                 | —   |
 | `netAnalysis_signalingChanges_scatter`   | 3011 | 迁移11slot | 绘制单群通路变化散点图     | 可视化  | 入口  | ↑ 用户; ↓ mergeCellChat（未定义）                                                    | ggplot2, ggrepel, plyr                 | —   |
 | `netAnalysis_signalingRole_heatmap`      | 3192 | 未动       | 绘制通路信号强度热图      | 可视化  | 入口  | ↑ 用户; ↓ scPalette                                                             | ComplexHeatmap, RColorBrewer, grid     | —   |
-| `netMappingDEG`                          | 3296 | 未动       | 把DEG结果映射到通讯记录   | 分析   | 入口  | ↑ 用户; ↓ subsetCommunication                                                   | dplyr                                  | —   |
+| `netMappingDEG`                          | 3296 | 迁移11slot | 把DEG结果映射到通讯记录（single/merged dataset-aligned） | 分析   | 入口  | ↑ 用户; ↓ subsetCommunication                                                   | dplyr                                  | —   |
 | `computeEnrichmentScore`                 | 3411 | 未动       | 计算LR富集分并绘制词云    | 分析   | 入口  | ↑ 用户; ↓ —                                                                     | RColorBrewer, wordcloud(!), dplyr      | —   |
 | `identifyCellTopics`                     | 3467 | 部分迁移     | 用NMF从细胞中心性提取主题  | 分析   | 入口  | ↑ 用户; ↓ suggestK1, CellChat2Seurat                                            | Matrix, RcppML(!), Seurat, stringr     | —   |
 | `identifyTopicCommunities`               | 3595 | 未动       | 对细胞主题做空间聚类分群    | 分析   | 入口  | ↑ 用户; ↓ CellChat2Seurat, computeEigengap                                      | Seurat, SNFtool(!), irlba, Matrix      | —   |
@@ -277,8 +279,8 @@
 | `ggPalette`                         | 963  | 未动       | 生成 n 种 hcl 调色板颜色            | 可视化  | 子模块 | ↑ netVisual_bubble, netAnalysis_river; ↓ —                                          | —                                                              | —   |
 | `scPalette`                         | 977  | 未动       | 生成单细胞可视化调色板                 | 可视化  | 子模块 | ↑ netVisual_circle, netVisual_spatial; ↓ —                                          | —                                                              | —   |
 | `netVisual`                         | 1051 | 未动       | 按布局绘制通路网络并导出图片              | 可视化  | 入口  | ↑ 用户; ↓ netVisual_circle, netVisual_hierarchy1                                      | svglite                                                        | —   |
-| `netVisual_aggregate`               | 1440 | 未动       | 聚合配体受体绘制通路网络                | 可视化  | 入口  | ↑ 用户; ↓ netVisual_circle, netVisual_hierarchy1                                      | —                                                              | —   |
-| `netVisual_individual`              | 1604 | 未动       | 逐个绘制配体受体对通讯网络               | 可视化  | 入口  | ↑ 用户; ↓ netVisual_circle, netVisual_hierarchy1                                      | —                                                              | —   |
+| `netVisual_aggregate`               | 1440 | 迁移11slot | 聚合配体受体绘制通路网络                | 可视化  | 入口  | ↑ 用户; ↓ netVisual_circle, netVisual_hierarchy1                                      | —                                                              | —   |
+| `netVisual_individual`              | 1604 | 迁移11slot | 逐个绘制配体受体对通讯网络               | 可视化  | 入口  | ↑ 用户; ↓ netVisual_circle, netVisual_hierarchy1                                      | —                                                              | —   |
 | `netVisual_hierarchy1`              | 1795 | 未动       | 绘制层级图上半部通讯网络                | 可视化  | 入口  | ↑ netVisual, netVisual_aggregate; ↓ mycircle                                        | Matrix, igraph, reshape2, shape                                | —   |
 | `netVisual_hierarchy2`              | 1985 | 未动       | 绘制层级图下半部通讯网络                | 可视化  | 入口  | ↑ netVisual, netVisual_individual; ↓ mycircle                                       | Matrix, igraph, reshape2, shape                                | —   |
 | `netVisual_circle`                  | 2176 | 未动       | 绘制环形细胞通讯网络图                 | 可视化  | 入口  | ↑ netVisual, netVisual_individual; ↓ scPalette                                      | Matrix, igraph, reshape2, scales                               | —   |
@@ -312,7 +314,7 @@
 | `StackedVlnPlot`                    | 6760 | 未动       | 纵向堆叠多基因小提琴图                 | 可视化  | 主流程 | ↑ plotGeneExpression; ↓ modify_vlnplot, extract_max                                 | Seurat, patchwork, purrr, ggplot2                              | —   |
 | `modify_vlnplot`                    | 6818 | 未动       | 绘制单个基因小提琴图面板                | 可视化  | 子模块 | ↑ StackedVlnPlot; ↓ —                                                               | Seurat, ggplot2                                                | —   |
 | `extract_max`                       | 6858 | 未动       | 提取 ggplot 纵轴最大值并取整          | 可视化  | 子模块 | ↑ StackedVlnPlot; ↓ —                                                               | ggplot2                                                        | —   |
-| `barPlot`                           | 6885 | 未动       | 按组绘制平均表达量柱状图                | 可视化  | 主流程 | ↑ plotGeneExpression; ↓ barplot_internal                                            | Seurat, reshape2, patchwork                                    | —   |
+| `barPlot`                           | 6885 | 迁移11slot | 按组绘制平均表达量柱状图                | 可视化  | 主流程 | ↑ plotGeneExpression; ↓ barplot_internal                                            | Seurat, reshape2, patchwork                                    | —   |
 | `barplot_internal`                  | 6969 | 未动       | 绘制单基因分组柱状图                  | 可视化  | 子模块 | ↑ barPlot, netVisual_barplot; ↓ —                                                   | ggplot2, ggpubr, scales                                        | —   |
 | `visualizePie`                      | 7029 | 未动       | scatterpie 绘制细胞比例饼图         | 可视化  | 入口  | ↑ 用户; ↓ —                                                                           | ggplot2, scatterpie(!), gtools                                 | —   |
 | `spatialTopicPlot`                  | 7123 | 未动       | 按空间坐标绘制 topic 得分图           | 可视化  | 入口  | ↑ 用户; ↓ —                                                                           | ggplot2, Matrix, RColorBrewer, scales, patchwork               | —   |
@@ -504,8 +506,8 @@
 
 ## 6. 读这份清单的方式
 
-- **P0 只一条**：先让包能装。补回四个被导出的函数（或从 NAMESPACE 撤掉 export），否则 `R CMD INSTALL`、`load_all()`、任何 `library(SpatialCellChat)` 都不可用；现有测试全走 `source()`，覆盖不到这一层。
-- **迁移顺序建议**：`R/visualization.R` 是最大缺口（62 个函数里 47 个未动，且 `netVisual_*` 主家族仍读 `net$prob`/`net$pval`）。这些函数在新对象上不是「结果不对」，而是取不到字段，适合按 `netVisual_aggregate` → `netVisual_circle`/`chord` → `heatmap`/`barplot` 的顺序成组迁移。
+- **P0-P5 当前入口**：安装阻塞、空间基础图、网络图、分析网络、场/分解、交互和剩余表达链已分别在对应回归脚本中验证；本清单不替代这些可执行证据。
+- **下一轮收尾**：运行完整源码 parse、`R CMD INSTALL --no-multiarch --with-keep.source .`、`git diff --check`，再处理仍被 issue log 标记的 API/语义边界；不要根据本页旧行号重新实现已经迁移的函数。
 - **兼容层收尾**：`my_as_sparse3Darray` 仅剩 1 处调用（`netVisual_CommunField`），把它和 `computeAvgCommunProb_LR_Avg/Sum`、`modifySparse3Darray` 一起清掉。
 - **死代码不要顺手删**：`是` 的 4 个可以删；`疑似` 的 40 个里有导出函数（如 `computeAveExpr`、`communicationDistPlot`），删除属 API 变更，建议先标 `@deprecated` 再删。
 - **依赖缺口**：15 个未装包全部落在 Suggests 的可选分支，不影响主链路；若要跑 `identifyCellTopics` / `suggestK` / `computeEnrichmentScore` 这类高级分析，需单独 `renv::install()` 并重新快照。

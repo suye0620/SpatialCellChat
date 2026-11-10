@@ -77,6 +77,63 @@ pass("netMappingDEG reads misc var.features and maps DEG columns",
        all(c("ligand.pvalues", "receptor.pvalues") %in% names(deg.net)) &&
        any(!is.na(deg.net$ligand.pvalues)))
 
+marker.table <- function(effect, pvalue) {
+  out <- expand.grid(
+    clusters = c("A", "B", "C", "D"),
+    features = c("G1", "G2", "L3", "R1", "R2", "R3"),
+    stringsAsFactors = FALSE
+  )
+  out$pvalues <- pvalue
+  out$logFC <- effect
+  out$pct.1 <- 0.8
+  out$pct.2 <- 0.2
+  out
+}
+source.one <- make_simulated_chat()
+source.two <- make_simulated_chat()
+for (source in c("source.one", "source.two")) {
+  value <- get(source)
+  value@DB$geneInfo <- chat@DB$geneInfo
+  value@misc$.var.features[["features.info"]] <- marker.table(
+    if (source == "source.one") 1 else 2,
+    if (source == "source.one") 0.01 else 0.02
+  )
+  assign(source, value)
+}
+merged.deg <- mergeSpatialCellChat(
+  list(one = source.one, two = source.two), show.plot = FALSE
+)
+snapshot.mapped <- netMappingDEG(merged.deg, "features")
+snapshot.effects <- vapply(c("one", "two"), function(dataset) {
+  unique(snapshot.mapped$ligand.logFC[snapshot.mapped$datasets == dataset])
+}, numeric(1))
+pass("merged DEG mapping uses the matching dataset snapshot",
+     all(snapshot.effects == c(one = 1, two = 2)) &&
+       all(snapshot.mapped$datasets %in% c("one", "two")))
+
+tagged.one <- marker.table(11, 0.001)
+tagged.one$datasets <- "one"
+tagged.two <- marker.table(22, 0.002)
+tagged.two$datasets <- "two"
+merged.deg@misc$.var.features[["features.info"]] <- rbind(tagged.one, tagged.two)
+tagged.mapped <- netMappingDEG(merged.deg, "features")
+tagged.effects <- vapply(c("one", "two"), function(dataset) {
+  unique(tagged.mapped$ligand.logFC[tagged.mapped$datasets == dataset])
+}, numeric(1))
+pass("merged tagged DEG table is filtered by dataset",
+     all(tagged.effects == c(one = 11, two = 22)))
+
+missing.deg <- merged.deg
+missing.deg@misc$.var.features[["features.info"]] <- NULL
+for (dataset in names(missing.deg@misc$.datasets))
+  missing.deg@misc$.datasets[[dataset]]$misc$.var.features[["features.info"]] <- NULL
+missing.error <- tryCatch({
+  netMappingDEG(missing.deg, "features")
+  ""
+}, error = conditionMessage)
+pass("merged DEG mapping rejects missing dataset-aligned evidence",
+     grepl("Dataset 'one'.*dataset-tagged merged marker table", missing.error))
+
 single.bar <- plotGeneExpression(chat, features = "G1", type = "bar")
 multi.bar <- plotGeneExpression(chat, features = c("G1", "G2"), type = "bar")
 ggplot2::ggsave(file.path(out.dir, "plotGeneExpression-bar-single.pdf"), single.bar,
