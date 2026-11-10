@@ -1525,19 +1525,23 @@ netVisual_aggregate <- function(object, signaling, signaling.name = NULL, color.
     gg <- netVisual_circle(prob.sum, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = paste0(signaling.name, " signaling pathway network"), vertex.label.cex = vertex.label.cex,...)
   }  else if (layout == "spatial") {
     prob.sum <- apply(prob, c(1,2), sum)
-    if (identical(vertex.weight, "incoming")){
-      if (length(slot(object, "netP")$centr) == 0) {
+    if (identical(vertex.weight, "incoming") || identical(vertex.weight, "outgoing")) {
+      centrality <- methods::slot(object, "netP")$centr
+      if (length(centrality) == 0L) {
         stop("Please run `netAnalysis_computeCentrality` to compute the network centrality scores! ")
       }
-      # vertex.weight = object@netP$centr[[signaling]]$indeg
-      vertex.weight = object@netP$centr["indeg", , signaling]
-    }
-    if (identical(vertex.weight, "outgoing")){
-      if (length(slot(object, "netP")$centr) == 0) {
-        stop("Please run `netAnalysis_computeCentrality` to compute the network centrality scores! ")
+      measure <- if (identical(vertex.weight, "incoming")) "indeg" else "outdeg"
+      axes <- dimnames(centrality)
+      groups <- rownames(prob.sum)
+      if (length(dim(centrality)) != 3L || length(axes) != 3L ||
+          any(vapply(axes, is.null, logical(1))) ||
+          any(vapply(axes, anyDuplicated, integer(1)) > 0L) ||
+          is.null(groups) || anyDuplicated(groups) ||
+          !measure %in% axes[[1L]] || !all(groups %in% axes[[2L]]) ||
+          !signaling %in% axes[[3L]]) {
+        stop("Pathway centrality must contain the requested measure, signaling pathway, and network groups by name; recompute group centrality if needed.", call. = FALSE)
       }
-      # vertex.weight = object@netP$centr[[signaling]]$outdeg
-      vertex.weight = object@netP$centr["outdeg", , signaling]
+      vertex.weight <- centrality[measure, groups, signaling]
     }
     coordinates <- object@images$coordinates
     labels <- object@idents

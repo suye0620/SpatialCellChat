@@ -1,0 +1,7 @@
+"dataset","cells","signal","direction","status","file"
+"simulated",20,"P1","incoming","PDF-WRITTEN","tests_dev/figures/P2/simulated/centrality-spatial-regression/incoming-reordered.pdf"
+"simulated",20,"P1","outgoing","PDF-WRITTEN","tests_dev/figures/P2/simulated/centrality-spatial-regression/outgoing-reordered.pdf"
+"visium",905,"TGFb","incoming","PDF-WRITTEN","tests_dev/figures/P2/visium/centrality-spatial-regression/incoming-reordered.pdf"
+"visium",905,"TGFb","outgoing","PDF-WRITTEN","tests_dev/figures/P2/visium/centrality-spatial-regression/outgoing-reordered.pdf"
+"slideseq",29536,"TGFb","incoming","PDF-WRITTEN","tests_dev/figures/P2/slideseq/centrality-spatial-regression/incoming-reordered.pdf"
+"slideseq",29536,"TGFb","outgoing","PDF-WRITTEN","tests_dev/figures/P2/slideseq/centrality-spatial-regression/outgoing-reordered.pdf"

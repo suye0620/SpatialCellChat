@@ -158,3 +158,12 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 验证：`tests_dev/test-network-render-isolates.R` 实绘 17 个情形，检查邻接矩阵、颜色、权重、接收边和逐群标签属性；模拟、Visium 和完整 Slide-seq 分别针对一个 pathway 和一个 LR，使用 aggregate/individual 与 circle/spatial/hierarchy 组合写出 18 张 PDF，记录见 `tests_dev/figures/P2/network-isolate-three-fixtures-2026-11-10.csv`。`test-netvisual-group-migration.R` 和 `test-merge-spatialcellchat.R` 回归通过。此前出现的空边颜色转换警告通过仅在存在边时转换消除；Visium 个体 circle 的自环绘制警告源于 igraph 将 35 条边的 arrow.width 与 6 条自环一起循环，现将标量宽度直接传给绘图调用，保留宽度值。测试仍有绘图库弃用、环境 locale 和 renv 状态警告。
 
 上述测试未穷举 LR 与绘图参数。完整 Slide-seq 的空间网络预览中群标签较小、背景较密，hierarchy 两面板的部分长标签靠近中心，需人工核对图像；写出 PDF 不等同于视觉或生物学验收。
+
+
+## P2-022：空间通路网络的中心性节点大小按位置错配
+
+位置：`netVisual_aggregate(layout = "spatial", vertex.weight = "incoming"/"outgoing")`。节点大小使用 `netP$centr` 中的群中心性，但原实现直接按数组的群维顺序取值，再按网络群顺序画图；当两者顺序不同，即使群名完全相同，节点大小仍会分配给错误的群。模拟、Visium、完整 Slide-seq 对象均可通过反转中心性群维复现。影响限于这两种中心性大小显示；通讯概率、中心性计算与筛选不受影响。
+
+修复：依据网络矩阵的群名、请求的 measure 和通路名称索引中心性；缺少名称、名称重复或缺失对应群/measure/通路时，要求重新计算或检查群中心性，不再静默错配。中心性数值与原有缩放公式保持不变。
+
+验证：`tests_dev/test-network-centrality-spatial.R` 对三对象分别用 incoming/outgoing，比较群顺序原样与反转时实际绘图层的节点大小，并检查缺群错误、输入未修改；六张实绘 PDF 和汇总见 `tests_dev/figures/P2/centrality-spatial-three-fixtures-2026-11-10.csv`。`test-netvisual-group-migration.R` 回归通过。每个数据集只覆盖一个通路，PDF 仍须人工验收；R 环境和绘图库仍有 locale、renv 与弃用警告。

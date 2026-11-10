@@ -55,3 +55,8 @@ Grid/Flow 的网格向量聚合已去除逐网格 `sf` 子集开销，并通过�
 ## 网络图孤立群回归
 
 `P2/network-isolate-regression/` 含 17 个网络绘图边界情形；`P2/network-isolate-three-fixtures-2026-11-10.csv` 及各数据集的 `network-isolate-regression/` 含三对象 aggregate/individual 各三种布局的 18 张 PDF。每个数据集只选择一个 pathway 和一条 LR，全部使用 `remove.isolate = TRUE`，不能代表所有参数与信号。模拟数据产生绘图库弃用警告，其余本次图形调用没有捕获到警告。Slide-seq 空间网络点密、标签较小，hierarchy 部分长标签靠近中心，均需人工复核。问题定位及测试范围见 P2-021。
+
+
+## 空间网络中心性节点大小
+
+`P2/centrality-spatial-three-fixtures-2026-11-10.csv` 索引三对象各一条通路的 incoming/outgoing 结果；图像写出前将中心性群维顺序反转，并检查节点大小仍按群名对应。具体原因和验证范围见 P2-022，图像仍需人工验收。
