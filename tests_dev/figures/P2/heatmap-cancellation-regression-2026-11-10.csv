@@ -1,0 +1,4 @@
+"dataset","cells","nonzero","status","file"
+"simulated",20,3,"PDF-WRITTEN","tests_dev/figures/P2/simulated/heatmap-cancellation-check/netVisual_heatmap.pdf"
+"visium",905,36,"PDF-WRITTEN","tests_dev/figures/P2/visium/heatmap-cancellation-check/netVisual_heatmap.pdf"
+"slideseq",29536,59,"PDF-WRITTEN","tests_dev/figures/P2/slideseq/heatmap-cancellation-check/netVisual_heatmap.pdf"

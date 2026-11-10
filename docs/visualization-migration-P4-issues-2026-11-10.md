@@ -30,3 +30,8 @@ Shiny 封装和 Plotly 输出需要分别实际验证；仅有 R 对象或静态
 ## P4-006：大对象 Shiny 浏览器交互与响应时间
 
 在 Visium（905）和完整 Slide-seq（29,536）对象上，真实鼠标框选两次并 Update，验证第二次替换第一次，Reset 恢复全部细胞，表达图覆盖全部细胞；分别见 `tests_dev/figures/P4/shiny-browser-summary-visium-2026-11-10.csv` 和 `tests_dev/figures/P4/shiny-browser-summary-slideseq-2026-11-10.csv`。Slide-seq 本机单次前两次选择更新约 11.6 和 9.2 秒（含鼠标动作），有性能待优化空间；这不是统计基准，也未覆盖所有浏览器、交互和参数。
+
+
+## P4-007：HTML 生成状态与浏览器测试记录分离
+
+`tests_dev/render_viz_p4.R` 仅生成 HTML，却在摘要中永久写入 `BROWSER-NOT-TESTED`，与独立 CDP 测试结果相矛盾。生成器现在仅写 `HTML-WRITTEN`；三对象已生成摘要指向 `tests_dev/figures/P4/browser-summary-2026-11-10.csv`，实际浏览器覆盖范围和结果以该独立文件为准，重新生成 HTML 不自动证明浏览器通过。

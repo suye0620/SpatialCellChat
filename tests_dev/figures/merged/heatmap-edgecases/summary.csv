@@ -1,0 +1,8 @@
+"case","sum","nonzero","status","detail"
+"cancel",0,2,"PDF-WRITTEN",""
+"negative",-1,1,"PDF-WRITTEN",""
+"balanced_isolates",0,4,"PDF-WRITTEN",""
+"zero",0,0,"ERROR","No significant cell-cell communication is inferred!
+"
+"zero_isolates",0,0,"ERROR","No significant cell-cell communication is inferred!
+"

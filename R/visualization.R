@@ -2797,8 +2797,9 @@ netVisual_heatmap <- function(
   net[is.na(net)] <- 0
 
   if (remove.isolate) {
-    idx1 <- which(Matrix::rowSums(net) == 0)
-    idx2 <- which(Matrix::colSums(net) == 0)
+    # Signed changes may sum to zero even when individual edges change.
+    idx1 <- which(Matrix::rowSums(net != 0) == 0)
+    idx2 <- which(Matrix::colSums(net != 0) == 0)
     idx <- intersect(idx1, idx2)
     if (length(idx) > 0) {
       net <- net[-idx, -idx, drop = FALSE]
@@ -2822,6 +2823,12 @@ netVisual_heatmap <- function(
     color.use <- color.use[col.show]
   }
 
+
+  # Opposite signed differences can cancel in the total while individual
+  # entries still carry changes. Test for an entirely zero matrix instead.
+  if (all(mat == 0)) {
+    stop("No significant cell-cell communication is inferred!", '\n')
+  }
 
   if (min(mat) < 0) {
     color.heatmap.use = colorRamp3(c(min(mat), 0, max(mat)), c(color.heatmap[1], "#f7f7f7", color.heatmap[2]))
@@ -2850,9 +2857,7 @@ netVisual_heatmap <- function(
   ha1 = rowAnnotation(Strength = anno_barplot(rowSums(abs(mat)), border = FALSE,gp = gpar(fill = color.use, col=color.use)), show_annotation_name = FALSE)
   ha2 = HeatmapAnnotation(Strength = anno_barplot(colSums(abs(mat)), border = FALSE,gp = gpar(fill = color.use, col=color.use)), show_annotation_name = FALSE)
 
-  if (sum(mat) == 0) {
-    stop("No significant cell-cell communication is inferred!",'\n')
-  } else if (sum(abs(unique(as.vector(mat))) > 0) == 1) {
+  if (sum(abs(unique(as.vector(mat))) > 0) == 1) {
     if (!is.function(color.heatmap.use)) color.heatmap.use = c("white", color.heatmap.use)
   } else {
     mat[mat == 0] <- NA

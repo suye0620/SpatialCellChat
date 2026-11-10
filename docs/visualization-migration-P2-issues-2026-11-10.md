@@ -123,3 +123,18 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 当前结果：single-object 数值路径保留原有 LR 选择、p-value 门控、归一化及 count/weight 语义；comparison 路径现由 `mergeSpatialCellChat()` 提供真实快照，并在 `tests_dev/test-merge-spatialcellchat.R` 中通过 producer 驱动回归。该回归是两个 simulated object 的合成对比，不代表真实样本间的生物学比较，也不替代三套 single-object 图像验收。
 
 剩余边界：对真实 Visium/Slide-seq 数据是否存在可解释的共同空间坐标系，不能由相同单位或像素比例推断。merged 空间对象因此保留 dataset-local 快照并拒绝顶层空间绘图；非空间 comparison 可正常消费 merged 快照。
+
+
+## P2-018：merged 差异热图的正负变化相互抵消
+
+位置：`R/visualization.R::netVisual_heatmap()` 的空结果判断及 `remove.isolate` 分支。merged 差异是第二个数据集减第一个数据集，既可正也可负。旧代码使用 `sum(mat) == 0` 判断整张图无变化；例如 A→A 增加 1、A→B 减少 1 时总和为零，尽管两条变化都存在仍报错。同理，`remove.isolate = TRUE` 用行列的带符号和判断群是否孤立，可能删除收发变化互相抵消的群。
+
+修复：只有每个元素都为零时才按空矩阵处理；只有对应行和列都没有非零元素时才删去孤立群。差值、方向、阈值和色阶均未重算。全零检查提前至色阶构造之前，使全零输入返回原有的无通讯提示，而不是先因色阶断点重复报错。
+
+验证：`tests_dev/test-merged-heatmap-edgecases.R` 使用真实 `mergeSpatialCellChat()` 生产的模拟对象，覆盖 +1/−1 总和抵消、纯负变化、四条变化的行列抵消及全零；在热图矩阵中核对非零数值。对模拟、Visium、完整 Slide-seq 的单对象热图重新出图并核对非零群矩阵，汇总见 `tests_dev/figures/P2/heatmap-cancellation-regression-2026-11-10.csv`。比较边界图保存在 `tests_dev/figures/merged/heatmap-edgecases/`。
+
+## P2-019：merged 比较图实绘与图例待核对
+
+此前 producer 回归对一些比较入口仅断言返回类型，未保存实际图。本次基于模拟对象及其经过明确修改的副本，使用真实 `mergeSpatialCellChat()` 生产快照，输出 10 张比较 PDF 至 `tests_dev/figures/merged/producer-comparison/`；这不是独立生物样本的比较，也不是用户的视觉验收。
+
+另观察到 merged `netVisual_heatmap()` 的差值直接来自第二数据集减第一数据集，图例仍固定写 `Relative values`；当所有差值非负时，默认两色映射将零映射为第一种颜色。该说明和色阶可能令读者误解，需要结合已有绘图约定单独评估，本次没有改变配色或差值定义。

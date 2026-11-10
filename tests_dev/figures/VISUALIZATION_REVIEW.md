@@ -42,3 +42,8 @@ Grid/Flow 的网格向量聚合已去除逐网格 `sf` 子集开销，并通过�
 ## 零向量显示修正
 
 `netVisual_CommunFieldGrid()` 的零长度箭头现在透明，避免绘图库把它们画成组织外的规则细点；非零箭头仍使用原位置、大小及用户指定透明度。三对象的结果分别在 `P3/<dataset>/zero-vector-display-check/`；完整 Slide-seq 是关闭箭头跳格、缩小背景点后的对照，并非默认参数结果。Grid 与 Flow 的整体可读性仍保留人工复核状态。
+
+
+## Merged 比较实绘与热图边界
+
+`merged/producer-comparison/summary.csv` 和同目录 10 张 PDF 使用真实 merge producer，但输入是模拟对象及其修改副本，不是独立生物样本。差异热图修复了正负变化求和抵消导致的误判和 `remove.isolate` 误删；边界图与三对象单图汇总分别见 `merged/heatmap-edgecases/` 和 `P2/heatmap-cancellation-regression-2026-11-10.csv`。图像仍需人工验收。

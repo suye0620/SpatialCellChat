@@ -2,7 +2,7 @@
 
 > 2026-08-09 · 针对 `spatialXXXPlot` 系列函数与 plotly 动图实现的系统审计
 > 关联文档：[REFACTORING_PLAN.md](REFACTORING_PLAN.md)、[DATA_STRUCTURE.md](DATA_STRUCTURE.md)
-> 本报告为重构 Phase 5（可视化）提供输入；本轮已落地距离计算、图像缓存迁移、plotly 共享布局辅助和 plotly 空间散点图矩阵适配。仍有依赖旧 slot 的 feature/LR 绘图函数，列为迁移阻塞而非隐藏兼容层。
+> 本报告主体保留 2026-08-09 的历史审计结果，旧状态与行号不代表当前代码。2026-11-10 的迁移与验收状态以文末第 9 节和 `tests_dev/figures/VISUALIZATION_REVIEW.md` 为准。
 
 ---
 
@@ -199,7 +199,7 @@ spatial3Dstack <- function(xy, layers, color.heatmap = "RdBu", point.size = 3, z
 
 ---
 
-## 6. 重构优化方向与优先级
+## 6. 重构优化方向与优先级（历史审计状态）
 
 | 优先级 | 项目 | 工作量 | 说明 |
 |---|---|---|---|
@@ -241,9 +241,18 @@ spatial3Dstack <- function(xy, layers, color.heatmap = "RdBu", point.size = 3, z
 
 ---
 
-## 8. 遗留与未验证项
+## 8. 遗留与未验证项（历史审计状态）
 
 - 真实 psoriasis Seurat 导入与 raster 自动提取已用 `tests_dev/test_data/visium_human_psoriasis_PP1_correctedLocations202401_annotated(1).RData` 验证；仍缺少更大规模坐标距离压力测试；
 - `spatialFeaturePlot`、`plotly_spatialLRpairPlot` 和依赖旧通信结构的 Gi/Lee 外层函数仍未完成最终 schema 迁移；
 - `plotStatistics_Gi` 的 trace 后处理、Shiny observer 累积和 HTML hover 转义仍需单独回归；
 - 3D stack 已加入 `NAMESPACE`，输入为单对象坐标与带细胞名的 `cell × layer` 表；共享色域、单 colorbar、层序 z 轴、hover 转义、非法层边界和 29,536 细胞 × 3 层渲染均已验证。该入口不承担多切片组织配准、物理 z 单位或跨对象细胞对应。
+
+
+## 9. 2026-11-10 迁移与验收状态
+
+- `spatialFeaturePlot()`、`spatialGiPlot()` 和 `spatialLeePlot()` 已适配当前对象并在模拟、Visium 与完整 Slide-seq 对象上产生 P1 图；对应 `tests_dev/figures/summary-<dataset>-P1.csv`。Gi 的更新单项结果另见 `summary-<dataset>-P1-spatialGiPlot.csv`。这些出图结果不代表所有参数与统计语义均已验收。
+- `plotly_spatialLRpairPlot()`、2D/3D spatialDimPlot、3D spatial stack 与 3D Gi 的 15 个 HTML 测试页已完成浏览器初始化和数据覆盖 smoke；Shiny 的选择、替换和重置已在三对象进行真实浏览器测试。分别见 `tests_dev/figures/P4/browser-summary-2026-11-10.csv` 和该目录下的 Shiny 汇总。大对象响应时间仍需优化，交互范围并未穷举。
+- `mergeSpatialCellChat()` 已提供数据集快照；比较函数的生产者和消费者测试见 `tests_dev/test-merge-spatialcellchat.R`、`tests_dev/test-remaining-entrypoints.R`。空间坐标仍是 dataset-local，不能将不同数据集视作已配准到同一组织坐标。
+- Slide-seq Grid/Flow 可读性、Visium 多 LR 弦图标签、旧缓存来源校验、独立环境恢复和用户人工验收仍未闭环。场网格已减少重复 sf 子集运算，并修复零长度箭头显示为细点的问题；细节见 `visualization-migration-P3-issues-2026-11-10.md`。
+- 阈值、富集和科学解释的未决问题仍按既有语义保留；不要把出图或浏览器 smoke 等同于统计正确性。

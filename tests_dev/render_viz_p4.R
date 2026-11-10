@@ -78,7 +78,7 @@ results <- lapply(names(specs), function(name) {
     if (!file.exists(file) || file.info(file)$size <= 1000L) stop("HTML missing or empty")
     ""
   }, error = function(e) conditionMessage(e))
-  status <- if (nzchar(message)) "FAIL" else "HTML-WRITTEN; BROWSER-NOT-TESTED"
+  status <- if (nzchar(message)) "FAIL" else "HTML-WRITTEN"
   cat(status, message, "\n")
   data.frame(dataset = dataset, figure = name, cells = nrow(chat@meta),
              feature = if (name == "plotly_spatialLRpairPlot") gene else "",

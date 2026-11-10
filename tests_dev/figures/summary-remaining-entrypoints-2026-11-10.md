@@ -27,3 +27,8 @@
 
 See `docs/remaining-migration-issues-2026-11-10.md` and the phase issue logs for
 causes, retained scientific semantics, and reproducibility limitations.
+
+
+## Merged comparison figure follow-up
+
+Ten comparison consumers now have actual PDFs under `merged/producer-comparison/`, generated from the real merge producer using a simulated fixture and an intentionally modified copy. The separate `merged/heatmap-edgecases/` cases check signed cancellation and isolate handling. These are rendering and contract checks, not biological comparisons or manual visual acceptance.
