@@ -73,6 +73,8 @@ specs <- list(
                   method = "3d", return.object = FALSE)
   }
 )
+normal.only <- identical(tolower(Sys.getenv("SC_P4_NORMAL_ONLY")), "true")
+if (normal.only) specs <- list()
 results <- lapply(names(specs), function(name) {
   cat("==", dataset, name, "\n")
   file <- file.path(out.dir, paste0(name, ".html"))
@@ -113,18 +115,71 @@ results <- lapply(names(specs), function(name) {
              status = status, detail = message, file = file)
 })
 results <- do.call(rbind, results)
-# htmlwidgets copies the JS assets, but not the accompanying license files.
-license.paths <- c(
-  "plotly-latest.min.js" = system.file("htmlwidgets", "lib", "plotlyjs", "LICENSE", package = "plotly"),
-  "typedarray.min.js" = system.file("htmlwidgets", "lib", "typedarray", "LICENSE", package = "plotly")
+normal.specs <- list(
+  plotFeatures_normal = function() plotFeatures(
+    feature.score, method = "normal", cells.highlight = feature.highlight,
+    plot.title = "Feature score"
+  ),
+  plotFeatures_normal_grouped = function() plotFeatures(
+    feature.score, group.by = as.character(chat@idents[cells]),
+    group.highlight = as.character(chat@idents[cells])[[1L]],
+    show.group = TRUE, method = "normal", plot.title = "Feature score"
+  )
 )
-if (any(!nzchar(license.paths))) stop("Plotly dependency license files are unavailable", call. = FALSE)
-assets <- list.files(out.dir, recursive = TRUE, full.names = TRUE)
-for (asset in assets[basename(assets) %in% names(license.paths)]) {
-  license.file <- file.path(dirname(asset), "LICENSE")
-  if (!file.copy(license.paths[[basename(asset)]], license.file, overwrite = TRUE))
-    stop("Unable to copy dependency license to ", license.file, call. = FALSE)
+normal.results <- lapply(names(normal.specs), function(name) {
+  cat("==", dataset, name, "\n")
+  file <- file.path(out.dir, paste0(name, ".pdf"))
+  message <- tryCatch({
+    plot <- normal.specs[[name]]()
+    if (!inherits(plot, "ggplot") && !inherits(plot, "patchwork"))
+      stop("unexpected plot class: ", paste(class(plot), collapse = ", "))
+    panels <- if (name == "plotFeatures_normal") list(plot) else
+      c(list(plot), plot$patches$plots)
+    if (length(panels) != if (name == "plotFeatures_normal") 1L else 2L)
+      stop("unexpected number of normal feature panels")
+    for (panel in panels) {
+      ids <- panel$data$cell_id
+      if (length(ids) != length(cells) || anyDuplicated(ids) ||
+          !setequal(ids, cells))
+        stop("normal feature panel does not preserve every fixture cell exactly once")
+    }
+    if (name == "plotFeatures_normal_grouped") {
+      expected.groups <- unique(as.character(chat@idents[cells]))
+      observed.groups <- unique(as.character(panels[[1L]]$data$group.label))
+      if (!setequal(observed.groups, expected.groups))
+        stop("grouped feature panel does not retain every fixture annotation")
+    }
+    ggplot2::ggsave(file, plot, width = 9, height = 5.5, limitsize = FALSE)
+    if (!file.exists(file) || file.info(file)$size <= 1000L)
+      stop("PDF missing or empty")
+    ""
+  }, error = function(e) conditionMessage(e))
+  status <- if (nzchar(message)) "FAIL" else "PDF-WRITTEN"
+  cat(status, message, "\n")
+  data.frame(dataset = dataset, figure = name, cells = length(cells),
+             groups = if (name == "plotFeatures_normal_grouped")
+               length(unique(as.character(chat@idents[cells]))) else NA_integer_,
+             status = status, detail = message,
+             file = file.path(out.dir, paste0(name, ".pdf")),
+             stringsAsFactors = FALSE)
+})
+normal.results <- do.call(rbind, normal.results)
+write.csv(normal.results, file.path(out.dir, "plotFeatures-normal-summary.csv"),
+          row.names = FALSE)
+# htmlwidgets copies the JS assets, but not the accompanying license files.
+if (length(results)) {
+  license.paths <- c(
+    "plotly-latest.min.js" = system.file("htmlwidgets", "lib", "plotlyjs", "LICENSE", package = "plotly"),
+    "typedarray.min.js" = system.file("htmlwidgets", "lib", "typedarray", "LICENSE", package = "plotly")
+  )
+  if (any(!nzchar(license.paths))) stop("Plotly dependency license files are unavailable", call. = FALSE)
+  assets <- list.files(out.dir, recursive = TRUE, full.names = TRUE)
+  for (asset in assets[basename(assets) %in% names(license.paths)]) {
+    license.file <- file.path(dirname(asset), "LICENSE")
+    if (!file.copy(license.paths[[basename(asset)]], license.file, overwrite = TRUE))
+      stop("Unable to copy dependency license to ", license.file, call. = FALSE)
+  }
+  write.csv(results, file.path(out.dir, "summary.csv"), row.names = FALSE)
 }
-write.csv(results, file.path(out.dir, "summary.csv"), row.names = FALSE)
 print(results)
-if (any(results$status == "FAIL")) quit(status = 1L)
+if (any(c(results$status, normal.results$status) == "FAIL")) quit(status = 1L)

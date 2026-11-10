@@ -110,6 +110,8 @@ merged 结构由真实 Visium 自身对照再次通过 `mergeSpatialCellChat()` 
 
 `continued-2026-11-11/P4/<dataset>/` 补入真实 fixture 表达分数的 `plotFeatures_2d` 和 `plotFeatures_3d`，并保留其余五类 P4 页面。浏览器记录 `continued-2026-11-11/P4/browser-summary-2026-11-11.csv` 覆盖三对象共 21 页，全部通过 Plotly 初始化、细胞点覆盖、2D/3D 场景和 relayout smoke。`plotFeatures()` 及其它图的视觉呈现仍待人工检查；其中固定 z 值是显示平面，不代表实测第三空间维度。
 
+`continued-2026-11-12/P4-normal/<dataset>/` 补齐三个真实 fixture 的静态 `plotFeatures()` 普通模式与注释/表达双面板模式，共 6 份 PDF。自动检查确认每个面板均恰好保留全部输入细胞，双面板的注释类别与 fixture 一致；这只证明输入覆盖和绘制写出，不代表人工视觉或生物学验收。
+
 全零 signaling layer 的 NMF 失败由 `selectK()` 的 Visium fixture 重跑发现，原因与验证见 `docs/remaining-migration-issues-2026-11-10.md` P5-019。共享归一化 helper 已同时覆盖模式推断入口，`test-remaining-migration.R` 的全零列回归通过。
 
 本次扩展后重新生成的 artifact inventory 共 722 项：363 PDF、50 张图像、55 个 HTML、210 个本地依赖文件和 44 份依赖许可证。运行 `python tests_dev/audit-visualization-artifacts.py --check-tracked` 前，需将该清单引用的本批产物纳入 Git 索引；审计只校验文件结构、PDF 边界、HTML 本地依赖和索引字节一致，不替代视觉或科学验收。

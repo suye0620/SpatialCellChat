@@ -101,4 +101,4 @@ keep ≠ 不动：本批仍要做**包用法核查**（`element_line(size=)`、`
 
 - **P1-P4**：已完成对应核心入口迁移和三类 fixture 的图形/交互回归；
 - **P5 收尾**：已完成 netP 显式筛选、selectK、netMappingDEG（含 merged dataset 对齐）、barPlot 和 signaling-role 消费者的回归；全零信号列由共享预处理排除，并对三个 fixture 输出收尾图；
-- **下一步**：完成 package install、源码 parse、diff check，处理 issue log 中仍未覆盖的可选入口/科学语义边界。
+- **当前剩余**：三对象静态 `plotFeatures()` 普通/分组模式已补充实绘，安装与 source package 检查已完成（限制见验收索引）。仍需人工复核 Visium chord 与全量 Slide-seq Grid/Flow 的显示效果；独立样本 merged 验收需要满足共同基因轴及可解释群注释契约的数据；其余可选依赖、参数组合与大对象交互性能按 issue log 中的覆盖边界继续处理。出图和自动 smoke 不等于视觉或生物学通过。

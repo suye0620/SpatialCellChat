@@ -273,3 +273,11 @@ Next direction: use independently acquired compatible samples with a defensible 
 修复：新增共享 `.sc_normalize_pattern_scores()`，先检查聚合分数为有限值，只对最大值大于 0 的信号列归一化；全零列从 NMF 输入移除，空网络仍由现有调用方给出明确错误。非零列的按列最大值归一化定义不变。`tests_dev/test-remaining-migration.R` 额外构造全零层，分别验证 `selectK()` 与 `identifyCommunicationPatterns()`；`tests_dev/render_p5_remaining_figures.R` 在模拟、Visium 和完整 Slide-seq fixture 上均生成 selectK 图。
 
 边界：该修复只排除没有群级信号的信息列，不改变任一非零信号的权重或阈值。NMF 与 ggplot 依赖警告仍会输出；绘图写出及 CDP smoke 不等同于人工视觉或生物学验收。
+
+## P5-020：静态 plotFeatures 模式此前只有合成数据验收
+
+位置：`tests_dev/render_viz_p4.R` 及 P4 fixture 验收。此前三个真实对象的 P4 覆盖了 `plotFeatures()` 的 2D/3D Plotly 页面，但静态 `method="normal"` 和 `show.group=TRUE` 双面板只在合成数据路径上验证，不能证明 Visium 与完整 Slide-seq 的坐标/细胞标识输入也能正常绘制。
+
+处理：新增 `SC_P4_NORMAL_ONLY=true` 测试模式，避免为静态验收重生成已存在的 Plotly 页面；对普通图及分组图的两个面板逐一断言每个 fixture 细胞恰好出现一次，并验证分组面板保留全部注释类别。脚本退出码现在同时覆盖 HTML 与静态 PDF 失败。审计器要求三个 fixture 各自存在普通/分组两行 `PDF-WRITTEN` 汇总并检查对应 PDF。
+
+验证：R 4.4.3 下 simulated（20 细胞）、Visium（905 spot）和完整 Slide-seq（29,536 细胞）均成功写出两种静态图，共 6 份 PDF；汇总位于 `tests_dev/figures/continued-2026-11-12/P4-normal/`。这不替代人工视觉或生物学验收。

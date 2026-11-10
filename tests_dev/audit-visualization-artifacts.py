@@ -192,6 +192,23 @@ def main():
                 add(continued_p4 / row['screenshotPath'], rel(expanded_browser),
                     'BROWSER-SMOKE', 'image')
 
+    # Static plotFeatures modes are separate from the Plotly browser pages.
+    normal_p4 = FIGURES / 'continued-2026-11-12' / 'P4-normal'
+    expected_normal = {'plotFeatures_normal', 'plotFeatures_normal_grouped'}
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        summary = normal_p4 / dataset / 'plotFeatures-normal-summary.csv'
+        if not summary.is_file():
+            errors.append(f'missing normal plotFeatures summary: {rel(summary)}')
+            continue
+        result_rows = rows(summary)
+        if len(result_rows) != 2 or {row.get('figure') for row in result_rows} != expected_normal:
+            errors.append(f'{rel(summary)}: expected both static plotFeatures modes exactly once')
+        for row in result_rows:
+            if row.get('status') != 'PDF-WRITTEN':
+                errors.append(f'{rel(summary)}: {row.get("figure")} has status {row.get("status")}')
+                continue
+            add(ROOT / row['file'], rel(summary), 'PDF-WRITTEN', 'pdf')
+
     installed_summary = recheck / 'installed-smoke' / 'summary.csv'
     if not installed_summary.is_file():
         errors.append(f'missing installed smoke summary: {rel(installed_summary)}')
