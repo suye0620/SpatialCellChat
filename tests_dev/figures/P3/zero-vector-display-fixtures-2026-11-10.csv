@@ -1,0 +1,3 @@
+"dataset","cells","signal","zero_transparent","positive_visible","geometry_unchanged","output"
+"simulated",20,"P1",0,1681,TRUE,"tests_dev/figures/P3/simulated/zero-vector-display-check/netVisual_CommunFieldGrid.pdf"
+"visium",905,"COLLAGEN",845,715,TRUE,"tests_dev/figures/P3/visium/zero-vector-display-check/netVisual_CommunFieldGrid.pdf"

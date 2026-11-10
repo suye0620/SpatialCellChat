@@ -37,3 +37,8 @@
 ## 网格聚合性能复测
 
 Grid/Flow 的网格向量聚合已去除逐网格 `sf` 子集开销，并通过空网格、缺失值及两种聚合方法的等价性检查；完整 Slide-seq 两幅参数对照的优化前后渲染结果哈希一致。性能证据和比较范围见 `docs/visualization-migration-P3-issues-2026-11-10.md` 的 P3-014。该优化不意味着场图可读性问题已经解决。
+
+
+## 零向量显示修正
+
+`netVisual_CommunFieldGrid()` 的零长度箭头现在透明，避免绘图库把它们画成组织外的规则细点；非零箭头仍使用原位置、大小及用户指定透明度。三对象的结果分别在 `P3/<dataset>/zero-vector-display-check/`；完整 Slide-seq 是关闭箭头跳格、缩小背景点后的对照，并非默认参数结果。Grid 与 Flow 的整体可读性仍保留人工复核状态。

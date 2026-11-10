@@ -5775,7 +5775,8 @@ netVisual_CommunField <- function(
 #' explicit sizes must be positive finite numeric vectors of length 1 or 2.
 #' `grid.resolution` is a positive finite multiplier. When
 #' `images$spatial.factors$ratio` is unavailable, coordinates remain in raw
-#' units and no physical scale is reported.
+#' units and no physical scale is reported. Zero-length vectors are transparent;
+#' nonzero arrows retain the requested opacity.
 #'
 #' @param object SpatialCellChat object
 #' @param signaling a signaling pathway or ligand-receptor pair to visualize
@@ -6053,13 +6054,13 @@ netVisual_CommunFieldGrid <- function(
         y = -lat,
         dx = u,
         dy = -v,
-        size = after_stat(norm_mag)
+        size = after_stat(norm_mag),
+        alpha = after_stat(ifelse(mag > 0, arrow.line.alpha, 0))
       ),
       data = uv.se,
       color = arrow.line.color,
       min.mag = min.mag,
       skip = arrow.skip,
-      alpha = arrow.line.alpha,
       arrow = grid::arrow(
         arrow.angle,
         grid::unit(arrow.length, "lines"),
@@ -6073,6 +6074,7 @@ netVisual_CommunFieldGrid <- function(
       arrow.ends = arrow.ends
     )+
     scale_size_continuous(range = arrow.line.width, guide = "none")+
+    scale_alpha_identity()+
     # geom_sf(data =current.gridded.na,mapping = aes(geometry=square_grid),color="white",fill="white",linewidth=0)+
     # scale_fill_gradientn(name = "Current",colours = oceColorsVelocity(120),
     #                      limits = c(0,1.6), breaks = seq(0.1,1.6,.3))+

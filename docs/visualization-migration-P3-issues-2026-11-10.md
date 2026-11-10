@@ -81,3 +81,14 @@ Slide-seq LAMININ outgoing 的诊断中，29,536 个细胞有 19,474 个非零�
 验证：`tests_dev/test-grid-visualization.R` 对空集合、零值、缺失值、无穷值和重复成员逐项比较原 sf 子集法，median 与 sum 均完全一致，并实绘两个入口。`tests_dev/benchmark-grid-field-aggregation.R` 的同进程单次合成对照（2,000 点、6,000 网格）中，median 聚合旧/新分别约 3.58/0.12 秒，sum 约 3.22/小于计时分辨率的 0.01 秒；仅为此聚合步骤，不是整个绘图的加速倍数。
 
 完整 Slide-seq 的 LAMININ outgoing 本次 Grid 和 Flow 对象构造分别约 23.97 和 23.79 秒，未包含字段计算和 PDF 输出。对照 PDF 以相同 `pdftoppm` 参数转为 PNG 后，优化前后 Grid 与 Flow 的 PNG 哈希均相同；对应原始 Grid 对照和 Flow 对照分别见 `tests_dev/figures/P3/slideseq/netVisual_CommunFieldGrid-no-skip.pdf` 和 `tests_dev/figures/P3/slideseq/netVisual_CommunFlow-adjusted.pdf`。旧的约 273 秒记录覆盖范围不同，不能计算整体加速倍数。显示问题和 `st_centroid` 警告仍待处理。
+
+
+## P3-015：零长度箭头被画成散点
+
+位置：`netVisual_CommunFieldGrid()` 的 `metR::geom_arrow()` 层。插值网格落在非占用区域时，旧代码将对应向量设置为零，但 `min.mag = 0` 仍允许这些向量进入绘图层；绘图库会将零长度箭头按线宽画成细点，使组织外出现规则点阵。修正为统计层抽样后对零长度向量使用透明度 0；非零向量使用用户的 `arrow.line.alpha`。网格抽样顺序、插值、向量值、非零箭头的位置和长度均不改变。
+
+验证：`tests_dev/test-grid-visualization.R` 检查自定义非零透明度、旧新非零箭头几何一致，以及全零场实际 PDF；`tests_dev/test-grid-zero-display-fixtures.R` 对模拟和 Visium 输出真实 PDF 并比较绘图层。全量 Slide-seq 的不跳格对照中 1,861 个零向量透明，540 个非零向量保留；结果见 `tests_dev/figures/P3/slideseq/zero-vector-display-check/`。这解决组织外伪点，但不能说明其余箭头已足够清晰，Grid 和 Flow 仍须视觉验收。
+
+## P3-016：场图帮助文件与函数签名不一致
+
+`man/netVisual_CommunFieldGrid.Rd` 与 `man/netVisual_CommunFlow.Rd` 仍描述旧的参数、默认值和尺寸规则，例如 Flow 的 `L`、`n`、`image.alpha` 和 `arrow.line.width`。用户参考帮助会误判实际展示。已按当前 R 函数和 roxygen 注释同步两份帮助；`test-grid-visualization.R` 解析 Rd 并逐项检查参数顺序、默认值。当前环境未安装 roxygen2，因此直接同步 Rd，未执行全项目文档重生成。

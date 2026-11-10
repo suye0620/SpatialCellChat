@@ -29,6 +29,24 @@ check <- function(label, condition) {
 }
 
 
+# Check the user-visible help signatures against the actual function formals.
+for (fn in c("netVisual_CommunFieldGrid", "netVisual_CommunFlow")) {
+  rd <- tools::parse_Rd(file.path("man", paste0(fn, ".Rd")))
+  usage <- rd[[which(vapply(rd, function(x) identical(attr(x, "Rd_tag"), "\\usage"), logical(1)))]]
+  call <- parse(text = paste(as.character(usage), collapse = ""))[[1L]]
+  args <- as.list(call)[-1L]
+  formal.args <- formals(get(fn))
+  arg.names <- names(args)
+  for (i in which(!nzchar(arg.names))) arg.names[i] <- as.character(args[[i]])
+  check(paste0(fn, " help documents argument names and order"),
+        identical(arg.names, names(formal.args)))
+  check(paste0(fn, " help documents actual defaults"),
+        all(vapply(which(nzchar(names(args))), function(i)
+          identical(args[[i]], formal.args[[arg.names[i]]]), logical(1))))
+  tools::checkRd(rd)
+}
+
+
 # Compare the same membership indices against the previous sf-subsetting
 # implementation, including empty and multiply assigned boundary positions.
 field.fixture <- sf::st_as_sf(
@@ -106,7 +124,7 @@ for (fn in c("netVisual_CommunFieldGrid", "netVisual_CommunFlow")) {
   input.before.explicit <- chat
   explicit <- capture.output(
     result <- fun(chat, signaling = "signal", pattern = "outgoing",
-                  cellsize = c(1, 1), grid.resolution = 1),
+                  cellsize = c(1, 1), grid.resolution = 1, arrow.line.alpha = 0.6),
     type = "message"
   )
   check(paste0(fn, " explicit cellsize returns ggplot"), inherits(result, "ggplot"))
@@ -122,6 +140,16 @@ for (fn in c("netVisual_CommunFieldGrid", "netVisual_CommunFlow")) {
   if (fn == "netVisual_CommunFieldGrid") {
     check("netVisual_CommunFieldGrid adaptively decimates arrows",
           nrow(built) <= 144L && any(grepl("Arrow sampling", explicit, fixed = TRUE)))
+    check("nonzero vectors retain requested opacity",
+          any(built$mag > 0) && all(built$alpha[built$mag > 0] == 0.6))
+    # Rebuild the same interpolated layer with the former fixed alpha to ensure
+    # magnitude, decimation, positions and size scales are unchanged.
+    result$layers[[2L]]$mapping$alpha <- NULL
+    result$layers[[2L]]$aes_params$alpha <- 0.6
+    before <- ggplot_build(result)$data[[2L]]
+    shared <- c("x", "y", "dx", "dy", "mag", "norm_mag", "size")
+    check("arrow sampling and nonzero arrow geometry match the former drawing",
+          identical(built[, shared], before[, shared]))
   } else {
     check("netVisual_CommunFlow adaptively limits streamline seeds",
           length(unique(built$group)) <= 9L &&
@@ -139,5 +167,22 @@ for (fn in c("netVisual_CommunFieldGrid", "netVisual_CommunFlow")) {
   check(paste0(fn, " reports occupancy diagnostics"),
         any(grepl("occupied", implicit, fixed = TRUE)))
 }
+
+
+zero.chat <- chat
+zero.matrix <- field.matrix
+zero.matrix@x[] <- 0
+zero.chat@netP$cell$field$outgoing <- SparseChatArray(
+  list(signal = zero.matrix), dimnames = list(cells, colnames(zero.matrix), "signal")
+)
+zero.plot <- netVisual_CommunFieldGrid(zero.chat, signaling = "signal",
+                                      pattern = "outgoing", cellsize = c(1, 1),
+                                      grid.resolution = 1, arrow.skip = 0)
+zero.pdf <- tempfile(fileext = ".pdf")
+ggplot2::ggsave(zero.pdf, zero.plot, width = 7, height = 5.5)
+check("an all-zero communication field renders without visible arrow marks",
+      file.exists(zero.pdf) && nrow(ggplot_build(zero.plot)$data[[2L]]) > 0 &&
+        all(ggplot_build(zero.plot)$data[[2L]]$alpha == 0))
+unlink(zero.pdf)
 
 cat("All grid visualization smoke tests passed.\n")
