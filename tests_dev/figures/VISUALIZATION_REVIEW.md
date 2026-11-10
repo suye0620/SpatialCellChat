@@ -21,7 +21,7 @@
 - Visium `netVisual_chord_gene`：88 LR 的 sector 标签重叠，汇总记为 `VISUAL-REVIEW`。
 - Slide-seq `netVisual_CommunFieldGrid`、`netVisual_CommunFlow`：默认背景遮挡向量，Flow 出现仅一步积分警告，记为 `VISUAL-REVIEW`。全量数据的参数对照改善了 Flow 显示并消除了该警告，但 Grid 箭头仍稀疏；两项对照也需视觉检查，不算通过。
 - 比较/merged 图及 pairwise embedding 缺少当前结构的真实对象构建入口和完整契约，尚未迁移验收。
-- `netAnalysis_contribution()` 和 `rankNet()` 未注册进三对象绘图清单，仍读取旧概率字段，单对象与比较分支均未完成迁移验收，详见 P2-017。
+- `netAnalysis_contribution()` 和 `rankNet()` 的单对象路径已迁移并完成三对象出图；`rankNet()` 的 comparison 仅通过 `misc$.datasets` 镜像测试，尚未用真实 `mergeSpatialCellChat()` producer 验收，详见 P2-017。
 - 原始旧缓存对象缺少距离及通信概率来源快照，无法安全使用通信距离模式，需从原始输入重新推断。
 - HTML 浏览器截图仅为抽查，未完成全部图、动态 widget 和 Shiny 的浏览器交互测试。Shiny 模拟服务端会话测试不替代浏览器测试。
 - topic 示例只覆盖两条 pathway；Seurat TopicSignaling 已用单个合成 Seurat 对象及显式 interaction 表实绘，但未覆盖三套真实 Seurat 数据。其他参数、三维堆叠及多样本比较并未穷举。
@@ -29,6 +29,6 @@
 
 ## 本次复测
 
-在 R 4.4.3 下再次运行 `tests_dev/test-netvisual-group-migration.R`、`tests_dev/test-viz-p3-migration.R` 和 `tests_dev/test-viz-p4-migration.R`，三项退出码均为 0。P3 测试仍报告部分点被移除、UMAP 初始嵌入尺度提示以及依赖包弃用提示；群网络测试也有绘图库弃用提示。Shiny 检查仅覆盖服务端模拟，不替代浏览器交互。复测环境启动时报告 locale 设置失败和 renv out-of-sync，不能据此认定环境已独立复现。
+在 R 4.4.3 下再次运行 `tests_dev/test-netvisual-group-migration.R`、`tests_dev/test-viz-p3-migration.R`、`tests_dev/test-viz-p4-migration.R` 和 `tests_dev/test-analysis-network-migration.R`，四项退出码均为 0。P2 新增的 `netAnalysis_contribution()`、`rankNet-netP` 和 `rankNet-net` 均在三套对象上写出 PDF。P3 测试仍报告部分点被移除、UMAP 初始嵌入尺度提示以及依赖包弃用提示；群网络测试也有绘图库弃用提示。Shiny 检查仅覆盖服务端模拟，不替代浏览器交互。复测环境启动时报告 locale 设置失败和 renv out-of-sync，不能据此认定环境已独立复现。
 
 详细位置、原因、修复与待确认事项见 `docs/visualization-migration-P0-issues-2026-11-10.md` 至 `docs/visualization-migration-P4-issues-2026-11-10.md`。

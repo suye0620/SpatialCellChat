@@ -106,10 +106,14 @@
 
 hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn = -1)` 后不恢复，导致后续操作的警告也被隐藏。迁移期间移除这些全局选项更改，保留绘图和统计计算；测试需重新运行以观察此前可能被掩盖的警告。
 
-## P2-017：contribution 和 rankNet 未纳入本轮三对象绘图清单
+## P2-017：contribution 和 rankNet 的单对象路径已迁移，comparison 仍待真实 merged producer
 
-位置：`R/analysis.R` 的 `netAnalysis_contribution()` 和 `rankNet()`。前者的群级与细胞级分支分别读取旧的 `net$prob` / `net$pval` 和 `net$prob.cell`；后者单对象分支同样读取旧概率路径，comparison 分支还依赖旧 merged 布局。此外 `rankNet()` 设置 `options(warn = -1)` 后未恢复。新对象的概率位于 `net` 或 `netP` 下的 `group$prob` / `group$pval` 和 `cell$prob`，因此现有出图结果不能证明这两个入口可用。
+位置：`R/analysis.R` 的 `netAnalysis_contribution()` 和 `rankNet()`。此前这两个入口分别读取旧的 `net$prob` / `net$pval`、`net$prob.cell` 以及旧 comparison 容器；新对象的概率现在从 `net` 或 `netP` 下的 `group$prob` / `group$pval` 和 `cell$prob` 逐层读取。
 
-本质：这两个分析绘图入口没有被现有的 P2/P3 三对象 runner 注册，不是已生成的 heatmap、bubble、chord 等图的通过证据。迁移总表曾将 `rankNet` 描述为 bubble 的依赖，但本次源码搜索未发现 `netVisual_bubble()` 直接调用 `rankNet()`，不应因此推断 bubble 单对象结果失效。
+本质：单对象路径是存储迁移，不能因为函数返回 ggplot 就自动视为完成；还必须确认 LR 选择、群级 p 值门控、归一化、weight/count 语义、receiver 分面和 cell-level 稀疏性没有被改变。comparison 路径则需要真实的 merged object producer 来保证 dataset、group、LR/pathway 和 cell 轴的名称对齐。迁移总表曾将 `rankNet` 描述为 bubble 的依赖，但源码中没有发现 `netVisual_bubble()` 直接调用 `rankNet()`，不应据此推断 bubble 单对象结果失效。
 
-修复方向：分别保留原 LR 选择、群级阈值、归一化、强度或计数及排序规则，按新 slot 逐层读取；细胞级不得将全量 cell×cell×LR 数据稠密化。需要补充数值对照与三对象实际出图；comparison 仍受 P2-015 阻塞。目前这两项尚未迁移或验收。
+当前结果：`netAnalysis_contribution()` 的 group、cell 和 receiver 分面，以及 `rankNet()` 的 `netP` weight/count、`net` cell count 已切换到 `SparseChatArray` 新 slot；三套真实 fixture（simulated、Visium 905 spots、完整 Slide-seq 29,536 cells）均已成功出图。回归脚本为 `tests_dev/test-analysis-network-migration.R`，产物和摘要分别位于 `tests_dev/figures/P2/<dataset>/` 与 `tests_dev/figures/summary-all-P2-*.csv`。
+
+剩余边界：`rankNet()` 已能读取文档约定的 `misc$.datasets` 快照并通过合成镜像测试，但项目中仍缺少真正的 `mergeSpatialCellChat()` producer。因此 comparison 还没有真实 merged object 的三对象验收；该边界不能用手工设置 `.mode = "merged"` 的测试替代。
+
+修复方向：先实现并验证 `mergeSpatialCellChat()` 的名称对齐、cell 名重写、稀疏层同步和对象有效性检查，再迁移 `netVisual_diffInteraction()`、heatmap/barplot/bubble comparison、pairwise embedding 及其分析消费者。comparison 的数值和图形验收应在真实 producer 完成后进行。

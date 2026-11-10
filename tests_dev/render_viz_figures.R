@@ -151,6 +151,20 @@ for (dataset in DATASETS) {
 
 for (dataset in DATASETS) {
   FIGURES <- c(FIGURES, list(
+    list(phase = "P2", dataset = dataset, name = "netAnalysis_contribution",
+         expr = quote(netAnalysis_contribution(state$chat,
+                       signaling = state$chat@netP$pathways[1]))),
+    list(phase = "P2", dataset = dataset, name = "rankNet-netP",
+         expr = quote(rankNet(state$chat, slot.name = "netP", mode = "single",
+                       measure = "weight"))),
+    list(phase = "P2", dataset = dataset, name = "rankNet-net",
+         expr = quote({
+           pathway <- state$chat@netP$pathways[1]
+           pair <- state$chat@LR$LRsig$interaction_name[
+             state$chat@LR$LRsig$pathway_name == pathway]
+           rankNet(state$chat, slot.name = "net", mode = "single", pairLR = pair,
+                   measure = "count")
+         })),
     list(phase = "P2", dataset = dataset, name = "netVisual_heatmap",
          base.device = TRUE, expr = quote(netVisual_heatmap(state$chat))),
     list(phase = "P2", dataset = dataset, name = "netVisual_barplot",

@@ -234,6 +234,28 @@ netAnalysis_computeCentrality <- function (
 
 
 
+
+.sc_contribution_layer_sums <- function(layers, rows = NULL, cols = NULL, min.value, range.value) {
+  vapply(layers, function(mat) {
+    if (!is.null(rows)) mat <- mat[rows, , drop = FALSE]
+    if (!is.null(cols)) mat <- mat[, cols, drop = FALSE]
+    n <- as.double(nrow(mat)) * ncol(mat)
+    if (range.value == 0 || n == 0) return(0)
+    (sum(mat) - n * min.value) / range.value
+  }, numeric(1))
+}
+
+.sc_contribution_layer_minmax <- function(layers) {
+  total <- sum(vapply(layers, function(mat) as.double(nrow(mat)) * ncol(mat), numeric(1)))
+  stored <- unlist(lapply(layers, function(mat) {
+    if (inherits(mat, "sparseMatrix")) mat@x else as.numeric(mat)
+  }), use.names = FALSE)
+  nonzero <- stored[stored != 0]
+  min.value <- if (length(nonzero) < total) 0 else min(nonzero)
+  max.value <- if (length(nonzero)) max(nonzero) else 0
+  c(min = min.value, max = max.value, range = max.value - min.value)
+}
+
 #' Compute and visualize the contribution of each ligand-receptor pair in the overall signaling pathways
 #'
 #' @param object CellChat object
@@ -259,144 +281,219 @@ netAnalysis_computeCentrality <- function (
 netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, do.group = TRUE, width = 0.1, vertex.receiver = NULL, thresh = 0.05, return.data = FALSE,
                                      x.rotation = 0, title = "Contribution of each L-R pair",
                                      font.size = 10, font.size.title = 10) {
-  pairLR <- searchPair(signaling = signaling, pairLR.use = object@LR$LRsig, key = "pathway_name", matching.exact = T, pair.only = T)
-  pair.name.use = select(object@DB$interaction[rownames(pairLR),],"interaction_name_2")
-  if (is.null(signaling.name)) {
-    signaling.name <- signaling
-  }
-  if (do.group) {
-    net <- object@net
-    pairLR.use.name <- dimnames(net$prob)[[3]]
-    pairLR.name <- intersect(rownames(pairLR), pairLR.use.name)
-    pairLR <- pairLR[pairLR.name, ]
-    prob <- net$prob
-    pval <- net$pval
-    prob[pval > thresh] <- 0
-  } else {
-    net <- object@net
-    pairLR.use.name <- dimnames(net$prob.cell)[[3]]
-    pairLR.name <- intersect(rownames(pairLR), pairLR.use.name)
-    pairLR <- pairLR[pairLR.name, ]
-    prob <- as.array(net$prob.cell)
-  }
+  branch <- object@net$cell
+  if (isTRUE(do.group)) branch <- object@net$group
+  prob <- branch$prob
+  if (!inherits(prob, "SparseChatArray"))
+    stop("Communication probabilities are missing for the requested level.", call. = FALSE)
+  if (length(signaling) != 1L || is.na(signaling) || !nzchar(signaling))
+    stop("signaling must name exactly one pathway.", call. = FALSE)
 
-  if (length(pairLR.name) > 1) {
-    pairLR.name.use <- pairLR.name[apply(prob[,,pairLR.name], 3, sum) != 0]
-  } else {
-    pairLR.name.use <- pairLR.name[sum(prob[,,pairLR.name]) != 0]
-  }
+  pairLR <- searchPair(signaling = signaling, pairLR.use = object@LR$LRsig,
+                       key = "pathway_name", matching.exact = TRUE, pair.only = TRUE)
+  available <- dimnames(prob)[[3L]]
+  selected <- intersect(rownames(pairLR), available)
+  layers <- lapply(selected, function(name) {
+    mat <- prob[[name]]
+    if (isTRUE(do.group) && inherits(branch$pval, "SparseChatArray") &&
+        name %in% dimnames(branch$pval)[[3L]]) {
+      keep <- branch$pval[[name]] <= thresh
+      mat <- mat * keep
+    }
+    mat
+  })
+  names(layers) <- selected
+  active <- vapply(layers, function(mat) sum(mat) != 0, logical(1))
+  layers <- layers[active]
+  selected <- selected[active]
+  if (!length(layers)) stop("There is no significant communication of ", signaling,
+                            call. = FALSE)
 
-
-  if (length(pairLR.name.use) == 0) {
-    stop(paste0('There is no significant communication of ', signaling.name))
-  } else {
-    pairLR <- pairLR[pairLR.name.use,]
-  }
-
-  prob <- prob[,,pairLR.name.use]
-
-  if (length(dim(prob)) == 2) {
-    prob <- replicate(1, prob, simplify="array")
-    dimnames(prob)[3] <- pairLR.name.use
-  }
-  prob <-(prob-min(prob))/(max(prob)-min(prob))
+  pair.info <- object@DB$interaction
+  if (!"interaction_name_2" %in% names(pair.info))
+    pair.info$interaction_name_2 <- pair.info$interaction_name
+  display <- pair.info$interaction_name_2[match(selected, pair.info$interaction_name)]
+  display[is.na(display) | !nzchar(display)] <- selected[is.na(display) | !nzchar(display)]
+  bounds <- .sc_contribution_layer_minmax(layers)
+  sums <- .sc_contribution_layer_sums(layers, min.value = bounds[["min"]],
+                                      range.value = bounds[["range"]])
+  denominator <- sum(sums)
+  if (!is.finite(denominator) || denominator <= 0)
+    stop("Communication values cannot be normalized to relative contributions.", call. = FALSE)
+  contribution <- sums / denominator
+  y.lim <- max(contribution)
+  if (is.null(signaling.name)) signaling.name <- signaling
 
   if (is.null(vertex.receiver)) {
-    pSum <- apply(prob, 3, sum)
-    pSum.max <- sum(prob)
-    pSum <- pSum/pSum.max
-    pSum[is.na(pSum)] <- 0
-    y.lim <- max(pSum)
-
-    pair.name <- unlist(dimnames(prob)[3])
-    pair.name <- factor(pair.name, levels = unique(pair.name))
-    if (!is.null(pairLR.name.use)) {
-      pair.name <- pair.name.use[as.character(pair.name),1]
-      pair.name <- factor(pair.name, levels = unique(pair.name))
+    df <- data.frame(name = factor(display, levels = unique(display)),
+                     contribution = as.numeric(contribution))
+    df1 <- df
+    if (nrow(df1) < 10L) {
+      pad <- data.frame(name = as.character(seq_len(10L - nrow(df1))),
+                        contribution = 0)
+      df <- rbind(df, pad)
     }
-    mat <- pSum
-    df1 <- data.frame(name = pair.name, contribution = mat)
-    if(nrow(df1) < 10) {
-      df2 <- data.frame(name = as.character(1:(10-nrow(df1))), contribution = rep(0, 10-nrow(df1)))
-      df <- rbind(df1, df2)
-    } else {
-      df <- df1
-    }
-    df <- df[order(df$contribution, decreasing = TRUE), ]
-    # df$name <- factor(df$name, levels = unique(df$name))
-    df$name <- factor(df$name,levels=df$name[order(df$contribution, decreasing = TRUE)])
-    df1$name <- factor(df1$name,levels=df1$name[order(df1$contribution, decreasing = TRUE)])
-    gg <- ggplot(df, aes(x=name, y=contribution)) + geom_bar(stat="identity", width = 0.7) +
-      theme_classic() + theme(axis.text.y = element_text(angle = x.rotation, hjust = 1,size=font.size, colour = 'black'), axis.text=element_text(size=font.size),
-                              axis.title.y = element_text(size= font.size), axis.text.x = element_blank(), axis.ticks = element_blank()) +
-      xlab("") + ylab("Relative contribution") + ylim(0,y.lim) + coord_flip() + theme(legend.position="none") +
-      scale_x_discrete(limits = rev(levels(df$name)), labels = c(rep("", max(0, 10-nlevels(df1$name))),rev(levels(df1$name))))
-    if (!is.null(title)) {
-      gg <- gg + ggtitle(title)+ theme(plot.title = element_text(hjust = 0.5, size = font.size.title))
-    }
-    gg
-
+    df <- df[order(df$contribution, decreasing = TRUE), , drop = FALSE]
+    df$name <- factor(df$name, levels = df$name[order(df$contribution, decreasing = TRUE)])
+    df1$name <- factor(df1$name, levels = df1$name[order(df1$contribution, decreasing = TRUE)])
+    labels <- c(rep("", max(0L, 10L - nlevels(df1$name))), rev(levels(df1$name)))
+    gg <- ggplot(df, aes(x = name, y = contribution)) +
+      geom_bar(stat = "identity", width = 0.7) + theme_classic() +
+      theme(axis.text.y = element_text(angle = x.rotation, hjust = 1, size = font.size, colour = "black"),
+            axis.text = element_text(size = font.size), axis.title.y = element_text(size = font.size),
+            axis.text.x = element_blank(), axis.ticks = element_blank(), legend.position = "none") +
+      xlab("") + ylab("Relative contribution") + ylim(0, y.lim) + coord_flip() +
+      scale_x_discrete(limits = rev(levels(df$name)), labels = labels)
+    if (!is.null(title)) gg <- gg + ggtitle(title) +
+      theme(plot.title = element_text(hjust = 0.5, size = font.size.title))
   } else {
-    pair.name <- factor(unlist(dimnames(prob)[3]), levels = unique(unlist(dimnames(prob)[3])))
-    # show all the communications
-    pSum <- apply(prob, 3, sum)
-    pSum.max <- sum(prob)
-    pSum <- pSum/pSum.max
-    pSum[is.na(pSum)] <- 0
-    y.lim <- max(pSum)
-
-    df<- data.frame(name = pair.name, contribution = pSum)
-    gg <- ggplot(df, aes(x=name, y=contribution)) + geom_bar(stat="identity",width = 0.2) +
-      theme_classic() + theme(axis.text=element_text(size=10),axis.text.x = element_text(angle = x.rotation, hjust = 1,size=8),
-                              axis.title.y = element_text(size=10)) +
-      xlab("") + ylab("Relative contribution") + ylim(0,y.lim)+ ggtitle("All")+ theme(plot.title = element_text(hjust = 0.5))#+
-
-    # show the communications in Hierarchy1
-    if (dim(prob)[3] > 1) {
-      pSum <- apply(prob[,vertex.receiver,], 3, sum)
-    } else {
-      pSum <- sum(prob[,vertex.receiver,])
+    n <- dim(prob)[1L]
+    if (is.character(vertex.receiver)) {
+      axis.names <- dimnames(prob)[[2L]]
+      if (is.null(axis.names) || any(!vertex.receiver %in% axis.names))
+        stop("vertex.receiver contains unknown target names.", call. = FALSE)
+      vertex.receiver <- match(vertex.receiver, axis.names)
     }
-
-    pSum <- pSum/pSum.max
-    pSum[is.na(pSum)] <- 0
-
-    df<- data.frame(name = pair.name, contribution = pSum)
-    gg1 <- ggplot(df, aes(x=name, y=contribution)) + geom_bar(stat="identity",width = 0.2) +
-      theme_classic() + theme(axis.text=element_text(size=10),axis.text.x = element_text(angle = x.rotation, hjust = 1,size=8), axis.title.y = element_text(size=10)) +
-      xlab("") + ylab("Relative contribution") + ylim(0,y.lim)+ ggtitle("Hierarchy1") + theme(plot.title = element_text(hjust = 0.5))#+
-    #scale_x_discrete(limits = c(0,1))
-
-    # show the communications in Hierarchy2
-
-    if (dim(prob)[3] > 1) {
-      pSum <- apply(prob[,setdiff(1:dim(prob)[1],vertex.receiver),], 3, sum)
-    } else {
-      pSum <- sum(prob[,setdiff(1:dim(prob)[1],vertex.receiver),])
+    if (!is.numeric(vertex.receiver) || anyNA(vertex.receiver) ||
+        any(vertex.receiver != as.integer(vertex.receiver)) || any(vertex.receiver < 1L | vertex.receiver > n))
+      stop("vertex.receiver must contain valid receiver indices or names.", call. = FALSE)
+    vertex.receiver <- unique(as.integer(vertex.receiver))
+    other.receiver <- setdiff(seq_len(n), vertex.receiver)
+    p1 <- .sc_contribution_layer_sums(layers, cols = vertex.receiver,
+                                      min.value = bounds[["min"]], range.value = bounds[["range"]]) / denominator
+    p2 <- .sc_contribution_layer_sums(layers, cols = other.receiver,
+                                      min.value = bounds[["min"]], range.value = bounds[["range"]]) / denominator
+    pair.name <- factor(display, levels = unique(display))
+    make.panel <- function(values, heading, bar.width = 0.2) {
+      dat <- data.frame(name = pair.name, contribution = as.numeric(values))
+      ggplot(dat, aes(x = name, y = contribution)) + geom_bar(stat = "identity", width = bar.width) +
+        theme_classic() + theme(axis.text = element_text(size = 10),
+          axis.text.x = element_text(angle = x.rotation, hjust = 1, size = 8),
+          axis.title.y = element_text(size = 10)) + xlab("") + ylab("Relative contribution") +
+        ylim(0, y.lim) + ggtitle(heading) + theme(plot.title = element_text(hjust = 0.5))
     }
-    pSum <- pSum/pSum.max
-    pSum[is.na(pSum)] <- 0
-
-    df<- data.frame(name = pair.name, contribution = pSum)
-    gg2 <- ggplot(df, aes(x=name, y=contribution)) + geom_bar(stat="identity", width=0.9) +
-      theme_classic() + theme(axis.text=element_text(size=10),axis.text.x = element_text(angle = x.rotation, hjust = 1,size=8), axis.title.y = element_text(size=10)) +
-      xlab("") + ylab("Relative contribution") + ylim(0,y.lim)+ ggtitle("Hierarchy2")+ theme(plot.title = element_text(hjust = 0.5))#+
-    #scale_x_discrete(limits = c(0,1))
-    title <- cowplot::ggdraw() + cowplot::draw_label(paste0("Contribution of each signaling in ", signaling.name, " pathway"), fontface='bold', size = 10)
-    gg.combined <- cowplot::plot_grid(gg, gg1, gg2, nrow = 1)
-    gg.combined <- cowplot::plot_grid(title, gg.combined, ncol = 1, rel_heights=c(0.1, 1))
-    gg <- gg.combined
-    gg
+    gg <- make.panel(contribution, "All")
+    gg1 <- make.panel(p1, "Hierarchy1")
+    gg2 <- make.panel(p2, "Hierarchy2", 0.9)
+    heading <- cowplot::ggdraw() + cowplot::draw_label(
+      paste0("Contribution of each signaling in ", signaling.name, " pathway"),
+      fontface = "bold", size = 10)
+    gg <- cowplot::plot_grid(heading, cowplot::plot_grid(gg, gg1, gg2, nrow = 1),
+                             ncol = 1, rel_heights = c(0.1, 1))
+    df <- data.frame(name = pair.name, contribution = as.numeric(p2))
   }
-  if (return.data) {
+  if (isTRUE(return.data)) {
     df <- subset(df, contribution > 0)
     return(list(LR.contribution = df, gg.obj = gg))
-  } else {
-    return(gg)
   }
+  gg
 }
 
 
+
+
+#' Internal helpers shared by the single-sample and snapshot-based comparison
+#' paths. Cell-level layers remain sparse throughout aggregation.
+.sc_ranknet_dataset_names <- function(object) {
+  if (!identical(object@misc$.mode, "merged"))
+    stop("comparison mode requires a merged object with misc$.datasets.", call. = FALSE)
+  datasets <- object@misc$.datasets
+  if (!is.list(datasets) || length(datasets) < 2L || is.null(names(datasets)) ||
+      anyNA(names(datasets)) || any(!nzchar(names(datasets))) || anyDuplicated(names(datasets)))
+    stop("merged comparison requires at least two uniquely named misc$.datasets entries.",
+         call. = FALSE)
+  names(datasets)
+}
+
+.sc_ranknet_branch <- function(object, slot.name, dataset = NULL) {
+  if (is.null(dataset)) return(methods::slot(object, slot.name))
+  record <- object@misc$.datasets[[dataset]]
+  branch.slot <- record[[slot.name]]
+  if (!is.list(branch.slot))
+    stop("misc$.datasets[['", dataset, "']] is missing its `", slot.name, "` snapshot.",
+         call. = FALSE)
+  branch.slot
+}
+
+.sc_ranknet_index <- function(index, labels, name) {
+  n <- length(labels)
+  if (is.null(index)) return(seq_len(n))
+  if (is.character(index)) {
+    if (is.null(labels) || anyNA(index) || any(!index %in% labels))
+      stop("The input `", name, "` should contain valid axis names.", call. = FALSE)
+    return(unique(match(index, labels)))
+  }
+  if (!is.numeric(index) || anyNA(index) || any(!is.finite(index)) ||
+      any(index != as.integer(index)) || any(index < 1L | index > n))
+    stop("The input `", name, "` should contain valid axis indices.", call. = FALSE)
+  unique(as.integer(index))
+}
+
+.sc_ranknet_layers <- function(object, slot.name, do.group, thresh,
+                               sources.use = NULL, targets.use = NULL, dataset = NULL) {
+  slot.data <- .sc_ranknet_branch(object, slot.name, dataset)
+  branch <- if (isTRUE(do.group)) slot.data$group else slot.data$cell
+  prob <- branch$prob
+  if (!inherits(prob, "SparseChatArray"))
+    stop("The requested communication probability layers are missing.", call. = FALSE)
+  dn <- dimnames(prob)
+  source.idx <- .sc_ranknet_index(sources.use, dn[[1L]], "sources.use")
+  target.idx <- .sc_ranknet_index(targets.use, dn[[2L]], "targets.use")
+  layers <- lapply(dimnames(prob)[[3L]], function(name) {
+    mat <- prob[[name]]
+    if (isTRUE(do.group) && inherits(branch$pval, "SparseChatArray") &&
+        name %in% dimnames(branch$pval)[[3L]]) {
+      mat <- mat * (branch$pval[[name]] <= thresh)
+    }
+    mat[source.idx, target.idx, drop = FALSE]
+  })
+  names(layers) <- dimnames(prob)[[3L]]
+  layers
+}
+
+.sc_ranknet_summarize <- function(layers, measure) {
+  values <- vapply(layers, function(mat) {
+    if (identical(measure, "count")) {
+      if (inherits(mat, "sparseMatrix")) sum(mat@x > 0) else sum(mat > 0)
+    } else {
+      sum(mat)
+    }
+  }, numeric(1))
+  values
+}
+
+.sc_ranknet_paired_values <- function(first, second) {
+  if (!identical(dim(first), dim(second)))
+    stop("Statistical test requires datasets with identical interaction matrix dimensions; set `do.stat = FALSE`.",
+         call. = FALSE)
+  rn1 <- rownames(first); rn2 <- rownames(second)
+  cn1 <- colnames(first); cn2 <- colnames(second)
+  if ((!is.null(rn1) && !is.null(rn2) && !setequal(rn1, rn2)) ||
+      (!is.null(cn1) && !is.null(cn2) && !setequal(cn1, cn2)))
+    stop("Paired statistical test requires identical named source and target axes; set `do.stat = FALSE`.",
+         call. = FALSE)
+  if (!is.null(rn1) && !is.null(rn2) && !identical(rn1, rn2))
+    second <- second[match(rn1, rn2), , drop = FALSE]
+  if (!is.null(cn1) && !is.null(cn2) && !identical(cn1, cn2))
+    second <- second[, match(cn1, cn2), drop = FALSE]
+  triplets <- function(mat) {
+    if (inherits(mat, "sparseMatrix")) {
+      z <- Matrix::summary(mat)
+      keep <- z$x != 0
+      list(key = z$i[keep] + (z$j[keep] - 1) * nrow(mat), value = z$x[keep])
+    } else {
+      idx <- which(mat != 0)
+      list(key = idx, value = mat[idx])
+    }
+  }
+  a <- triplets(first); b <- triplets(second)
+  keys <- sort(union(a$key, b$key))
+  av <- numeric(length(keys)); bv <- numeric(length(keys))
+  if (length(a$key)) av[match(a$key, keys)] <- a$value
+  if (length(b$key)) bv[match(b$key, keys)] <- b$value
+  keep <- av + bv != 0
+  list(first = av[keep], second = bv[keep])
+}
 
 #' Rank signaling networks based on the information flow or the number of interactions
 #'
@@ -449,53 +546,26 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
                     legend.size = 0.1, legend.text.size = 8, legend.position = "top", legend.spacing = c(2, -8)) {
   measure <- match.arg(measure)
   mode <- match.arg(mode)
-  options(warn = -1)
-  object.names <- names(methods::slot(object, slot.name))
+  if (!slot.name %in% c("net", "netP"))
+    stop("slot.name must be 'net' or 'netP'.", call. = FALSE)
+  object.names <- if (identical(mode, "single")) {
+    as.character(object@misc$.param$sample %||% "single")
+  } else {
+    .sc_ranknet_dataset_names(object)
+  }
   if (measure == "weight") {
     ylabel = "Information flow"
   } else if (measure == "count") {
     ylabel = "Number of interactions"
   }
   if (mode == "single") {
-    object1 <- methods::slot(object, slot.name)
-    if (do.group) {
-      prob = object1$prob
-      prob[object1$pval > thresh] <- 0
-    } else {
-      prob = object1$prob.cell
-    }
-
-    if (measure == "count") {
-      prob <- 1*(prob > 0)
-    }
-    if (!is.null(sources.use)) {
-      if (is.character(sources.use)) {
-        if (all(sources.use %in% dimnames(prob)[[1]])) {
-          sources.use <- match(sources.use, dimnames(prob)[[1]])
-        } else {
-          stop("The input `sources.use` should be cell group names or a numerical vector!")
-        }
-      }
-      idx.t <- setdiff(1:nrow(prob), sources.use)
-      prob[idx.t, , ] <- 0
-    }
-    if (!is.null(targets.use)) {
-      if (is.character(targets.use)) {
-        if (all(targets.use %in% dimnames(prob)[[1]])) {
-          targets.use <- match(targets.use, dimnames(prob)[[2]])
-        } else {
-          stop("The input `targets.use` should be cell group names or a numerical vector!")
-        }
-      }
-      idx.t <- setdiff(1:nrow(prob), targets.use)
-      prob[ ,idx.t, ] <- 0
-    }
-    if (sum(prob) == 0) {
+    layers <- .sc_ranknet_layers(object, slot.name, do.group, thresh,
+                                 sources.use, targets.use)
+    pSum.original <- .sc_ranknet_summarize(layers, measure)
+    if (!length(pSum.original) || sum(pSum.original) == 0) {
       stop("No inferred communications for the input!")
     }
-
-    pSum <- apply(prob, 3, sum)
-    pSum.original <- pSum
+    pSum <- pSum.original
     if (measure == "weight") {
       if (do.group) {
         pSum <- -1/log(pSum)
@@ -513,8 +583,8 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
     }
 
     pair.name <- names(pSum)
-
-    df<- data.frame(name = pair.name, contribution = pSum.original, contribution.scaled = pSum, group = object.names[comparison[1]])
+    df<- data.frame(name = pair.name, contribution = as.numeric(pSum.original),
+                    contribution.scaled = as.numeric(pSum), group = object.names[1L])
     idx <- with(df, order(df$contribution))
     df <- df[idx, ]
     df$name <- factor(df$name, levels = as.character(df$name))
@@ -553,6 +623,9 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
     }
 
   } else if (mode == "comparison") {
+    if (length(comparison) < 2L || anyNA(comparison) || any(comparison != as.integer(comparison)) ||
+        any(comparison < 1L | comparison > length(object.names)) || anyDuplicated(comparison))
+      stop("comparison must select at least two distinct dataset indices.", call. = FALSE)
     prob.list <- list()
     pSum <- list()
     pSum.original <- list()
@@ -561,43 +634,14 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
     pSum.original.all <- c()
     object.names.comparison <- c()
     for (i in 1:length(comparison)) {
-      object.list <- methods::slot(object, slot.name)[[comparison[i]]]
-      if (do.group) {
-        prob <- object.list$prob
-        prob[object.list$pval > thresh] <- 0
-      } else {
-        prob <- object.list$prob.cell
-      }
-      if (measure == "count") {
-        prob <- 1*(prob > 0)
-      }
-      prob.list[[i]] <- prob
-      if (!is.null(sources.use)) {
-        if (is.character(sources.use)) {
-          if (all(sources.use %in% dimnames(prob)[[1]])) {
-            sources.use <- match(sources.use, dimnames(prob)[[1]])
-          } else {
-            stop("The input `sources.use` should be cell group names or a numerical vector!")
-          }
-        }
-        idx.t <- setdiff(1:nrow(prob), sources.use)
-        prob[idx.t, , ] <- 0
-      }
-      if (!is.null(targets.use)) {
-        if (is.character(targets.use)) {
-          if (all(targets.use %in% dimnames(prob)[[1]])) {
-            targets.use <- match(targets.use, dimnames(prob)[[2]])
-          } else {
-            stop("The input `targets.use` should be cell group names or a numerical vector!")
-          }
-        }
-        idx.t <- setdiff(1:nrow(prob), targets.use)
-        prob[ ,idx.t, ] <- 0
-      }
-      if (sum(prob) == 0) {
+      dataset.name <- object.names[comparison[i]]
+      layers <- .sc_ranknet_layers(object, slot.name, do.group, thresh,
+                                   sources.use, targets.use, dataset.name)
+      prob.list[[i]] <- layers
+      pSum.original[[i]] <- .sc_ranknet_summarize(layers, measure)
+      if (sum(pSum.original[[i]]) == 0) {
         stop("No inferred communications for the input!")
       }
-      pSum.original[[i]] <- apply(prob, 3, sum)
       if (measure == "weight") {
         if (do.group) {
           pSum[[i]] <- -1/log(pSum.original[[i]])
@@ -613,7 +657,7 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
         pSum[[i]] <- pSum.original[[i]]
       }
       pair.name[[i]] <- names(pSum.original[[i]])
-      object.names.comparison <- c(object.names.comparison, object.names[comparison[i]])
+      object.names.comparison <- c(object.names.comparison, dataset.name)
     }
     if (measure == "weight" & do.group == TRUE) {
       values.assign <- seq(max(unlist(pSum))*1.1, max(unlist(pSum))*1.5, length.out = length(unlist(idx)))
@@ -714,20 +758,14 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
     # }
     if (do.stat & length(comparison) == 2) {
       for (i in 1:length(pair.name.all)) {
-        if (nrow(prob.list[[j]]) != nrow(prob.list[[1]])) {
-          stop("Statistical test is not applicable to datasets with different cellular compositions! Please set `do.stat = FALSE`")
-        }
-        prob.values <- matrix(0, nrow = nrow(prob.list[[1]]) * nrow(prob.list[[1]]), ncol = length(comparison))
-        for (j in 1:length(comparison)) {
-          if (pair.name.all[i] %in% pair.name[[j]]) {
-            prob.values[, j] <- as.vector(prob.list[[j]][ , , pair.name.all[i]])
+        if (all(vapply(pair.name, function(x) pair.name.all[i] %in% x, logical(1)))) {
+          pair.mats <- lapply(prob.list, `[[`, pair.name.all[i])
+          paired <- .sc_ranknet_paired_values(pair.mats[[1L]], pair.mats[[2L]])
+          if (length(paired$first) > 3L) {
+            pvalues <- wilcox.test(paired$first, paired$second, paired = TRUE)$p.value
           } else {
-            prob.values[, j] <- NA
+            pvalues <- 0
           }
-        }
-        prob.values <- prob.values[rowSums(prob.values, na.rm = TRUE) != 0, , drop = FALSE]
-        if (nrow(prob.values) >3 & sum(is.na(prob.values)) == 0) {
-          pvalues <- wilcox.test(prob.values[ ,1], prob.values[ ,2], paired = TRUE)$p.value
         } else {
           pvalues <- 0
         }
