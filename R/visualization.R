@@ -6278,8 +6278,25 @@ netVisual_CommunFieldGrid <- function(
   }
 })
 
+# A finite zero field has no streamlines; metR cannot integrate it reliably.
+.sc_is_zero_streamline_data <- function(data) {
+  is.data.frame(data) && nrow(data) > 0L &&
+    all(c("u", "v") %in% names(data)) &&
+    is.numeric(data$u) && is.numeric(data$v) &&
+    all(is.finite(data$u)) && all(is.finite(data$v)) &&
+    all(data$u == 0) && all(data$v == 0)
+}
+
 .sc_guard_streamline_layer <- function(layer) {
-  if (identical(layer$stat, metR::StatStreamline)) layer$stat <- .sc_streamline_compat_stat()
+  if (identical(layer$stat, metR::StatStreamline)) {
+    if (.sc_is_zero_streamline_data(layer$data)) {
+      # An empty layer keeps the plot structure and background, without
+      # passing a zero-speed field to metR's undefined integration setup.
+      layer$data <- layer$data[FALSE, , drop = FALSE]
+    } else {
+      layer$stat <- .sc_streamline_compat_stat()
+    }
+  }
   layer
 }
 
@@ -6302,8 +6319,9 @@ netVisual_CommunFieldGrid <- function(
 #' checked for a zero-vector filtering defect. The affected metR 0.19.0
 #' implementation receives a locally guarded correction; an affected,
 #' unverified implementation produces an error. The stored field and the
-#' metR namespace are not modified. Zero fields may still produce a warning
-#' from metR. An explicitly supplied custom stat is not replaced.
+#' metR namespace are not modified. A finite all-zero field renders the
+#' background without streamlines. An explicitly supplied custom stat is not
+#' replaced or bypassed.
 #'
 #' @param object SpatialCellChat object
 #' @param signaling a signaling pathway or ligand-receptor pair to visualize

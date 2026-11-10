@@ -41,6 +41,8 @@ custom.layer <- metR::geom_streamline(stat=custom.stat)
 stopifnot(identical(.sc_guard_streamline_layer(custom.layer)$stat, custom.stat))
 stat <- .sc_streamline_compat_stat()
 stopifnot(identical(stat, .sc_streamline_compat_stat()))
+# A genuinely corrected stat must pass the real behavioral probe unchanged.
+stopifnot(identical(.sc_resolve_streamline_stat(stat, package_version('99.0'), new.env()), stat))
 # Compare real metR and production adapter, with reproducible seeds for jitter.
 make.field <- function(case) {
   d <- expand.grid(x=-3:3,y=-3:3)
@@ -73,6 +75,13 @@ results <- lapply(cases, function(case) {
     adapted_rows=if(inherits(b$value,'error')) NA_integer_ else nrow(b$value),unchanged=same,
     baseline_warning=paste(a$warnings,collapse=' | '),adapted_warning=paste(b$warnings,collapse=' | '))
 })
+# Distinguish exactly zero from small nonzero or invalid values.
+stopifnot(.sc_is_zero_streamline_data(data.frame(u=c(0,0),v=c(0,0))),
+  !.sc_is_zero_streamline_data(data.frame(u=c(0,1e-300),v=c(0,0))),
+  !.sc_is_zero_streamline_data(data.frame(u=c(0,NA_real_),v=c(0,0))),
+  !.sc_is_zero_streamline_data(data.frame(u=c(0,Inf),v=c(0,0))),
+  !.sc_is_zero_streamline_data(data.frame(u=numeric(),v=numeric())),
+  !.sc_is_zero_streamline_data(data.frame(u=0)))
 # Exercise the actual public entry point and a serialized/reloaded plot.
 coords <- as.matrix(expand.grid(x=0:4,y=0:4)); cells <- paste0('c',seq_len(nrow(coords))); rownames(coords) <- cells
 expr <- Matrix::Matrix(matrix(1,nrow=1,ncol=length(cells),dimnames=list('G1',cells)),sparse=TRUE)
@@ -83,6 +92,21 @@ chat@netP$cell$field$outgoing <- SparseChatArray(list(signal=as(components,'dgCM
 p <- netVisual_CommunFlow(chat,signaling='signal',pattern='outgoing',cellsize=1,grid.resolution=1,L=2,min.L=0,res=8,start=data.frame(x=2,y=-2),jitter=0)
 custom.plot <- netVisual_CommunFlow(chat,signaling='signal',pattern='outgoing',cellsize=1,grid.resolution=1,L=2,min.L=0,res=8,start=data.frame(x=2,y=-2),jitter=0,stat=custom.stat)
 stopifnot(identical(custom.plot$layers[[2L]]$stat,custom.stat))
+zero.chat <- chat
+zero.components <- Matrix::Matrix(components * 0,sparse=TRUE)
+zero.chat@netP$cell$field$outgoing <- SparseChatArray(list(signal=as(zero.components,'dgCMatrix')),dimnames=list(cells,c('x','y'),'signal'))
+zero.before <- zero.chat
+zero.plot <- suppressWarnings(netVisual_CommunFlow(zero.chat,signaling='signal',pattern='outgoing',cellsize=1,grid.resolution=1,L=2,min.L=0,res=8,start=data.frame(x=2,y=-2),jitter=0))
+zero.warnings <- character()
+zero.built <- withCallingHandlers(ggplot2::ggplot_build(zero.plot),warning=function(w){zero.warnings<<-c(zero.warnings,conditionMessage(w));invokeRestart('muffleWarning')})
+stopifnot(identical(zero.chat,zero.before),nrow(zero.built$data[[1L]])==length(cells),
+  nrow(zero.built$data[[2L]])==0L,nrow(zero.plot$layers[[2L]]$data)==0L,
+  !any(grepl('stat_streamline|integrat',zero.warnings,ignore.case=TRUE)))
+zero.pdf <- tempfile(fileext='.pdf'); ggplot2::ggsave(zero.pdf,zero.plot,width=6,height=5)
+stopifnot(file.info(zero.pdf)$size>0); unlink(zero.pdf)
+zero.custom <- suppressWarnings(netVisual_CommunFlow(zero.chat,signaling='signal',pattern='outgoing',cellsize=1,grid.resolution=1,L=2,min.L=0,res=8,start=data.frame(x=2,y=-2),jitter=0,stat=custom.stat))
+stopifnot(identical(zero.custom$layers[[2L]]$stat,custom.stat),nrow(zero.custom$layers[[2L]]$data)>0L,
+  all(zero.custom$layers[[2L]]$data$u==0),all(zero.custom$layers[[2L]]$data$v==0))
 built <- ggplot2::ggplot_build(p)$data[[2L]]
 stopifnot(nrow(built)>0)
 file <- tempfile(fileext='.rds'); pdf.file <- tempfile(fileext='.pdf')

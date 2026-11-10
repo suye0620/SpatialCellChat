@@ -11,13 +11,21 @@ components <- matrix(rep(c(1,1),each=length(cells)),ncol=2,dimnames=list(cells,c
 chat@netP$cell$field$outgoing <- SpatialCellChat:::SparseChatArray(list(signal=as(components,'dgCMatrix')),dimnames=list(cells,c('x','y'),'signal'))
 p <- netVisual_CommunFlow(chat,signaling='signal',pattern='outgoing',cellsize=1,grid.resolution=1,L=2,min.L=0,res=8,start=data.frame(x=2,y=-2),jitter=0)
 stopifnot(nrow(ggplot2::ggplot_build(p)$data[[2L]])>0)
-file <- tempfile(fileext='.rds'); pdf.file <- tempfile(fileext='.pdf'); child <- tempfile(fileext='.R')
-saveRDS(p,file)
+zero <- chat
+zero.components <- Matrix::Matrix(components * 0,sparse=TRUE)
+zero@netP$cell$field$outgoing <- SpatialCellChat:::SparseChatArray(list(signal=as(zero.components,'dgCMatrix')),dimnames=list(cells,c('x','y'),'signal'))
+zero.plot <- suppressWarnings(netVisual_CommunFlow(zero,signaling='signal',pattern='outgoing',cellsize=1,grid.resolution=1,L=2,min.L=0,res=8,start=data.frame(x=2,y=-2),jitter=0))
+zero.built <- ggplot2::ggplot_build(zero.plot)
+stopifnot(nrow(zero.built$data[[1L]])==length(cells),nrow(zero.built$data[[2L]])==0L)
+file <- tempfile(fileext='.rds'); zero.file <- tempfile(fileext='.rds'); pdf.file <- tempfile(fileext='.pdf'); child <- tempfile(fileext='.R')
+saveRDS(p,file);saveRDS(zero.plot,zero.file)
 writeLines(c('.libPaths(c(commandArgs(TRUE)[1L], .libPaths()))',
   'p <- readRDS(commandArgs(TRUE)[2L])',
   'if (!nrow(ggplot2::ggplot_build(p)$data[[2L]])) stop("No streamlines after reload")',
-  'ggplot2::ggsave(commandArgs(TRUE)[3L],p,width=6,height=5)'),child)
-status <- system2(file.path(R.home('bin'),'Rscript.exe'),c(shQuote(child),shQuote(normalizePath(args[[1L]])),shQuote(file),shQuote(pdf.file)))
+  'ggplot2::ggsave(commandArgs(TRUE)[3L],p,width=6,height=5)',
+  'z <- ggplot2::ggplot_build(readRDS(commandArgs(TRUE)[4L]))',
+  'if (nrow(z$data[[1L]]) != 25L || nrow(z$data[[2L]]) != 0L) stop("Invalid zero-field plot")'),child)
+status <- system2(file.path(R.home('bin'),'Rscript.exe'),c(shQuote(child),shQuote(normalizePath(args[[1L]])),shQuote(file),shQuote(pdf.file),shQuote(zero.file)))
 stopifnot(identical(status,0L),file.info(pdf.file)$size>0)
-unlink(c(file,pdf.file,child))
+unlink(c(file,zero.file,pdf.file,child))
 cat('Installed namespace and fresh-process serialization checks passed.\n')

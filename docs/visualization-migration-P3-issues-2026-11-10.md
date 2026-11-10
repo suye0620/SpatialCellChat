@@ -126,4 +126,13 @@ Flow 默认 `res = 0.5`，该对象依赖层在每个方向仅执行 1 步积分
 
 实际数据：`tests_dev/compare-streamline-production-fields.R` 对三个对象调用 `computeCommunField()`，在默认 `res=0.5` 和 `res=8` 下比较原始与兼容 stat 并实绘。模拟 P1、Visium COLLAGEN、完整 Slide-seq LAMININ 的两种分辨率，绘图层数据均逐项一致；这三个所选场的插值网格没有出现精确抵消。汇总、警告与 12 张对照 PDF 在 `tests_dev/figures/P3/streamline-production-comparison-2026-11-11/`。这只覆盖各对象一个 outgoing 通路，不证明全部数据、参数或未来 metR 版本。
 
-尚存限制：全零场在原始 metR 和兼容实现中均会产生相同的 `stat_streamline()` 计算警告；Slide-seq 默认分辨率仍报告只执行一个积分步，P3-018 的箭头/流线可读性未解决。Grid 和 P3 迁移回归通过，`tools::checkRd` 通过；R 启动仍有 locale 与 renv 状态警告。这些自动对照不代表用户视觉或生物学验收。
+当时的限制：直接调用原始 metR 或其兼容 stat 时，全零场均会产生相同的 `stat_streamline()` 计算警告；公开入口的全零场修复另见 P3-021。Slide-seq 默认分辨率仍报告只执行一个积分步，P3-018 的箭头/流线可读性未解决。Grid 和 P3 迁移回归通过，`tools::checkRd` 通过；R 启动仍有 locale 与 renv 状态警告。这些自动对照不代表用户视觉或生物学验收。
+
+
+## P3-021：全零通讯场无法通过 Flow 实际绘图
+
+位置：`netVisual_CommunFlow()` 的默认 metR 流线图层。全零细胞场经过网格聚合和插值得到全零网格后，本机 metR 0.19.0 在推断积分步数时产生缺失值，`ggplot_build()` 和实际保存会报 `missing value where TRUE/FALSE needed`。如果明确向 metR 指定积分步数，空积分结果也可能产生独立的数据表警告。因此，只在 stat 层用人工构造输入看到警告，低估了公开入口的实际影响。
+
+修复：只有默认 stat 且插值网格非空、两个分量全部为有限数并且均严格为零时，使用零行流线图层；背景细胞、坐标、输入对象和已存储场不变。任何非零、非有限数据及显式自定义 stat 均走原路径。该特殊情况下返回图的默认流线图层数据为零行，原始场仍在对象中；这也避免为没有流线的图执行 metR 积分。
+
+验证：`tests_dev/diagnose-zero-streamline-public.R` 显式使用原始 metR stat 复现 3,721 个零插值点导致的构图错误，并验证空图层可输出 25 个背景细胞；`tests_dev/test-streamline-compat.R` 检查公开入口的零场实绘、输入不变、自定义 stat 不被替换及非零/缺失/无穷输入不被误判，也使用真实行为探测验证已修复 stat 原样直通。Grid 和 P3 迁移回归、帮助文件检查通过。直接使用 metR 或用户自定义 stat 时，依赖的原有零场警告/错误仍可能出现；本修复不改变第三方包。
