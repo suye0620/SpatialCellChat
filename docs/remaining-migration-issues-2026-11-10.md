@@ -81,3 +81,25 @@ Impact: DEG-based communication filtering could not be used safely after merged 
 Fix: map each named communication table with its matching snapshot marker table; when a merged marker table has a `datasets` column, filter that table by dataset first. Unstratified merged marker tables are not silently reused. Missing evidence reports the dataset name and the required producer.
 
 Acceptance: The P5 regression covers snapshot-local mapping with distinct values, dataset-tagged merged tables, missing-evidence failure, and the existing single-object path.
+
+## P5-007: remaining entry-point and widget audit checkpoint
+
+Checkpoint after the P5 migration pass: the broad old-slot scan no longer finds
+SpatialCellChat consumers of removed `@data`, `@data.signaling`, `@data.project`,
+`@net$prob`, or `@net$pval` fields. The remaining work is focused on omitted
+comparison/analysis entrances and optional interactive/3D rendering paths.
+
+The first focused rerun found one test-environment defect rather than a payload
+defect: `tests_dev/test-commun-flow-widget.R` can construct the widget, but its
+source-mode asset assertion is not valid when `renv` has an installed
+`SpatialCellChat` package, because `system.file()` resolves to the installed
+package and `htmlwidgets::saveWidget()` copies assets from that package. The
+contract needs to accept both source-tree and installed-package execution while
+still requiring the JS/CSS files to be present in the rendered dependency
+directory.
+
+The next audit must cover `rankSimilarity()`, `rankNetPairwise()`,
+`compareInteractions()`, `suggestK()`/`suggestK1()`, the comparison scatter
+functions, `spatialVisual_scoring()` merged behavior, topic/statistics plots,
+and all available 3D/widget branches. Any behavioral change must preserve the
+11-slot schema and be recorded here with a focused regression check.
