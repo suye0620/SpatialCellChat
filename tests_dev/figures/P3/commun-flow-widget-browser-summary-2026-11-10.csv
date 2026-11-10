@@ -1,0 +1,4 @@
+dataset,expectedCells,renderedCells,canvasPixels,animationMoved,pauseHeld,resumed,particleCount,controls,status,screenshot
+"simulated",20,20,120,true,true,true,48,"PASS","PASS","simulated/flow-widget-browser.png"
+"visium",905,905,5491,true,true,true,48,"PASS","PASS","visium/flow-widget-browser.png"
+"slideseq",29536,29536,18664,true,true,true,48,"PASS","PASS","slideseq/flow-widget-browser.png"

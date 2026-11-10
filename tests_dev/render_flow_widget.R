@@ -39,7 +39,7 @@ result <- tryCatch({
   if (!file.exists(file) || file.info(file)$size <= 1000L) stop("HTML missing or empty")
   ""
 }, error = function(e) conditionMessage(e))
-status <- if (nzchar(result)) "FAIL" else "HTML-WRITTEN; BROWSER-NOT-TESTED"
+status <- if (nzchar(result)) "FAIL" else "HTML-WRITTEN"
 summary <- data.frame(dataset = dataset, cells = nrow(chat@meta), signal = signal,
                       status = status, detail = result, file = file)
 write.csv(summary, file.path(out.dir, "netVisual_CommunFlowWidget-summary.csv"), row.names = FALSE)

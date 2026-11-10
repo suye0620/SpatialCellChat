@@ -1,0 +1,2 @@
+dataset,signal,cells,nonzero_field_cells,grid_points,nonzero_grid_points,default_skip,output,default_sampled_rows,no_skip_sampled_rows
+slideseq,LAMININ,29536,19474,2401,540,4,tests_dev/figures/P3/slideseq/netVisual_CommunFieldGrid-no-skip.pdf,100,2401

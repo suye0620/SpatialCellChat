@@ -162,9 +162,11 @@ NMF/statistical interpretation and optional dependencies remain separate issues.
 
 P4 HTML generation now has a 15-case Chrome CDP smoke result (Plotly
 initialization, point/cell coverage, 3D scene, stack trace/colorbar/layer ticks,
-and relayout). A separate simulated Shiny Chrome session covers real mouse
-selection, replacement and reset; it is not a performance acceptance for large
-Visium or Slide-seq Shiny sessions. P3 Slide-seq Grid and Flow remain
+and relayout). Shiny Chrome sessions on all three datasets cover real mouse
+selection, replacement and reset. Slide-seq updates took about 11.6 and 9.2
+seconds in one local run, so performance still needs investigation. P3 widget
+browser checks cover animation and selected controls on all three datasets,
+but do not establish biological correctness. P3 Slide-seq Grid and Flow remain
 `VISUAL-REVIEW`, including the integration warning on the default Flow plot.
 The 3D stack production entry point and its single-dataset input contract are
 implemented and verified; multi-slice tissue registration remains outside that

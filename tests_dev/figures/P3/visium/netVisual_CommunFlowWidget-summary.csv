@@ -1,2 +1,2 @@
 "dataset","cells","signal","status","detail","file"
-"visium",905,"COLLAGEN","HTML-WRITTEN; BROWSER-NOT-TESTED","","tests_dev/figures/P3/visium/netVisual_CommunFlowWidget.html"
+"visium","905","COLLAGEN","HTML-WRITTEN","Browser checks recorded separately in P3/commun-flow-widget-browser-summary-2026-11-10.csv","tests_dev/figures/P3/visium/netVisual_CommunFlowWidget.html"

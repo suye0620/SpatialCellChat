@@ -1,0 +1,2 @@
+dataset,cells,expression_cells,initial_count,first_count,second_count,reset_count,initial_ms,first_ms,second_ms,elapsed_ms,first_target,second_target,status
+slideseq,29536,29536,29536,1,75,29536,3766,11633,9244,29617,"CAAGNGCTATTGTG-1","CGCACNCTCCCCTA-1",PASS

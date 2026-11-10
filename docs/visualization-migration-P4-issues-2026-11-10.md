@@ -25,3 +25,8 @@ Shiny 封装和 Plotly 输出需要分别实际验证；仅有 R 对象或静态
 ## P4-004：三维堆叠生产入口与输入契约
 
 生产入口为 `plotly_spatialStackPlot()`。它从单对象 `images$coordinates` 读取共享 x/y，接收带唯一细胞行名和层列名的 `cell × layer` 数值表，按细胞名对齐，沿 z 轴按层顺序堆叠；z 轴是层序的视觉编码，不解释为物理深度。所有层使用单个 `scatter3d` 主 trace 和全局色域/单 colorbar，不抽样或截断大对象；NaN、Inf、重复/缺失细胞名、重复/空层名和全 NA 层直接拒绝。三套 fixture 的 3 层 HTML 和 CDP 验收已通过。该入口不声称完成多切片组织配准；真实多切片配准仍属于不同的输入契约。
+
+
+## P4-006：大对象 Shiny 浏览器交互与响应时间
+
+在 Visium（905）和完整 Slide-seq（29,536）对象上，真实鼠标框选两次并 Update，验证第二次替换第一次，Reset 恢复全部细胞，表达图覆盖全部细胞；分别见 `tests_dev/figures/P4/shiny-browser-summary-visium-2026-11-10.csv` 和 `tests_dev/figures/P4/shiny-browser-summary-slideseq-2026-11-10.csv`。Slide-seq 本机单次前两次选择更新约 11.6 和 9.2 秒（含鼠标动作），有性能待优化空间；这不是统计基准，也未覆盖所有浏览器、交互和参数。

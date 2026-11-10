@@ -1,2 +1,2 @@
 "dataset","cells","signal","status","detail","file"
-"simulated",20,"P1","HTML-WRITTEN; BROWSER-NOT-TESTED","","tests_dev/figures/P3/simulated/netVisual_CommunFlowWidget.html"
+"simulated","20","P1","HTML-WRITTEN","Browser checks recorded separately in P3/commun-flow-widget-browser-summary-2026-11-10.csv","tests_dev/figures/P3/simulated/netVisual_CommunFlowWidget.html"
