@@ -6,6 +6,8 @@
 
 > **2026-11-10 状态校正：** §1-§3 的 broken/partial 数量和部分行号是 2026-11-04 的迁移前快照，不是当前验收状态。当前已通过 P0-P5 的核心回归：group LR 网络、空间 aggregate/individual、analysis network、embedding、CommunField、topic、plotly/Shiny、merged producer，以及 P5 的 netP 筛选、selectK、netMappingDEG、barPlot 和 signaling-role 图。详见 `tests_dev/test-*.R`、`tests_dev/figures/summary-*.txt` 和 `docs/remaining-migration-issues-2026-11-10.md`。
 
+> **2026-11-11 补充验收：** 修复全零信号层归一化产生 NaN 的问题（P5-019）；P5 收尾的 8 类图已在模拟、Visium 和完整 Slide-seq fixture 上逐项生成。P4 另补 `plotFeatures()` 的三对象 2D/3D 页面，21 个页面通过 Chrome/CDP smoke。所有结果仍待人工视觉和生物学验收，不能把出图或浏览器 smoke 当作科学正确性证明。
+
 ## 1. 规模
 
 | 文件 | 顶层函数 | broken | partial | OK/keep | helper |
@@ -98,5 +100,5 @@ keep ≠ 不动：本批仍要做**包用法核查**（`element_line(size=)`、`
 ## 8. 批次划分（更新）
 
 - **P1-P4**：已完成对应核心入口迁移和三类 fixture 的图形/交互回归；
-- **P5 收尾**：已完成 netP 显式筛选、selectK、netMappingDEG（含 merged dataset 对齐）、barPlot 和 signaling-role 消费者的回归；
+- **P5 收尾**：已完成 netP 显式筛选、selectK、netMappingDEG（含 merged dataset 对齐）、barPlot 和 signaling-role 消费者的回归；全零信号列由共享预处理排除，并对三个 fixture 输出收尾图；
 - **下一步**：完成 package install、源码 parse、diff check，处理 issue log 中仍未覆盖的可选入口/科学语义边界。

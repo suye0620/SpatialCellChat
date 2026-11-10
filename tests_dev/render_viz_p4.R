@@ -32,6 +32,14 @@ if (!nzchar(output.root)) stop("SC_P4_OUT_ROOT must not be empty", call. = FALSE
 out.dir <- file.path(output.root, dataset)
 dir.create(out.dir, recursive = TRUE, showWarnings = FALSE)
 gene <- rownames(assay(chat, "norm"))[1L]
+cells <- rownames(chat@meta)
+feature.coordinates <- chat@images$coordinates[cells, , drop = FALSE]
+feature.score <- data.frame(
+  x = feature.coordinates[, 1L], y = feature.coordinates[, 2L],
+  score = as.numeric(assay(chat, "norm")[gene, cells]),
+  row.names = cells
+)
+feature.highlight <- head(cells, min(5L, length(cells)))
 stack.genes <- head(rownames(assay(chat, "norm")), 3L)
 stack.layers <- t(as.matrix(assay(chat, "norm")[stack.genes, , drop = FALSE]))
 rownames(stack.layers) <- colnames(assay(chat, "norm"))
@@ -51,6 +59,14 @@ specs <- list(
     chat, layers = stack.layers, title.name = "Spatial feature stack"
   ),
   plotly_spatialLRpairPlot = function() plotly_spatialLRpairPlot(chat, features = gene)[[1L]],
+  plotFeatures_2d = function() plotFeatures(
+    feature.score, method = "2d", cells.highlight = feature.highlight,
+    plot.title = "Feature score", three.dim.z = 7
+  ),
+  plotFeatures_3d = function() plotFeatures(
+    feature.score, method = "3d", cells.highlight = feature.highlight,
+    plot.title = "Feature score", three.dim.z = 7
+  ),
   spatialGiPlot_3d = function() {
     signal <- ensure_gi()
     spatialGiPlot(chat, signaling.name = signal, measure = "indeg", do.binary = FALSE,
@@ -63,7 +79,16 @@ results <- lapply(names(specs), function(name) {
   message <- tryCatch({
     p <- plotly::plotly_build(specs[[name]]())
     ids <- unlist(lapply(p$x$data, function(x) x$customdata), use.names = FALSE)
-    if (name == "spatialGiPlot_3d") {
+    if (startsWith(name, "plotFeatures_")) {
+      feature.traces <- Filter(function(x) length(x$customdata) > 0L, p$x$data)
+      ids <- unlist(lapply(feature.traces, `[[`, "customdata"), use.names = FALSE)
+      count <- sum(vapply(feature.traces, function(x) length(x$x), integer(1)))
+      if (!setequal(ids, cells) || count != length(cells))
+        stop("feature traces do not preserve every fixture cell exactly once")
+      if (name == "plotFeatures_3d" &&
+          !all(vapply(feature.traces, function(x) all(x$z == 7), logical(1))))
+        stop("3D feature traces do not use the requested z coordinate")
+    } else if (name == "spatialGiPlot_3d") {
       count <- sum(vapply(p$x$data[seq_len(min(2L, length(p$x$data)))],
                           function(x) length(x$x), integer(1)))
       if (count != nrow(chat@meta)) stop("Gi trace point count differs from input cell count")

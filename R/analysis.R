@@ -1056,17 +1056,8 @@ selectK <- function(object, slot.name = "netP", pattern = c("outgoing","incoming
   # Convert only this small group-level tensor for NMF; never materialize the
   # cell-level communication array here.
   prob <- .sc_group_prob_array(object, slot.name)
-  if (pattern == "outgoing") {
-    data_sender <- apply(prob, c(1,3), sum)
-    data_sender = sweep(data_sender, 2L, apply(data_sender, 2, function(x) max(x, na.rm = TRUE)), '/', check.margin = FALSE)
-    data0 = as.matrix(data_sender)
-  } else if (pattern == "incoming") {
-    data_receiver <- apply(prob, c(2,3), sum)
-    data_receiver = sweep(data_receiver, 2L, apply(data_receiver, 2, function(x) max(x, na.rm = TRUE)), '/', check.margin = FALSE)
-    data0 = as.matrix(data_receiver)
-  }
-  data <- data0
-  data <- data[rowSums(data)!=0,]
+  data0 <- .sc_normalize_pattern_scores(prob, pattern)
+  data <- data0[rowSums(data0) > 0, , drop = FALSE]
   if (!nrow(data) || !ncol(data))
     stop("The selected signaling network has no non-zero group scores", call. = FALSE)
   max.rank <- min(dim(data)) - 1L
@@ -1086,7 +1077,8 @@ selectK <- function(object, slot.name = "netP", pattern = c("outgoing","incoming
   # df3 <- data.frame(k = res$measures$rank, score = res$measures$dispersion, Measure = "Dispersion")
   df <- rbind(df1, df2)
   #df <- rbind(df1, df2, df3)
-  gg <- ggplot(df, aes(x = k, y = score, group = Measure, color = Measure)) + geom_line(linewidth=1) +
+  rank.line <- if (length(unique(df$k)) > 1L) geom_line(linewidth = 1) else NULL
+  gg <- ggplot(df, aes(x = k, y = score, group = Measure, color = Measure)) + rank.line +
     geom_point() +
     theme_classic() + labs(x = 'Number of patterns', y='Measure score') +
     labs(title = title.name) +  theme(plot.title = element_text(size = 10, face = "bold", hjust = 0.5)) +
@@ -1344,22 +1336,34 @@ suggestK <- function(
         dim = dim(prob), dimnames = dimnames(prob))
 }
 
+.sc_normalize_pattern_scores <- function(prob, pattern) {
+  pattern <- match.arg(pattern, c("outgoing", "incoming"))
+  group.margin <- if (pattern == "outgoing") 1L else 2L
+  scores <- apply(prob, c(group.margin, 3L), sum)
+  scores <- matrix(
+    as.numeric(scores),
+    nrow = dim(prob)[group.margin],
+    ncol = dim(prob)[3L],
+    dimnames = list(dimnames(prob)[[group.margin]], dimnames(prob)[[3L]])
+  )
+  if (any(!is.finite(scores)))
+    stop("The selected signaling network contains non-finite group scores", call. = FALSE)
+
+  column.max <- apply(scores, 2L, max)
+  active <- column.max > 0
+  if (!any(active)) return(scores[, FALSE, drop = FALSE])
+  scores <- scores[, active, drop = FALSE]
+  scores <- sweep(scores, 2L, column.max[active], "/", check.margin = FALSE)
+  scores
+}
+
 identifyCommunicationPatterns <- function(object, slot.name = "netP", pattern = c("outgoing","incoming"), k = NULL, k.range = seq(2,10), heatmap.show = TRUE,
                                           color.use = NULL, color.heatmap = "Spectral", title.legend = "Contributions",
                                           width = 4, height = 6, font.size = 8) {
   pattern <- match.arg(pattern)
   prob <- .sc_group_prob_array(object, slot.name)
-  if (pattern == "outgoing") {
-    data_sender <- apply(prob, c(1,3), sum)
-    data_sender = sweep(data_sender, 2L, apply(data_sender, 2, function(x) max(x, na.rm = TRUE)), '/', check.margin = FALSE)
-    data0 = as.matrix(data_sender)
-  } else if (pattern == "incoming") {
-    data_receiver <- apply(prob, c(2,3), sum)
-    data_receiver = sweep(data_receiver, 2L, apply(data_receiver, 2, function(x) max(x, na.rm = TRUE)), '/', check.margin = FALSE)
-    data0 = as.matrix(data_receiver)
-  }
-  data <- data0
-  data <- data[rowSums(data)!=0,]
+  data0 <- .sc_normalize_pattern_scores(prob, pattern)
+  data <- data0[rowSums(data0) > 0, , drop = FALSE]
   if (is.null(k)) {
     stop("Please run the function `selectK` for selecting a suitable k!")
   }

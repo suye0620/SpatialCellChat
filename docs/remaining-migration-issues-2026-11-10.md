@@ -265,3 +265,11 @@ Next direction: use independently acquired compatible samples with a defensible 
 位置：`R/analysis.R:netAnalysis_signalingChanges_scatter()` 和 `R/visualization.R:netVisual_diffInteraction()`。原因：既有 `rowSums(mat.diff) != 0` 筛选可能留下零行，随后给零行数据框赋单个值而报错；全零差异网络虽然能绘图，却对空边集求最大值并设置边属性，产生无意义警告。影响相同数据或筛选后没有保留通路/连边的 merged 比较。
 
 修复：零行散点图返回无点 ggplot，并说明“没有通路通过当前变化筛选”；不更改 `rowSums` 筛选或将此结果解释为所有方向均无变化。空边网络跳过边属性处理，保留原节点。聚焦测试包含真实零差异、非零相反方向抵消、`do.label` 开关，以及原有非零比较回归。该图提示不能替代后续对 P5-010 方向抵消语义的单独决策。
+
+## P5-019: 全零信号层在模式归一化中产生 NaN
+
+位置：`selectK()` 和 `identifyCommunicationPatterns()` 的 outgoing/incoming 群网络预处理。原逻辑将每个信号层按该列最大值归一化；全零层的最大值为 0，除法生成 NaN。`rowSums(data) != 0` 随后可能保留含 NA 的行，NMF 最终报 `Input matrix x contains at least one null or NA-filled row`。这在 Visium fixture 的 1,032 个 LR 层中可复现，影响所选方向存在全零层的 rank 选择和模式识别。
+
+修复：新增共享 `.sc_normalize_pattern_scores()`，先检查聚合分数为有限值，只对最大值大于 0 的信号列归一化；全零列从 NMF 输入移除，空网络仍由现有调用方给出明确错误。非零列的按列最大值归一化定义不变。`tests_dev/test-remaining-migration.R` 额外构造全零层，分别验证 `selectK()` 与 `identifyCommunicationPatterns()`；`tests_dev/render_p5_remaining_figures.R` 在模拟、Visium 和完整 Slide-seq fixture 上均生成 selectK 图。
+
+边界：该修复只排除没有群级信号的信息列，不改变任一非零信号的权重或阈值。NMF 与 ggplot 依赖警告仍会输出；绘图写出及 CDP smoke 不等同于人工视觉或生物学验收。

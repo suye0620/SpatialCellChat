@@ -103,3 +103,13 @@ P3 局部修复实验见 `P3/streamline-patch-experiment-2026-11-11/`：合成�
 P4 的 15 个页面浏览器检查记录在 `recheck-449c181/P4/browser-summary-2026-11-10.csv`，15/15 通过，覆盖全细胞覆盖、3D scene、stack 三层/单 colorbar 和 `Plotly.relayout`。同一生产提交的隔离重跑产物与已有 HTML 重复，未另行纳入版本控制。这仍是浏览器 smoke，不是人工视觉或所有浏览器交互验收。
 
 merged 结构由真实 Visium 自身对照再次通过 `mergeSpatialCellChat()` producer 生成，并成功绘制 10 个 comparison consumers；摘要在 `merged/visium-self-control-2026-11-11/summary.csv`。该对照是同一样本的技术零差异，不是独立样本比较。完整独立样本比较仍受 P5-014 的基因轴和共同群注释契约阻塞。
+
+## 2026-11-11 补齐 P4/P5 fixture 产物
+
+`P5/three-fixture-2026-11-11/<dataset>/` 为 simulated（20 个细胞）、Visium（905 个位置）和完整 Slide-seq（29,536 个细胞）各生成 8 张收尾图：selectK、单/多 feature 表达柱图、空间 aggregate/individual，以及 signaling-role scatter/network/heatmap；三份 `summary.csv` 均为 8/8 PASS。摘要 PASS 代表调用和 PDF 写出成功，不代表图像或结果已经人工验收。
+
+`continued-2026-11-11/P4/<dataset>/` 补入真实 fixture 表达分数的 `plotFeatures_2d` 和 `plotFeatures_3d`，并保留其余五类 P4 页面。浏览器记录 `continued-2026-11-11/P4/browser-summary-2026-11-11.csv` 覆盖三对象共 21 页，全部通过 Plotly 初始化、细胞点覆盖、2D/3D 场景和 relayout smoke。`plotFeatures()` 及其它图的视觉呈现仍待人工检查；其中固定 z 值是显示平面，不代表实测第三空间维度。
+
+全零 signaling layer 的 NMF 失败由 `selectK()` 的 Visium fixture 重跑发现，原因与验证见 `docs/remaining-migration-issues-2026-11-10.md` P5-019。共享归一化 helper 已同时覆盖模式推断入口，`test-remaining-migration.R` 的全零列回归通过。
+
+本次扩展后重新生成的 artifact inventory 共 722 项：363 PDF、50 张图像、55 个 HTML、210 个本地依赖文件和 44 份依赖许可证。运行 `python tests_dev/audit-visualization-artifacts.py --check-tracked` 前，需将该清单引用的本批产物纳入 Git 索引；审计只校验文件结构、PDF 边界、HTML 本地依赖和索引字节一致，不替代视觉或科学验收。

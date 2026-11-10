@@ -57,6 +57,31 @@ k.plot <- selectK(chat, slot.name = "net", pattern = "outgoing", k.range = 2, nr
 pass("selectK reads sparse group layers and honors a small rank range",
      inherits(k.plot, "ggplot") && all(unique(k.plot$data$k) == 2))
 
+zero.layer.chat <- chat
+zero.layer.prob <- unclass(zero.layer.chat@net$group$prob)
+zero.layer.name <- "all-zero-regression-layer"
+zero.layer.prob[[length(zero.layer.prob) + 1L]] <- Matrix::sparseMatrix(
+  i = integer(), j = integer(), x = numeric(),
+  dims = dim(zero.layer.prob[[1L]])
+)
+zero.layer.dimnames <- dimnames(zero.layer.chat@net$group$prob)
+zero.layer.dimnames[[3L]] <- c(zero.layer.dimnames[[3L]], zero.layer.name)
+zero.layer.chat@net$group$prob <- SparseChatArray(
+  zero.layer.prob, dimnames = zero.layer.dimnames
+)
+k.zero.layer <- selectK(zero.layer.chat, slot.name = "net", pattern = "outgoing",
+                        k.range = 2, nrun = 2)
+pass("selectK excludes an all-zero signaling layer from NMF input",
+     inherits(k.zero.layer, "ggplot") && all(unique(k.zero.layer$data$k) == 2))
+pattern.zero.layer <- identifyCommunicationPatterns(
+  zero.layer.chat, slot.name = "net", pattern = "outgoing", k = 2,
+  heatmap.show = FALSE
+)
+pass("pattern inference handles an all-zero signaling layer",
+     is.list(pattern.zero.layer@net$pattern$outgoing) &&
+       !zero.layer.name %in%
+         pattern.zero.layer@net$pattern$outgoing$signaling[, "Signaling"])
+
 if (!requireNamespace("RcppML", quietly = TRUE)) {
   stop("RcppML is required for the suggestK1 rank-one regression.", call. = FALSE)
 }

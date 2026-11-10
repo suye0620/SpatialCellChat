@@ -113,16 +113,22 @@ const cases = [
   ["simulated", "plotly_spatialDimPlot_3d.html", "3d"],
   ["simulated", "plotly_spatialStackPlot.html", "stack"],
   ["simulated", "plotly_spatialLRpairPlot.html", "lr"],
+  ["simulated", "plotFeatures_2d.html", "feature2d"],
+  ["simulated", "plotFeatures_3d.html", "feature3d"],
   ["simulated", "spatialGiPlot_3d.html", "gi3d"],
   ["visium", "plotly_spatialDimPlot_2d.html", "2d"],
   ["visium", "plotly_spatialDimPlot_3d.html", "3d"],
   ["visium", "plotly_spatialStackPlot.html", "stack"],
   ["visium", "plotly_spatialLRpairPlot.html", "lr"],
+  ["visium", "plotFeatures_2d.html", "feature2d"],
+  ["visium", "plotFeatures_3d.html", "feature3d"],
   ["visium", "spatialGiPlot_3d.html", "gi3d"],
   ["slideseq", "plotly_spatialDimPlot_2d.html", "2d"],
   ["slideseq", "plotly_spatialDimPlot_3d.html", "3d"],
   ["slideseq", "plotly_spatialStackPlot.html", "stack"],
   ["slideseq", "plotly_spatialLRpairPlot.html", "lr"],
+  ["slideseq", "plotFeatures_2d.html", "feature2d"],
+  ["slideseq", "plotFeatures_3d.html", "feature3d"],
   ["slideseq", "spatialGiPlot_3d.html", "gi3d"]
 ];
 const expectedCells = { simulated: 20, visium: 905, slideseq: 29536 };
@@ -179,13 +185,14 @@ async function main() {
       })()`);
       const cells = expectedCells[dataset];
       const expectedPointCount = kind === "stack" ? cells * 3 : cells;
-      const hasCellCoverage = kind === "2d" || kind === "3d" || kind === "lr" || kind === "stack"
+      const hasCellCoverage = kind === "2d" || kind === "3d" || kind === "lr" ||
+        kind === "stack" || kind === "feature2d" || kind === "feature3d"
         ? info.uniqueCellIds === cells
         : info.pointCount >= cells;
       const hasExpectedGeometry = kind === "stack"
         ? info.sceneCount > 0 && info.zPointCount === expectedPointCount &&
           info.layerTickCount === 3 && info.colorbarCount === 1 && info.dataTraceCount === 1
-        : kind === "3d" || kind === "gi3d"
+        : kind === "3d" || kind === "feature3d" || kind === "gi3d"
         ? info.sceneCount > 0 && info.zPointCount >= cells
         : info.mainSvg;
       const passed = info.plotly === "object" && info.traceCount > 0 && info.pointCount >= expectedPointCount &&
@@ -216,7 +223,7 @@ async function main() {
       throw new Error("Refusing to remove an unexpected Chrome profile path");
     fs.rmSync(resolvedUserData, { recursive: true, force: true });
   }
-  const out = path.join(root, "browser-summary-2026-11-10.csv");
+  const out = path.join(root, process.env.SC_P4_BROWSER_SUMMARY || "browser-summary-2026-11-10.csv");
   const header = Object.keys(results[0]).join(",");
   const csv = [header, ...results.map(row => Object.keys(results[0]).map(key => JSON.stringify(row[key] ?? "")).join(","))].join("\n") + "\n";
   fs.writeFileSync(out, csv);

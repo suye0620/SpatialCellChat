@@ -1,6 +1,8 @@
 PASS: netP explicit pathway selection returns pathway rows
 PASS: merged netP explicit pathway selection returns one table per snapshot
 PASS: selectK reads sparse group layers and honors a small rank range
+PASS: selectK excludes an all-zero signaling layer from NMF input
+PASS: pattern inference handles an all-zero signaling layer
 PASS: suggestK1 handles rank-one and rank-two NMF outputs
 PASS: suggestK1 sampled branch handles rank-one and rank-two outputs
 PASS: netMappingDEG reads misc var.features and maps DEG columns

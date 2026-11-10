@@ -140,6 +140,58 @@ def main():
                 if asset.name in ('plotly-latest.min.js', 'typedarray.min.js'):
                     add(asset.parent / 'LICENSE', rel(asset), 'LICENSE', 'license')
 
+    # Expanded P4 recheck adds fixture-derived plotFeatures 2D/3D pages.
+    continued_p4 = FIGURES / 'continued-2026-11-11' / 'P4'
+    expected_p4_names = {
+        'plotly_spatialDimPlot_2d', 'plotly_spatialDimPlot_3d',
+        'plotly_spatialStackPlot', 'plotly_spatialLRpairPlot',
+        'plotFeatures_2d', 'plotFeatures_3d', 'spatialGiPlot_3d',
+    }
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        summary = continued_p4 / dataset / 'summary.csv'
+        if not summary.is_file():
+            errors.append(f'missing expanded P4 summary: {rel(summary)}')
+            continue
+        result_rows = rows(summary)
+        if {row.get('figure') for row in result_rows} != expected_p4_names:
+            errors.append(f'{rel(summary)}: expanded P4 entry-point coverage is incomplete')
+        for row in result_rows:
+            if row.get('status') != 'HTML-WRITTEN':
+                errors.append(f'{rel(summary)}: {row.get("figure")} has status {row.get("status")}')
+                continue
+            path = ROOT / row['file']
+            add(path, rel(summary), 'HTML-WRITTEN', 'html')
+            if not path.is_file():
+                continue
+            html = AssetParser()
+            html.feed(path.read_text(encoding='utf-8'))
+            for url in html.assets:
+                parsed = urlsplit(url)
+                if parsed.scheme or parsed.netloc or url.startswith('#'):
+                    continue
+                asset = path.parent / unquote(parsed.path)
+                add(asset, rel(path), 'LOCAL-ASSET', 'asset')
+                if asset.name in ('plotly-latest.min.js', 'typedarray.min.js'):
+                    add(asset.parent / 'LICENSE', rel(asset), 'LICENSE', 'license')
+
+    expanded_browser = continued_p4 / 'browser-summary-2026-11-11.csv'
+    if not expanded_browser.is_file():
+        errors.append(f'missing expanded P4 browser summary: {rel(expanded_browser)}')
+    else:
+        browser_rows = rows(expanded_browser)
+        expected_pages = {(dataset, name + '.html')
+                          for dataset in ('simulated', 'visium', 'slideseq')
+                          for name in expected_p4_names}
+        actual_pages = {(row['dataset'], row['file']) for row in browser_rows}
+        if len(browser_rows) != 21 or actual_pages != expected_pages:
+            errors.append(f'{rel(expanded_browser)}: expanded P4 browser coverage is incomplete')
+        for row in browser_rows:
+            if row.get('status') != 'PASS':
+                errors.append(f'{rel(expanded_browser)}: browser failure for {row.get("dataset")}/{row.get("file")}')
+            if row.get('screenshotPath'):
+                add(continued_p4 / row['screenshotPath'], rel(expanded_browser),
+                    'BROWSER-SMOKE', 'image')
+
     installed_summary = recheck / 'installed-smoke' / 'summary.csv'
     if not installed_summary.is_file():
         errors.append(f'missing installed smoke summary: {rel(installed_summary)}')
@@ -195,6 +247,17 @@ def main():
     else:
         for path in sorted((FIGURES / 'P5' / 'simulated').glob('*.pdf')):
             add(path, rel(p5_summary), 'PASS', 'pdf')
+    p5_three_fixture = FIGURES / 'P5' / 'three-fixture-2026-11-11'
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        summary = p5_three_fixture / dataset / 'summary.csv'
+        if not summary.is_file():
+            errors.append(f'missing P5 three-fixture summary: {rel(summary)}')
+            continue
+        for row in rows(summary):
+            if row.get('status') != 'PASS':
+                errors.append(f'{rel(summary)}: {row.get("figure")} has status {row.get("status")}')
+            if row.get('file'):
+                add(ROOT / row['file'], rel(summary), row.get('status', ''), 'pdf')
 
     for dataset in ('simulated', 'visium', 'slideseq'):
         summaries = [FIGURES / 'P4' / dataset / 'summary.csv',
