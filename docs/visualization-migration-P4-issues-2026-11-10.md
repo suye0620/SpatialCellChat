@@ -18,10 +18,10 @@ Shiny 封装和 Plotly 输出需要分别实际验证；仅有 R 对象或静态
 
 ## 当前证据与限制
 
-三个对象各自生成了 2D/3D 维度图、单基因表达图与单指标 Gi 3D HTML；Slide-seq 每项数据 trace 均覆盖全部 29,536 个细胞。`tests_dev/test-p4-browser-cdp.js` 使用本地 Chrome CDP 对 2026-11-10 生成的 12 个页面执行了 Plotly 初始化、点数/细胞覆盖、3D scene 和一次 `Plotly.relayout` 检查，汇总见 `tests_dev/figures/P4/browser-summary-2026-11-10.csv`，12/12 为 PASS。
+三个对象各自生成了 2D/3D 维度图、3 层 spatial stack、单基因表达图与单指标 Gi 3D HTML；Slide-seq 每项数据 trace 均覆盖全部 29,536 个细胞，stack 覆盖 88,608 个 layer-cell 点。`tests_dev/test-p4-browser-cdp.js` 使用本地 Chrome CDP 对 2026-11-10 生成的 15 个页面执行了 Plotly 初始化、点数/细胞覆盖、3D scene、stack 单主 trace/单 colorbar/三层刻度和一次 `Plotly.relayout` 检查，汇总见 `tests_dev/figures/P4/browser-summary-2026-11-10.csv`，15/15 为 PASS。
 
-该 smoke test 不是完整人工验收：尚未逐项完成浏览器中的鼠标框选、连续选择后的可视状态检查，也不覆盖 Shiny 浏览器会话。Shiny 的连续两次框选、更新、反转和重置已通过 `shiny::testServer()` 验证，但不能替代浏览器验收；因此 HTML 应标记为“CDP smoke PASS，完整交互未验收”，不能笼统写成浏览器交互已完成。
+`tests_dev/test-p4-shiny-cdp.js` 另行启动 simulated Shiny app，通过 Chrome CDP 的真实鼠标拖拽和按钮点击验证两次选择替换及 Reset：首次为 `c1`，第二次为 `c13`，两次不累加，Reset 恢复 20 个细胞；汇总见 `tests_dev/figures/P4/shiny-browser-summary-2026-11-10.csv`。这证明了 Shiny 选择器的浏览器交互契约，但没有替代在 Visium/Slide-seq 大对象上的性能验收。
 
-## P4-004：三维堆叠仅存在于审计原型
+## P4-004：三维堆叠生产入口与输入契约
 
-迁移计划要求 3D stack 生产化，但现有 `spatial3Dstack()` 只定义在 `tests_dev/audit_visualization_findings.R`，不是包中现有公开入口；计划未给出多层输入、坐标配准、细胞对应、z 轴单位与缺失切片的完整契约。把该原型复制到包内并用单样本自造多层，不能证明真实多切片数据的语义正确。此项尚未完成，需先确定真实输入及接口契约，再按真实数据验收。
+生产入口为 `plotly_spatialStackPlot()`。它从单对象 `images$coordinates` 读取共享 x/y，接收带唯一细胞行名和层列名的 `cell × layer` 数值表，按细胞名对齐，沿 z 轴按层顺序堆叠；z 轴是层序的视觉编码，不解释为物理深度。所有层使用单个 `scatter3d` 主 trace 和全局色域/单 colorbar，不抽样或截断大对象；NaN、Inf、重复/缺失细胞名、重复/空层名和全 NA 层直接拒绝。三套 fixture 的 3 层 HTML 和 CDP 验收已通过。该入口不声称完成多切片组织配准；真实多切片配准仍属于不同的输入契约。

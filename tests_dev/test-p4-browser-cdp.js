@@ -111,14 +111,17 @@ async function waitForPlotly(client) {
 const cases = [
   ["simulated", "plotly_spatialDimPlot_2d.html", "2d"],
   ["simulated", "plotly_spatialDimPlot_3d.html", "3d"],
+  ["simulated", "plotly_spatialStackPlot.html", "stack"],
   ["simulated", "plotly_spatialLRpairPlot.html", "lr"],
   ["simulated", "spatialGiPlot_3d.html", "gi3d"],
   ["visium", "plotly_spatialDimPlot_2d.html", "2d"],
   ["visium", "plotly_spatialDimPlot_3d.html", "3d"],
+  ["visium", "plotly_spatialStackPlot.html", "stack"],
   ["visium", "plotly_spatialLRpairPlot.html", "lr"],
   ["visium", "spatialGiPlot_3d.html", "gi3d"],
   ["slideseq", "plotly_spatialDimPlot_2d.html", "2d"],
   ["slideseq", "plotly_spatialDimPlot_3d.html", "3d"],
+  ["slideseq", "plotly_spatialStackPlot.html", "stack"],
   ["slideseq", "plotly_spatialLRpairPlot.html", "lr"],
   ["slideseq", "spatialGiPlot_3d.html", "gi3d"]
 ];
@@ -145,18 +148,23 @@ async function main() {
       const info = await evaluate(client, `(() => {
         const gd = document.querySelector('.plotly');
         const data = gd._fullData || [];
-        const pointCount = data.reduce((total, trace) => total + (Array.isArray(trace.x) ? trace.x.length : 0), 0);
-        const zPointCount = data.reduce((total, trace) => total + (Array.isArray(trace.z) ? trace.z.length : 0), 0);
-        const cellIds = [...new Set(data.flatMap(trace => Array.isArray(trace.customdata) ? trace.customdata : []))];
+        const dataTraces = data.filter(trace => trace.hoverinfo !== 'none');
+        const pointCount = dataTraces.reduce((total, trace) => total + (Array.isArray(trace.x) ? trace.x.length : 0), 0);
+        const zPointCount = dataTraces.reduce((total, trace) => total + (Array.isArray(trace.z) ? trace.z.length : 0), 0);
+        const cellIds = [...new Set(dataTraces.flatMap(trace => Array.isArray(trace.customdata) ? trace.customdata : []))];
         return {
           plotly: typeof window.Plotly,
           traceCount: data.length,
+          dataTraceCount: dataTraces.length,
           pointCount,
           zPointCount,
           uniqueCellIds: cellIds.length,
           mainSvg: !!gd.querySelector('.main-svg'),
           canvas: !!gd.querySelector('canvas'),
-          sceneCount: Object.keys(gd._fullLayout || {}).filter(key => /^scene\\d*$/.test(key)).length
+          sceneCount: Object.keys(gd._fullLayout || {}).filter(key => /^scene\\d*$/.test(key)).length,
+          colorbarCount: dataTraces.filter(trace => trace.marker && trace.marker.showscale).length,
+          layerTickCount: gd._fullLayout.scene && gd._fullLayout.scene.zaxis.ticktext
+            ? gd._fullLayout.scene.zaxis.ticktext.length : 0
         };
       })()`);
       const interaction = await evaluate(client, `(() => {
@@ -170,16 +178,28 @@ async function main() {
         }));
       })()`);
       const cells = expectedCells[dataset];
-      const hasCellCoverage = kind === "2d" || kind === "3d" || kind === "lr"
+      const expectedPointCount = kind === "stack" ? cells * 3 : cells;
+      const hasCellCoverage = kind === "2d" || kind === "3d" || kind === "lr" || kind === "stack"
         ? info.uniqueCellIds === cells
         : info.pointCount >= cells;
-      const hasExpectedGeometry = kind === "3d" || kind === "gi3d"
+      const hasExpectedGeometry = kind === "stack"
+        ? info.sceneCount > 0 && info.zPointCount === expectedPointCount &&
+          info.layerTickCount === 3 && info.colorbarCount === 1 && info.dataTraceCount === 1
+        : kind === "3d" || kind === "gi3d"
         ? info.sceneCount > 0 && info.zPointCount >= cells
         : info.mainSvg;
-      const passed = info.plotly === "object" && info.traceCount > 0 && info.pointCount >= cells &&
+      const passed = info.plotly === "object" && info.traceCount > 0 && info.pointCount >= expectedPointCount &&
         hasCellCoverage && hasExpectedGeometry && interaction.relayout;
+      let screenshotPath = "";
+      if (passed && kind === "stack") {
+        const screenshot = await client.command("Page.captureScreenshot", {
+          format: "png", captureBeyondViewport: false
+        });
+        screenshotPath = `${dataset}/plotly_spatialStackPlot-browser.png`;
+        fs.writeFileSync(path.join(root, screenshotPath), Buffer.from(screenshot.data, "base64"));
+      }
       results.push({ dataset, file, kind, status: passed ? "PASS" : "FAIL", ...info,
-        browserRelayout: interaction.relayout });
+        browserRelayout: interaction.relayout, screenshotPath });
       console.log(`${passed ? "[PASS]" : "[FAIL]"} ${dataset}/${file} traces=${info.traceCount} points=${info.pointCount} cells=${info.uniqueCellIds} z=${info.zPointCount}`);
     }
     client.close();

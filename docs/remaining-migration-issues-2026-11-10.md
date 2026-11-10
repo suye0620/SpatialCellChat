@@ -160,17 +160,19 @@ dedicated merged comparison plots.
 reads SpatialCellChat slots, so they are not slot-migration consumers. Their
 NMF/statistical interpretation and optional dependencies remain separate issues.
 
-P4 HTML generation now has a 12-case Chrome CDP smoke result (Plotly
-initialization, point/cell coverage, 3D scene, and relayout), but this is not
-full browser-interaction acceptance. Mouse selection and a Shiny browser
-session remain untested. P3 Slide-seq Grid and Flow remain `VISUAL-REVIEW`,
-including the integration warning on the default Flow plot. The 3D stack
-remains a non-public prototype without a verified multi-slice data and
-registration contract (P4-004); it is not counted as delivered.
+P4 HTML generation now has a 15-case Chrome CDP smoke result (Plotly
+initialization, point/cell coverage, 3D scene, stack trace/colorbar/layer ticks,
+and relayout). A separate simulated Shiny Chrome session covers real mouse
+selection, replacement and reset; it is not a performance acceptance for large
+Visium or Slide-seq Shiny sessions. P3 Slide-seq Grid and Flow remain
+`VISUAL-REVIEW`, including the integration warning on the default Flow plot.
+The 3D stack production entry point and its single-dataset input contract are
+implemented and verified; multi-slice tissue registration remains outside that
+contract.
 
 The Agent Notes validator reports pre-existing errors in other records; the new
-merged-pairwise note itself validates. Do not claim that the full Note set is
-clean until those independent records are repaired and revalidated.
+merged-pairwise and 3D-stack Notes validate. Do not claim that the full Note
+set is clean until those independent records are repaired and revalidated.
 
 ## P5-012: invalid group names could silently change cell-pair identity
 

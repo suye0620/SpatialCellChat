@@ -207,7 +207,7 @@ spatial3Dstack <- function(xy, layers, color.heatmap = "RdBu", point.size = 3, z
 | **P1** | 收敛重复代码 | 中 | colormap、theme、坐标轴变换和 plotly trace 构建仍有重复 |
 | **P2（进行中）** | 适配新 schema | 中/大 | `spatialDimPlot`、`spatialCCCDistPlot` 和 plotly spatialDimPlot 已适配；`spatialFeaturePlot`、`plotly_spatialLRpairPlot` 仍访问旧 `@data*`/旧通信结构 |
 | **P3（部分完成）** | 指标与绘图细节 | 小/中 | 距离缓存、零值和树查询已修复；Gi `spot_highlight`、`do.binary`、Lee `cutoff`、trace 索引仍需决策或迁移 |
-| **P4** | plotly 现代化 | 中 | 3D stack 单 trace 原型已验证；生产 API、动态框选、colorbar 显式配置和 Shiny observer 修复仍待落地 |
+| **P4** | plotly 现代化 | 中 | `plotly_spatialStackPlot()` 已提供单 trace/全局色域/显式 colorbar 的生产入口；静态 HTML 15/15 CDP smoke 和 simulated Shiny 鼠标选择已通过，大对象 Shiny 性能与多切片配准仍不在契约内 |
 
 ### 与现有重构计划的衔接
 
@@ -235,7 +235,7 @@ spatial3Dstack <- function(xy, layers, color.heatmap = "RdBu", point.size = 3, z
 - 真实 psoriasis Seurat fixture 导入通过：`33538 × 905` norm 矩阵、1 个 `main` raster、`600 × 595 × 3` RGB 图像、905 个 spot 坐标，`validateSpatialCellChat()` 为 TRUE；
 - `tests_dev/test-computeCellDistance.R`：8/8 通过；`tests_dev/benchmark-computeCellDistance.R`：树查询与 dense reference 逐元素一致，n=1000 的本机计时约 19.5×；n=250/500 的小样本计时受系统分辨率与启动成本影响（本次约 0.5×/NA），内存结论以不物化 n×n 矩阵为准。
 
-**3D stack 演示**：`tests_dev/audit_3dstack_prototype.html`（3 层 × 300 点）。
+**3D stack 历史演示**：`tests_dev/audit_3dstack_prototype.html`（3 层 × 300 点）；生产入口为 `plotly_spatialStackPlot()`，三套 fixture 的 3 层 HTML 和浏览器 smoke 已验证。
 
 **完整包检查**：已运行 `devtools::check('.', document = FALSE, args = c('--no-manual'))`；构建成功，但在依赖检查阶段因环境缺少 required packages（`ALRA`、`ggalluvial`、`svglite`、`MERINGUE`、`ComplexHeatmap`、`sna`、`forcats`、`ggpubr`、`ggnetwork`、`ggnewscale`）而停止。该结果不能作为源代码回归失败；本报告以独立 source 的 targeted checks 作为当前验证证据。feature/LR 绘图仍需最终 schema 的真实通信 fixture，不应把旧 slot 读取伪装成兼容成功。
 
@@ -246,4 +246,4 @@ spatial3Dstack <- function(xy, layers, color.heatmap = "RdBu", point.size = 3, z
 - 真实 psoriasis Seurat 导入与 raster 自动提取已用 `tests_dev/test_data/visium_human_psoriasis_PP1_correctedLocations202401_annotated(1).RData` 验证；仍缺少更大规模坐标距离压力测试；
 - `spatialFeaturePlot`、`plotly_spatialLRpairPlot` 和依赖旧通信结构的 Gi/Lee 外层函数仍未完成最终 schema 迁移；
 - `plotStatistics_Gi` 的 trace 后处理、Shiny observer 累积和 HTML hover 转义仍需单独回归；
-- 3D stack 当前是验证原型，不是已导出的生产函数；生产 API 需要确定 layer 输入、共享色域、z 轴单位和大数据渲染后再加入 NAMESPACE。
+- 3D stack 已加入 `NAMESPACE`，输入为单对象坐标与带细胞名的 `cell × layer` 表；共享色域、单 colorbar、层序 z 轴、hover 转义、非法层边界和 29,536 细胞 × 3 层渲染均已验证。该入口不承担多切片组织配准、物理 z 单位或跨对象细胞对应。

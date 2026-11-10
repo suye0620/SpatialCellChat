@@ -8093,6 +8093,170 @@ plotly_spatialLRpairPlot_shiny <- function(
 }
 
 
+#' @title Stack spatial feature layers in a Plotly 3D view
+#'
+#' @description
+#' Render numeric cell-by-layer values as horizontal spatial slices. The z-axis
+#' encodes layer order only; it is not a physical tissue-depth measurement.
+#'
+#' @param object A single-dataset `SpatialCellChat` object with spatial coordinates.
+#' @param layers A numeric matrix or data frame with cells in rows and named
+#'   layers in columns. Row names must contain exactly the coordinate cell names;
+#'   rows are aligned by name.
+#' @param color.heatmap A valid RColorBrewer palette name or a vector of colors.
+#' @param point.size A positive finite marker size.
+#' @param z.axis.space A positive finite distance between adjacent layer planes.
+#' @param title.name Optional plot title.
+#' @param colorbar.title Colorbar title.
+#'
+#' @return A built Plotly widget with one `scatter3d` trace and one shared colorbar.
+#' @export
+plotly_spatialStackPlot <- function(
+    object,
+    layers,
+    color.heatmap = "RdBu",
+    point.size = 3,
+    z.axis.space = 1,
+    title.name = NULL,
+    colorbar.title = "value"
+) {
+  if (!methods::is(object, "SpatialCellChat"))
+    stop("object must be a SpatialCellChat object", call. = FALSE)
+  .sc_assert_shared_spatial_coordinates(object, "plotly_spatialStackPlot()")
+
+  coordinates <- object@images$coordinates
+  if (is.null(coordinates) || !is.matrix(coordinates) ||
+      ncol(coordinates) < 2L || !is.numeric(coordinates[, seq_len(2L), drop = FALSE]) ||
+      any(!is.finite(coordinates[, seq_len(2L), drop = FALSE])))
+    stop("object must contain at least two finite numeric spatial coordinate columns",
+         call. = FALSE)
+  cell_ids <- rownames(coordinates)
+  if (is.null(cell_ids) || anyNA(cell_ids) || any(!nzchar(cell_ids)) ||
+      anyDuplicated(cell_ids))
+    stop("spatial coordinates must have unique, non-empty cell names", call. = FALSE)
+
+  if (!(is.matrix(layers) || is.data.frame(layers)) ||
+      is.data.frame(layers) && !all(vapply(layers, is.numeric, logical(1))))
+    stop("layers must be a numeric matrix or a data frame of numeric columns",
+         call. = FALSE)
+  layer_values <- as.matrix(layers)
+  layer_ids <- rownames(layer_values)
+  layer_names <- colnames(layer_values)
+  if (!is.numeric(layer_values) || nrow(layer_values) != length(cell_ids) ||
+      ncol(layer_values) < 1L)
+    stop("layers must have one numeric row per coordinate and at least one column",
+         call. = FALSE)
+  if (is.null(layer_ids) || anyNA(layer_ids) || any(!nzchar(layer_ids)) ||
+      anyDuplicated(layer_ids) || !setequal(layer_ids, cell_ids))
+    stop("layer row names must uniquely match the spatial coordinate cell names",
+         call. = FALSE)
+  if (is.null(layer_names) || anyNA(layer_names) || any(!nzchar(layer_names)) ||
+      anyDuplicated(layer_names))
+    stop("layers must have unique, non-empty column names", call. = FALSE)
+  if (any(is.nan(layer_values)) || any(is.infinite(layer_values)))
+    stop("layers cannot contain NaN, Inf, or -Inf values", call. = FALSE)
+  if (length(point.size) != 1L || !is.numeric(point.size) ||
+      is.na(point.size) || !is.finite(point.size) || point.size <= 0)
+    stop("point.size must be one positive finite number", call. = FALSE)
+  if (length(z.axis.space) != 1L || !is.numeric(z.axis.space) ||
+      is.na(z.axis.space) || !is.finite(z.axis.space) || z.axis.space <= 0)
+    stop("z.axis.space must be one positive finite number", call. = FALSE)
+  if (!is.null(title.name) &&
+      (!is.character(title.name) || length(title.name) != 1L || is.na(title.name)))
+    stop("title.name must be NULL or one non-missing string", call. = FALSE)
+  if (!is.character(colorbar.title) || length(colorbar.title) != 1L ||
+      is.na(colorbar.title) || !nzchar(colorbar.title))
+    stop("colorbar.title must be one non-empty string", call. = FALSE)
+
+  layer_values <- layer_values[cell_ids, , drop = FALSE]
+  finite_by_layer <- colSums(is.finite(layer_values))
+  if (any(finite_by_layer == 0L))
+    stop("each layer must contain at least one finite value", call. = FALSE)
+  value_index <- which(is.finite(layer_values), arr.ind = TRUE)
+  values <- layer_values[value_index]
+  color_min <- min(0, values)
+  color_max <- max(0, values)
+  zero_only <- color_min == 0 && color_max == 0
+  if (zero_only) {
+    color_min <- -1e-6
+    color_max <- 1e-6
+  }
+
+  if (length(color.heatmap) == 1L && is.character(color.heatmap)) {
+    palette_names <- rownames(RColorBrewer::brewer.pal.info)
+    if (is.na(color.heatmap) || !color.heatmap %in% palette_names)
+      stop("color.heatmap must name an RColorBrewer palette or be a color vector",
+           call. = FALSE)
+    palette_size <- min(11L, RColorBrewer::brewer.pal.info[color.heatmap, "maxcolors"])
+    base_colors <- RColorBrewer::brewer.pal(max(3L, palette_size), color.heatmap)
+  } else {
+    base_colors <- as.character(color.heatmap)
+    if (length(base_colors) < 2L || anyNA(base_colors) ||
+        any(!vapply(base_colors, function(color) {
+          !inherits(try(grDevices::col2rgb(color), silent = TRUE), "try-error")
+        }, logical(1))))
+      stop("color.heatmap must be a palette name or at least two valid colors",
+           call. = FALSE)
+  }
+  colors <- grDevices::colorRampPalette(base_colors)(99L)
+
+  html_escape <- function(value) {
+    value <- as.character(value)
+    value <- gsub("&", "&amp;", value, fixed = TRUE)
+    value <- gsub("<", "&lt;", value, fixed = TRUE)
+    value <- gsub(">", "&gt;", value, fixed = TRUE)
+    value <- gsub("\"", "&quot;", value, fixed = TRUE)
+    gsub("'", "&#39;", value, fixed = TRUE)
+  }
+  z_values <- (value_index[, "col"] - 1) * z.axis.space
+  hover <- paste0(
+    "<b>", html_escape(layer_names[value_index[, "col"]]), "</b>",
+    "<br>cell: ", html_escape(cell_ids[value_index[, "row"]]),
+    "<br>value: ", format(values, digits = 6L, trim = TRUE, scientific = FALSE)
+  )
+  plot_data <- data.frame(
+    x = coordinates[cell_ids, 1L][value_index[, "row"]],
+    y = coordinates[cell_ids, 2L][value_index[, "row"]],
+    z = z_values,
+    value = values,
+    cell_id = cell_ids[value_index[, "row"]],
+    hover = hover,
+    stringsAsFactors = FALSE
+  )
+  tick_values <- (seq_along(layer_names) - 1) * z.axis.space
+  colorbar <- list(title = colorbar.title)
+  if (zero_only) {
+    colorbar$tickmode <- "array"
+    colorbar$tickvals <- 0
+    colorbar$ticktext <- "0"
+  }
+  plotly::plot_ly(
+    data = plot_data,
+    x = ~x, y = ~y, z = ~z, color = ~value, colors = colors,
+    customdata = ~cell_id, text = ~hover, hoverinfo = "text",
+    type = "scatter3d", mode = "markers",
+    marker = list(size = point.size, cmin = color_min, cmax = color_max,
+                  showscale = TRUE, colorbar = colorbar),
+    showlegend = FALSE
+  ) |>
+    plotly::layout(
+      title = title.name,
+      scene = list(
+        xaxis = list(title = "x", zeroline = FALSE),
+        yaxis = list(title = "y", zeroline = FALSE),
+        zaxis = list(title = "layer", tickmode = "array",
+                     tickvals = tick_values, ticktext = layer_names,
+                     zeroline = FALSE),
+        aspectmode = "manual",
+        aspectratio = list(x = 1, y = 1, z = 0.35),
+        camera = list(eye = list(x = 1.6, y = 1.6, z = 0.9))
+      ),
+      showlegend = FALSE
+    ) |>
+    plotly::plotly_build()
+}
+
+
 #' @title interactive spatialDimPlot
 #'
 #' @param object a SpatialCellChat object

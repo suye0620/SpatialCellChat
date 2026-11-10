@@ -30,6 +30,10 @@ if (identical(dataset, "slideseq")) options(future.globals.maxSize = 20 * 1024^3
 out.dir <- file.path("tests_dev/figures/P4", dataset)
 dir.create(out.dir, recursive = TRUE, showWarnings = FALSE)
 gene <- rownames(assay(chat, "norm"))[1L]
+stack.genes <- head(rownames(assay(chat, "norm")), 3L)
+stack.layers <- t(as.matrix(assay(chat, "norm")[stack.genes, , drop = FALSE]))
+rownames(stack.layers) <- colnames(assay(chat, "norm"))
+colnames(stack.layers) <- stack.genes
 ensure_gi <- function() {
   if (is.null(chat@netP$centr.cell)) {
     signal <- dimnames(chat@netP$cell$prob)[[3L]][1L]
@@ -41,6 +45,9 @@ ensure_gi <- function() {
 specs <- list(
   plotly_spatialDimPlot_2d = function() plotly_spatialDimPlot(chat, method = "2d"),
   plotly_spatialDimPlot_3d = function() plotly_spatialDimPlot(chat, method = "3d"),
+  plotly_spatialStackPlot = function() plotly_spatialStackPlot(
+    chat, layers = stack.layers, title.name = "Spatial feature stack"
+  ),
   plotly_spatialLRpairPlot = function() plotly_spatialLRpairPlot(chat, features = gene)[[1L]],
   spatialGiPlot_3d = function() {
     signal <- ensure_gi()
@@ -58,6 +65,11 @@ results <- lapply(names(specs), function(name) {
       count <- sum(vapply(p$x$data[seq_len(min(2L, length(p$x$data)))],
                           function(x) length(x$x), integer(1)))
       if (count != nrow(chat@meta)) stop("Gi trace point count differs from input cell count")
+    } else if (name == "plotly_spatialStackPlot") {
+      data.traces <- Filter(function(x) !identical(x$hoverinfo, "none"), p$x$data)
+      count <- sum(vapply(data.traces, function(x) length(x$x), integer(1)))
+      if (length(data.traces) != 1L || count != nrow(chat@meta) * length(stack.genes))
+        stop("stack trace count or point coverage differs from input cells and layers")
     } else if (!setequal(ids, rownames(chat@meta))) {
       stop("plot trace does not contain all input cells")
     }
