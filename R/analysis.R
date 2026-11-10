@@ -1466,97 +1466,86 @@ computeNetSimilarity <- function(object, slot.name = "netP", type = c("functiona
 #' @return
 #' @export
 #'
-computeNetSimilarityPairwise <- function(object, slot.name = "netP", type = c("functional","structural"), comparison = NULL, k = NULL, thresh = NULL) {
+computeNetSimilarityPairwise <- function(object, slot.name = "netP", type = c("functional", "structural"), comparison = NULL, k = NULL, thresh = NULL) {
   type <- match.arg(type)
-  if (is.null(comparison)) {
-    comparison <- 1:length(unique(object@meta$datasets))
-  }
+  if (!identical(object@misc$.mode, "merged"))
+    stop("pairwise similarity requires a merged SpatialCellChat object.", call. = FALSE)
+  dataset.names <- .sc_ranknet_dataset_names(object)
+  if (is.null(comparison)) comparison <- seq_along(dataset.names)
+  if (!is.numeric(comparison) || anyNA(comparison) ||
+      any(comparison != as.integer(comparison)) ||
+      any(comparison < 1L | comparison > length(dataset.names)) ||
+      anyDuplicated(comparison))
+    stop("comparison must contain distinct valid dataset indices.", call. = FALSE)
+  comparison <- as.integer(comparison)
+  selected.names <- dataset.names[comparison]
   cat("Compute signaling network similarity for datasets", as.character(comparison), '\n')
   comparison.name <- paste(comparison, collapse = "-")
-  net <- list()
-  signalingAll <- c()
-  object.net.nameAll <- c()
-  # 1:length(setdiff(names(methods::slot(object, slot.name)), "similarity"))
-  for (i in 1:length(comparison)) {
-    object.net <- methods::slot(object, slot.name)[[comparison[i]]]
-    object.net.name <- names(methods::slot(object, slot.name))[comparison[i]]
-    object.net.nameAll <- c(object.net.nameAll, object.net.name)
-    net[[i]] = object.net$prob
-    signalingAll <- c(signalingAll, paste0(dimnames(net[[i]])[[3]], "--", object.net.name))
-    # signalingAll <- c(signalingAll, dimnames(net[[i]])[[3]])
-  }
-  names(net) <- object.net.nameAll
-  net.dim <- sapply(net, dim)[3,]
-  nnet <- sum(net.dim)
-  position <- cumsum(net.dim); position <- c(0,position)
 
-  if (is.null(k)) {
-    if (nnet <= 25) {
-      k <- ceiling(sqrt(nnet))
-    } else {
-      k <- ceiling(sqrt(nnet)) + 1
-    }
-
-  }
-  if (!is.null(thresh)) {
-    for (i in 1:length(net)) {
-      neti <- net[[i]]
-      neti[neti < quantile(c(neti[neti != 0]), thresh)] <- 0
-      net[[i]] <- neti
+  layers <- list()
+  signaling.names <- character()
+  for (dataset.name in selected.names) {
+    record <- object@misc$.datasets[[dataset.name]]
+    branch <- record[[slot.name]]$group
+    prob <- branch$prob
+    if (!inherits(prob, "SparseChatArray"))
+      stop("dataset '", dataset.name, "' has no group-level probability layers for ", slot.name, ".", call. = FALSE)
+    pval <- if (identical(slot.name, "net")) branch$pval else NULL
+    for (layer.name in dimnames(prob)[[3L]]) {
+      mat <- as.matrix(prob[[layer.name]])
+      if (inherits(pval, "SparseChatArray") && layer.name %in% dimnames(pval)[[3L]])
+        mat[as.matrix(pval[[layer.name]]) >= 0.05] <- 0
+      if (!is.null(thresh)) {
+        nonzero <- mat[mat != 0]
+        if (length(nonzero)) mat[mat < stats::quantile(nonzero, thresh)] <- 0
+      }
+      layers[[length(layers) + 1L]] <- mat
+      signaling.names <- c(signaling.names, paste0(layer.name, "--", dataset.name))
     }
   }
+  nnet <- length(layers)
+  if (!nnet) stop("No signaling layers are available for comparison.", call. = FALSE)
+
   if (type == "functional") {
-    # compute the functional similarity
-    S3 <- matrix(0, nrow = nnet, ncol = nnet)
-    for (i in 1:nnet) {
-      for (j in 1:nnet) {
-        idx.i <- which(position - i >= 0)[1]
-        idx.j <- which(position - j >= 0)[1]
-        net.i <- net[[idx.i-1]]
-        net.j <- net[[idx.j-1]]
-        Gi <- (net.i[ , ,i-position[idx.i-1]] > 0)*1
-        Gj <- (net.j[ , ,j-position[idx.j-1]] > 0)*1
-        S3[i,j] <- sum(Gi * Gj)/sum(Gi+Gj-Gi*Gj,na.rm=TRUE)
+    similarity <- matrix(0, nrow = nnet, ncol = nnet)
+    for (i in seq_len(nnet)) {
+      for (j in seq_len(nnet)) {
+        gi <- layers[[i]] > 0
+        gj <- layers[[j]] > 0
+        denominator <- sum(gi + gj - gi * gj)
+        similarity[i, j] <- if (denominator == 0) 0 else sum(gi * gj) / denominator
       }
     }
-
-    # define the similarity matrix
-    S3[is.na(S3)] <- 0;  diag(S3) <- 1
-    S_signalings <- S3
-  } else if (type == "structural") {
-    # compute the structure distance
-    D_signalings <- matrix(0, nrow = nnet, ncol = nnet)
-    for (i in 1:nnet) {
-      for (j in 1:nnet) {
-        idx.i <- which(position - i >= 0)[1]
-        idx.j <- which(position - j >= 0)[1]
-        net.i <- net[[idx.i-1]]
-        net.j <- net[[idx.j-1]]
-        Gi <- (net.i[ , ,i-position[idx.i-1]] > 0)*1
-        Gj <- (net.j[ , ,j-position[idx.j-1]] > 0)*1
-        D_signalings[i,j] <- computeNetD_structure(Gi,Gj)
+    diag(similarity) <- 1
+  } else {
+    distance <- matrix(0, nrow = nnet, ncol = nnet)
+    for (i in seq_len(nnet)) {
+      for (j in seq_len(nnet)) {
+        distance[i, j] <- computeNetD_structure(layers[[i]] > 0, layers[[j]] > 0)
       }
     }
-    # define the structure similarity matrix
-    D_signalings[is.infinite(D_signalings)] <- 0
-    D_signalings[is.na(D_signalings)] <- 0
-    S_signalings <- 1-D_signalings
+    distance[!is.finite(distance)] <- 0
+    distance[is.na(distance)] <- 0
+    similarity <- 1 - distance
+    diag(similarity) <- 1
   }
-  # smooth the similarity matrix using SNN
-  SNN <- buildSNN(S_signalings, k = k, prune.SNN = 1/15)
-  Similarity <- as.matrix(S_signalings*SNN)
-  rownames(Similarity) <- signalingAll
-  colnames(Similarity) <- rownames(Similarity)
 
-  if (!is.list(methods::slot(object, slot.name)$similarity[[type]]$matrix)) {
-    methods::slot(object, slot.name)$similarity[[type]]$matrix <- NULL
-  }
-  # methods::slot(object, slot.name)$similarity[[type]]$matrix <- Similarity
-  methods::slot(object, slot.name)$similarity[[type]]$matrix[[comparison.name]] <- Similarity
-  return(object)
+  if (is.null(k)) k <- if (nnet <= 25L) ceiling(sqrt(nnet)) else ceiling(sqrt(nnet)) + 1L
+  k <- max(1L, min(as.integer(k), nnet))
+  SNN <- if (nnet == 1L) matrix(1, 1L, 1L) else buildSNN(similarity, k = max(2L, k), prune.SNN = 1 / 15)
+  Similarity <- as.matrix(similarity * SNN)
+  rownames(Similarity) <- signaling.names
+  colnames(Similarity) <- signaling.names
+
+  slot.data <- methods::slot(object, slot.name)
+  if (!is.list(slot.data$similarity)) slot.data$similarity <- list()
+  if (!is.list(slot.data$similarity[[type]])) slot.data$similarity[[type]] <- list()
+  if (!is.list(slot.data$similarity[[type]]$matrix))
+    slot.data$similarity[[type]]$matrix <- list()
+  slot.data$similarity[[type]]$matrix[[comparison.name]] <- Similarity
+  methods::slot(object, slot.name) <- slot.data
+  object
 }
-
-
 #' Manifold learning of the signaling networks based on their similarity
 #'
 #' @param object CellChat object
@@ -2381,22 +2370,42 @@ subsetCommunication <- function(object = NULL, net = NULL, slot.name = "net",
                                            receptor.pvalues = receptor.pvalues, receptor.logFC = receptor.logFC, receptor.pct.1 = receptor.pct.1, receptor.pct.2 =receptor.pct.2)
   } else if (identical(mode, "merged")) {
     if (is.null(net)) {
-      net0 <- slot(object, "net")
-      df.net <- vector("list", length(net0))
-      names(df.net) <- names(net0)
-      for (i in 1:length(net0)) {
-        net <- net0[[i]]
-        LR <- object@LR[[i]]$LRsig
-        cells.level <- levels(object@idents)
-
-        df.net[[i]] <- subsetCommunication_internal(net, LR, cells.level, slot.name = slot.name,
-                                                    sources.use = sources.use, targets.use = targets.use,
-                                                    signaling = signaling,
-                                                    pairLR.use = pairLR.use,
-                                                    thresh = thresh,
-                                                    datasets = datasets, ligand.pvalues = ligand.pvalues, ligand.logFC = ligand.logFC, ligand.pct.1 = ligand.pct.1, ligand.pct.2 = ligand.pct.2,
-                                                    receptor.pvalues = receptor.pvalues, receptor.logFC = receptor.logFC, receptor.pct.1 = receptor.pct.1, receptor.pct.2 =receptor.pct.2)
+      dataset.names <- names(object@misc$.datasets)
+      if (is.null(dataset.names) || !length(dataset.names))
+        stop("merged object has no named misc$.datasets snapshots", call. = FALSE)
+      selected <- dataset.names
+      if (!is.null(datasets)) {
+        if (is.numeric(datasets)) {
+          if (any(datasets < 1L | datasets > length(dataset.names)))
+            stop("datasets contains an index outside the merged object.", call. = FALSE)
+          selected <- dataset.names[unique(as.integer(datasets))]
+        } else {
+          if (any(!as.character(datasets) %in% dataset.names))
+            stop("datasets contains an unknown merged dataset name.", call. = FALSE)
+          selected <- intersect(dataset.names, as.character(datasets))
+        }
       }
+      df.net <- lapply(selected, function(dataset.name) {
+        record <- object@misc$.datasets[[dataset.name]]
+        dataset.net <- record[[slot.name]]
+        if (!is.list(dataset.net))
+          stop("misc$.datasets[['", dataset.name, "']] is missing its `", slot.name,
+               "` snapshot.", call. = FALSE)
+        dataset.LR <- record$LR$LRsig %||% object@LR$LRsig
+        subsetCommunication_internal(dataset.net, dataset.LR,
+                                     levels(object@idents), slot.name = slot.name,
+                                     sources.use = sources.use, targets.use = targets.use,
+                                     signaling = signaling, pairLR.use = pairLR.use,
+                                     thresh = thresh,
+                                     datasets = NULL, ligand.pvalues = ligand.pvalues,
+                                     ligand.logFC = ligand.logFC, ligand.pct.1 = ligand.pct.1,
+                                     ligand.pct.2 = ligand.pct.2,
+                                     receptor.pvalues = receptor.pvalues,
+                                     receptor.logFC = receptor.logFC,
+                                     receptor.pct.1 = receptor.pct.1,
+                                     receptor.pct.2 = receptor.pct.2)
+      })
+      names(df.net) <- selected
     } else {
       LR <- data.frame()
       for (i in 1:length(object@LR)) {
@@ -2894,14 +2903,12 @@ netAnalysis_signalingRole_scatter <- function(object, signaling = NULL, color.us
 netAnalysis_diff_signalingRole_scatter <- function(object, color.use = NULL, comparison = c(1,2), signaling = NULL, signaling.exclude = NULL, idents.exclude = NULL, slot.name = "netP", group = NULL, dot.size = 2.5, point.shape = c(21, 22, 24, 23, 25, 8, 3), label.size = 3, dot.alpha = 0.6,
                                                    x.measure = "outdeg", y.measure = "indeg", xlabel = "Outgoing interaction strength", ylabel = "Incoming interaction strength", title = NULL,
                                                    font.size = 10, font.size.title = 10, do.label = T, show.legend = T, show.axes = T) {
-  if (is.list(object)) {
-    object <- mergeCellChat(object, add.names = names(object))
-  }
-  if (!is.list(object@net[[1]])) {
-    stop("This function cannot be applied to a single cellchat object from one dataset!")
-  }
+  if (is.list(object)) object <- mergeCellChat(object, add.names = names(object))
+  dataset.name <- .sc_ranknet_dataset_names(object)
+  comparison <- .sc_ranknet_index(comparison, dataset.name, "comparison")
+  if (length(comparison) != 2L)
+    stop("comparison must select exactly two datasets.", call. = FALSE)
 
-  dataset.name <- names(object@net)
   message(paste0("Visualizing differential outgoing and incoming signaling changes from ", dataset.name[comparison[1]], " to ", dataset.name[comparison[2]]))
   title <- paste0("Signaling changes ", " (", dataset.name[comparison[1]], " vs. ", dataset.name[comparison[2]], ")")
 
@@ -2911,7 +2918,8 @@ netAnalysis_diff_signalingRole_scatter <- function(object, color.use = NULL, com
     ylabel = "Differential incoming interaction strength"
   }
   if (is.null(signaling)) {
-    signaling <- union(object@netP[[comparison[1]]]$pathways, object@netP[[comparison[2]]]$pathways)
+    signaling <- union(object@misc$.datasets[[dataset.name[comparison[1]]]]$netP$pathways,
+                       object@misc$.datasets[[dataset.name[comparison[2]]]]$netP$pathways)
   }
   if (!is.null(signaling.exclude)) {
     signaling <- setdiff(signaling, signaling.exclude)
@@ -2919,14 +2927,14 @@ netAnalysis_diff_signalingRole_scatter <- function(object, color.use = NULL, com
 
   mat.all.merged <- list()
   for (ii in 1:length(comparison)) {
-    if (length(slot(object, slot.name)[[comparison[ii]]]$centr) == 0) {
+dataset.record <- object@misc$.datasets[[dataset.name[comparison[ii]]]]
+    centr <- dataset.record[[slot.name]]$centr
+    if (length(centr) == 0) {
       stop("Please run `netAnalysis_computeCentrality` to compute the network centrality scores for each dataset seperately! ")
     }
-    if (sum(c(x.measure, y.measure) %in% dimnames(slot(object, slot.name)[[comparison[ii]]]$centr)[[1]]) !=2) {
-      stop(paste0("`x.measure, y.measure` should be one of ", paste(dimnames(slot(object, slot.name)[[comparison[ii]]]$centr)[[1]],collapse=", "), '\n', "`outdeg_unweighted` is only supported for version >= 1.1.2"))
+    if (sum(c(x.measure, y.measure) %in% dimnames(centr)[[1]]) != 2) {
+      stop(paste0("`x.measure, y.measure` should be one of ", paste(dimnames(centr)[[1]],collapse=", "), "\n", "`outdeg_unweighted` is only supported for version >= 1.1.2"))
     }
-
-    centr <- slot(object, slot.name)[[comparison[ii]]]$centr
     outgoing <- matrix(0, nrow = length(cell.levels), ncol = dim(centr)[3])
     incoming <- matrix(0, nrow = length(cell.levels), ncol = dim(centr)[3])
     dimnames(outgoing) <- list(cell.levels, dimnames(centr)[[3]])
@@ -3058,33 +3066,24 @@ netAnalysis_diff_signalingRole_scatter <- function(object, color.use = NULL, com
 netAnalysis_signalingChanges_scatter <- function(object, idents.use, color.use = c("grey10", "#F8766D", "#00BFC4"), comparison = c(1,2), signaling = NULL, signaling.label = NULL, top.label = 1, signaling.exclude = NULL, xlims = NULL, ylims = NULL,slot.name = "netP", dot.size = 2.5, point.shape = c(21, 22, 24, 23), label.size = 3, dot.alpha = 0.6,
                                                  x.measure = "outdeg", y.measure = "indeg", xlabel = "Differential outgoing interaction strength", ylabel = "Differential incoming interaction strength", title = NULL,
                                                  font.size = 10, font.size.title = 10, do.label = T, show.legend = T, show.axes = T) {
-  if (is.list(object)) {
-    object <- mergeCellChat(object, add.names = names(object))
-  }
-  if (is.list(object@net[[1]])) {
-    dataset.name <- names(object@net)
-    message(paste0("Visualizing differential outgoing and incoming signaling changes from ", dataset.name[comparison[1]], " to ", dataset.name[comparison[2]]))
-    title <- paste0("Signaling changes of ", idents.use, " (", dataset.name[comparison[1]], " vs. ", dataset.name[comparison[2]], ")")
-
-    cell.levels <- levels(object@idents)
-    if (is.null(xlabel) | is.null(ylabel)) {
-      xlabel = "Differential outgoing interaction strength"
-      ylabel = "Differential incoming interaction strength"
-    }
-
-  } else {
-    message("Visualizing outgoing and incoming signaling on a single object \n")
-    title <- paste0("Signaling patterns of ", idents.use)
-    if (length(slot(object, slot.name)$centr) == 0) {
-      stop("Please run `netAnalysis_computeCentrality` to compute the network centrality scores! ")
-    }
-    cell.levels <- levels(object@idents)
+if (is.list(object)) object <- mergeCellChat(object, add.names = names(object))
+  dataset.name <- .sc_ranknet_dataset_names(object)
+  comparison <- .sc_ranknet_index(comparison, dataset.name, "comparison")
+  if (length(comparison) != 2L)
+    stop("comparison must select exactly two datasets.", call. = FALSE)
+  message(paste0("Visualizing differential outgoing and incoming signaling changes from ", dataset.name[comparison[1]], " to ", dataset.name[comparison[2]]))
+  title <- paste0("Signaling changes of ", idents.use, " (", dataset.name[comparison[1]], " vs. ", dataset.name[comparison[2]], ")")
+  cell.levels <- levels(object@idents)
+  if (is.null(xlabel) | is.null(ylabel)) {
+    xlabel = "Differential outgoing interaction strength"
+    ylabel = "Differential incoming interaction strength"
   }
   if (!(idents.use %in% cell.levels)) {
     stop("Please check the input cell group names!")
   }
   if (is.null(signaling)) {
-    signaling <- union(object@netP[[comparison[1]]]$pathways, object@netP[[comparison[2]]]$pathways)
+    signaling <- union(object@misc$.datasets[[dataset.name[comparison[1]]]]$netP$pathways,
+                       object@misc$.datasets[[dataset.name[comparison[2]]]]$netP$pathways)
   }
   if (!is.null(signaling.exclude)) {
     signaling <- setdiff(signaling, signaling.exclude)
@@ -3093,13 +3092,14 @@ netAnalysis_signalingChanges_scatter <- function(object, idents.use, color.use =
 
   mat.all.merged <- list()
   for (ii in 1:length(comparison)) {
-    if (length(slot(object, slot.name)[[comparison[ii]]]$centr) == 0) {
+dataset.record <- object@misc$.datasets[[dataset.name[comparison[ii]]]]
+    centr <- dataset.record[[slot.name]]$centr
+    if (length(centr) == 0) {
       stop("Please run `netAnalysis_computeCentrality` to compute the network centrality scores for each dataset seperately! ")
     }
-    if (sum(c(x.measure, y.measure) %in% dimnames(slot(object, slot.name)[[comparison[ii]]]$centr)[[1]]) !=2) {
-      stop(paste0("`x.measure, y.measure` should be one of ", paste(dimnames(slot(object, slot.name)[[comparison[ii]]]$centr)[[1]],collapse=", "), '\n', "`outdeg_unweighted` is only supported for version >= 1.1.2"))
+    if (sum(c(x.measure, y.measure) %in% dimnames(centr)[[1]]) != 2) {
+      stop(paste0("`x.measure, y.measure` should be one of ", paste(dimnames(centr)[[1]],collapse=", "), "\n", "`outdeg_unweighted` is only supported for version >= 1.1.2"))
     }
-    centr <- slot(object, slot.name)[[comparison[ii]]]$centr
     outgoing <- matrix(0, nrow = length(cell.levels), ncol = dim(centr)[3])
     incoming <- matrix(0, nrow = length(cell.levels), ncol = dim(centr)[3])
     dimnames(outgoing) <- list(cell.levels, dimnames(centr)[[3]])
@@ -3133,7 +3133,7 @@ netAnalysis_signalingChanges_scatter <- function(object, idents.use, color.use =
 
   mat.diff <- mat.all.merged.use[[2]] -  mat.all.merged.use[[1]]
   idx <- rowSums(mat.diff) != 0
-  mat.diff <- mat.diff[idx, ]
+  mat.diff <- mat.diff[idx, , drop = FALSE]
   out.specific.signaling <- rownames(mat.diff) %in% out.specific.signaling
   in.specific.signaling <- rownames(mat.diff) %in% in.specific.signaling
   out.in.specific.signaling <- as.logical(out.specific.signaling * in.specific.signaling)

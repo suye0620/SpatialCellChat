@@ -669,6 +669,48 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+.sc_validate_merged_datasets <- function(object) {
+  datasets <- object@misc$.datasets
+  if (!is.list(datasets) || length(datasets) < 2L || is.null(names(datasets)) ||
+      anyNA(names(datasets)) || any(!nzchar(names(datasets))) || anyDuplicated(names(datasets)))
+    return("merged misc$.datasets must contain at least two uniquely named snapshots")
+  if (!"datasets" %in% names(object@meta))
+    return("merged meta must contain a datasets column")
+  if (!identical(levels(object@meta$datasets), names(datasets)))
+    return("merged meta$datasets levels must match misc$.datasets names")
+
+  errors <- character()
+  merged.cells <- rownames(object@meta)
+  for (dataset in names(datasets)) {
+    record <- datasets[[dataset]]
+    label <- paste0("misc$.datasets[['", dataset, "']]")
+    if (!is.list(record)) {
+      errors <- c(errors, paste0(label, " must be a list"))
+      next
+    }
+    cells <- if (is.data.frame(record$meta)) rownames(record$meta) else NULL
+    if (is.null(cells) || anyDuplicated(cells)) {
+      errors <- c(errors, paste0(label, "$meta must have unique cell rownames"))
+      next
+    }
+    expected.cells <- merged.cells[as.character(object@meta$datasets) == dataset]
+    if (!identical(cells, expected.cells))
+      errors <- c(errors, paste0(label, "$meta cells must match the merged dataset partition in order"))
+    if (!inherits(record$idents, "factor") || length(record$idents) != length(cells) ||
+        !identical(names(record$idents), cells) || anyNA(record$idents))
+      errors <- c(errors, paste0(label, "$idents must be a named factor aligned to snapshot cells"))
+    group.names <- if (inherits(record$idents, "factor")) levels(record$idents) else character()
+    errors <- c(errors, .sc_validate_net(record$net, cells, group.names,
+                                          paste0(label, "$net")))
+    errors <- c(errors, .sc_validate_net(record$netP, cells, group.names,
+                                          paste0(label, "$netP")))
+    if (!is.list(record$LR) || !is.data.frame(record$LR$LRsig))
+      errors <- c(errors, paste0(label, "$LR$LRsig must be a data.frame"))
+    errors <- c(errors, .sc_validate_images(record$images, cells, object@misc$.datatype))
+  }
+  unique(errors[nzchar(errors)])
+}
+
 .sc_validate_object <- function(object) {
   errors <- character()
   cell_names <- colnames(object@assay$norm)
@@ -713,6 +755,8 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
       errors <- c(errors, "single objects must not contain misc$.datasets")
     if (identical(mode, "merged") && !is.list(object@misc$.datasets))
       errors <- c(errors, "merged misc$.datasets must be a list")
+    if (identical(mode, "merged"))
+      errors <- c(errors, .sc_validate_merged_datasets(object))
   }
   unique(errors[nzchar(errors)])
 }

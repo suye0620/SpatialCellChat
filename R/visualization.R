@@ -1257,6 +1257,71 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
 }
 
 
+.sc_viz_merged_dataset_names <- function(object) {
+  if (!identical(object@misc$.mode, "merged"))
+    stop("comparison plotting requires a merged SpatialCellChat object.", call. = FALSE)
+  datasets <- object@misc$.datasets
+  if (!is.list(datasets) || length(datasets) < 2L || is.null(names(datasets)) ||
+      anyNA(names(datasets)) || any(!nzchar(names(datasets))) || anyDuplicated(names(datasets)))
+    stop("merged object requires at least two named misc$.datasets snapshots.", call. = FALSE)
+  names(datasets)
+}
+
+.sc_viz_merged_index <- function(comparison, dataset.names) {
+  if (is.null(comparison)) comparison <- seq_along(dataset.names)
+  if (!is.numeric(comparison) || anyNA(comparison) ||
+      any(comparison != as.integer(comparison)) ||
+      any(comparison < 1L | comparison > length(dataset.names)) ||
+      anyDuplicated(comparison))
+    stop("comparison must contain distinct valid merged dataset indices.", call. = FALSE)
+  as.integer(comparison)
+}
+
+.sc_viz_merged_group_matrix <- function(object, dataset, slot.name = "net",
+                                        measure = c("count", "weight"),
+                                        thresh = 0.05) {
+  measure <- match.arg(measure)
+  record <- object@misc$.datasets[[dataset]]
+  if (!is.list(record) || !is.list(record[[slot.name]]))
+    stop("merged dataset snapshot is missing `", slot.name, "`.", call. = FALSE)
+  branch <- record[[slot.name]]$group
+  if (!is.list(branch))
+    stop("merged dataset snapshot is missing its group network.", call. = FALSE)
+  value <- branch[[measure]]
+  if (is.null(value)) {
+    prob <- branch$prob
+    if (!inherits(prob, "SparseChatArray"))
+      stop("merged dataset has neither the requested aggregate matrix nor probabilities.", call. = FALSE)
+    pval <- if (identical(slot.name, "net")) branch$pval else NULL
+    value <- matrix(0, nrow = dim(prob)[1L], ncol = dim(prob)[2L],
+                    dimnames = dimnames(prob)[1:2])
+    for (layer.name in dimnames(prob)[[3L]]) {
+      mat <- as.matrix(prob[[layer.name]])
+      if (inherits(pval, "SparseChatArray") &&
+          layer.name %in% dimnames(pval)[[3L]]) {
+        mat[as.matrix(pval[[layer.name]]) > thresh] <- 0
+      }
+      value <- value + if (identical(measure, "count")) (mat > 0) else mat
+    }
+  } else {
+    value <- as.matrix(value)
+  }
+  groups <- levels(object@idents)
+  if (!identical(rownames(value), groups) || !identical(colnames(value), groups))
+    stop("merged group network axes must match levels(object@idents) by name.", call. = FALSE)
+  value
+}
+
+.sc_viz_merged_difference <- function(object, comparison, measure, thresh = 0.05) {
+  datasets <- .sc_viz_merged_dataset_names(object)
+  comparison <- .sc_viz_merged_index(comparison, datasets)
+  measure.base <- sub("\\.merged$", "", measure)
+  first <- .sc_viz_merged_group_matrix(object, datasets[[comparison[[1L]]]],
+                                        measure = measure.base, thresh = thresh)
+  second <- .sc_viz_merged_group_matrix(object, datasets[[comparison[[2L]]]],
+                                         measure = measure.base, thresh = thresh)
+  list(value = second - first, datasets = datasets[comparison], comparison = comparison)
+}
 .sc_viz_group_lr <- function(object, signaling, thresh, pairLR.use = NULL) {
   prob <- object@net$group$prob
   pval <- object@net$group$pval
@@ -2450,9 +2515,8 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
                                       edge.curved=0.2,shape='circle',layout=in_circle(), margin=0.2,
                                       arrow.width=1,arrow.size = 0.2){
   measure <- match.arg(measure)
-  obj1 <- object@net[[comparison[1]]][[measure]]
-  obj2 <- object@net[[comparison[2]]][[measure]]
-  net.diff <- obj2 - obj1
+  merged.diff <- .sc_viz_merged_difference(object, comparison, measure)
+  net.diff <- merged.diff$value
   if (measure %in% c("count", "count.merged")) {
     if (is.null(title.name)) {
       title.name = "Differential number of interactions"
@@ -2637,9 +2701,7 @@ netVisual_heatmap <- function(
   slot.name <- match.arg(slot.name)
   if (identical(object@misc$.mode, "merged")) {
     message("Do heatmap based on a merged object \n")
-    obj1 <- object@net[[comparison[1]]][[measure]]
-    obj2 <- object@net[[comparison[2]]][[measure]]
-    net.diff <- obj2 - obj1
+    net.diff <- .sc_viz_merged_difference(object, comparison, measure)$value
 
     if (measure == "count") {
       if (is.null(title.name)) {
@@ -2803,9 +2865,7 @@ netVisual_barplot <- function(object, comparison = c(1,2), measure = c("count", 
   slot.name <- match.arg(slot.name)
   if (identical(object@misc$.mode, "merged")) {
     message("Show differential number of interactions based on a merged object \n")
-    obj1 <- object@net[[comparison[1]]][[measure]]
-    obj2 <- object@net[[comparison[2]]][[measure]]
-    net.diff <- obj2 - obj1
+    net.diff <- .sc_viz_merged_difference(object, comparison, measure)$value
 
     if (measure == "count") {
       if (is.null(title.name)) {
@@ -3030,7 +3090,7 @@ netVisual_bubble <- function(object, sources.use = NULL, targets.use = NULL, sig
     df.net$source.target <- factor(df.net$source.target, levels = cells.order)
     df <- df.net
   } else {
-    dataset.name <- names(object@net)
+    dataset.name <- .sc_viz_merged_dataset_names(object)
     df.net.all <- subsetCommunication(object, slot.name = "net",
                                       sources.use = sources.use, targets.use = targets.use,
                                       signaling = signaling,
@@ -4175,6 +4235,17 @@ netAnalysis_dot <- function(object, slot.name = "netP", pattern = c("outgoing","
 #' @export
 #'
 #' @examples
+.sc_viz_snapshot_group_prob_array <- function(object, slot.name, dataset) {
+  record <- object@misc$.datasets[[dataset]]
+  branch <- if (is.list(record)) record[[slot.name]]$group else NULL
+  prob <- if (is.list(branch)) branch$prob else NULL
+  if (!inherits(prob, "SparseChatArray"))
+    stop("merged dataset has no group-level probabilities for ", slot.name, ".", call. = FALSE)
+  dn <- dimnames(prob)
+  value <- array(0, dim = dim(prob), dimnames = dn)
+  for (layer.name in dn[[3L]]) value[, , layer.name] <- as.matrix(prob[[layer.name]])
+  value
+}
 .sc_viz_embedding_data <- function(object, slot.name, type, pathway.remove = NULL) {
   result <- methods::slot(object, slot.name)
   similarity <- result$similarity[[type]]
@@ -4369,20 +4440,16 @@ netVisual_embeddingZoomIn <- function(object, slot.name = "netP", type = c("func
 netVisual_embeddingPairwise <- function(object, slot.name = "netP", type = c("functional","structural"), comparison = NULL, color.use = NULL, point.shape = NULL, pathway.labeled = NULL, top.label = 1, pathway.remove = NULL, pathway.remove.show = TRUE, dot.size = c(2, 6), label.size = 2.5, dot.alpha = 0.5,
                                         xlabel = "Dim 1", ylabel = "Dim 2", title = NULL,do.label = T, show.legend = T, show.axes = T) {
   type <- match.arg(type)
-  if (is.null(comparison)) {
-    comparison <- 1:length(unique(object@meta$datasets))
-  }
+  dataset.names <- .sc_viz_merged_dataset_names(object)
+  comparison <- .sc_viz_merged_index(comparison, dataset.names)
   cat("2D visualization of signaling networks from datasets", as.character(comparison), '\n')
   comparison.name <- paste(comparison, collapse = "-")
 
   Y <- methods::slot(object, slot.name)$similarity[[type]]$dr[[comparison.name]]
   clusters <- methods::slot(object, slot.name)$similarity[[type]]$group[[comparison.name]]
-  object.names <- setdiff(names(methods::slot(object, slot.name)), "similarity")[comparison]
-  prob <- list()
-  for (i in 1:length(comparison)) {
-    object.net <- methods::slot(object, slot.name)[[comparison[i]]]
-    prob[[i]] = object.net$prob
-  }
+  object.names <- dataset.names[comparison]
+  prob <- lapply(object.names, function(dataset.name)
+    .sc_viz_snapshot_group_prob_array(object, slot.name, dataset.name))
 
   if (is.null(point.shape)) {
     point.shape <- c(21, 0, 24, 23, 25, 10, 12)
@@ -4485,20 +4552,16 @@ netVisual_embeddingPairwiseZoomIn <- function(object, slot.name = "netP", type =
                                               xlabel = NULL, ylabel = NULL, do.label = T, show.legend = F, show.axes = T) {
 
   type <- match.arg(type)
-  if (is.null(comparison)) {
-    comparison <- 1:length(unique(object@meta$datasets))
-  }
+  dataset.names <- .sc_viz_merged_dataset_names(object)
+  comparison <- .sc_viz_merged_index(comparison, dataset.names)
   cat("2D visualization of signaling networks from datasets", as.character(comparison), '\n')
   comparison.name <- paste(comparison, collapse = "-")
 
   Y <- methods::slot(object, slot.name)$similarity[[type]]$dr[[comparison.name]]
   clusters <- methods::slot(object, slot.name)$similarity[[type]]$group[[comparison.name]]
-  object.names <- setdiff(names(methods::slot(object, slot.name)), "similarity")[comparison]
-  prob <- list()
-  for (i in 1:length(comparison)) {
-    object.net <- methods::slot(object, slot.name)[[comparison[i]]]
-    prob[[i]] = object.net$prob
-  }
+  object.names <- dataset.names[comparison]
+  prob <- lapply(object.names, function(dataset.name)
+    .sc_viz_snapshot_group_prob_array(object, slot.name, dataset.name))
 
   if (is.null(point.shape)) {
     point.shape <- c(21, 0, 24, 23, 25, 10, 12)
