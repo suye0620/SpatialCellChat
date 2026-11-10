@@ -20,6 +20,7 @@ suppressPackageStartupMessages({
 source("R/SpatialCellChat_class.R")
 source("R/utilities.R")
 source("R/database.R")
+source("R/merging.R")
 source("R/analysis.R")
 
 check <- function(label, condition) {
@@ -81,10 +82,21 @@ check("empty cache intersection returns no LR rows and no genes",
 merged <- chat
 merged@misc$.mode <- "merged"
 merged@misc$.datasets <- list(
-  sample1 = list(net = list(group = list(prob = prob, LR.sig = "LR1"))),
-  sample2 = list(net = list(group = list(prob = prob, LR.sig = "LR2")))
+  sample1 = list(LR = chat@LR,
+                 net = list(group = list(prob = prob, LR.sig = "LR1"))),
+  sample2 = list(LR = chat@LR,
+                 net = list(group = list(prob = prob, LR.sig = "LR2")))
 )
 merged.result <- extractEnrichedLR(merged, "P1", geneLR.return = TRUE)
 check("merged mode unions cached LR results from misc$.datasets",
       identical(merged.result$pairLR$interaction_name, c("LR1", "LR2")) &&
         setequal(merged.result$geneLR, c("L1", "R1", "L2", "R2")))
+
+merged.local.lr <- merged
+merged.local.lr@misc$.datasets$sample1$LR$LRsig <- lr["LR1", , drop = FALSE]
+merged.local.lr@misc$.datasets$sample2$LR$LRsig <- lr["LR3", , drop = FALSE]
+local.result <- extractEnrichedLR(merged.local.lr, "P1", geneLR.return = TRUE,
+                                  enriched.only = FALSE)
+check("merged candidate extraction uses each snapshot LR metadata",
+      identical(local.result$pairLR$interaction_name, "LR1") &&
+        identical(local.result$geneLR, c("L1", "R1")))

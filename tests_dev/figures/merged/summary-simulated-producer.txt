@@ -1,6 +1,6 @@
 Merged SpatialCellChat producer regression
 date: 2026-11-10
-checks: 27
+checks: 29
 status: PASS
 
 producer returns a merged SpatialCellChat
@@ -8,6 +8,8 @@ merged object validates
 dataset metadata and prefixed cells align
 snapshot names and cell-level sparse axes align
 dataset-specific LRsig tables are retained and unioned
+merged LR extraction consumes the real producer snapshots
+merged LR extraction skips snapshots missing a requested pathway
 group-level snapshot axes retain group names
 merged spatial coordinates stay dataset-local
 merged spatial plots reject dataset-local coordinates

@@ -149,18 +149,24 @@ pass preserves legacy behavior as requested; the focused regression verifies the
 current behavior, not its scientific correctness. A later decision should test
 each direction independently and address zero and missing-layer interpretation.
 
+`netAnalysis_contribution()` is explicitly single-dataset. It now rejects a
+merged container with an actionable error rather than reporting a misleading
+missing-probability failure; comparison consumers remain `rankNet()` and the
+dedicated merged comparison plots.
+
 ## P5-011: validation and dependency boundaries
 
 `suggestK()` consumes a Liger object and `suggestK1()` a matrix; neither directly
 reads SpatialCellChat slots, so they are not slot-migration consumers. Their
 NMF/statistical interpretation and optional dependencies remain separate issues.
 
-P4 HTML generation and sampled screenshots are not full browser-interaction
-acceptance. The three-object P4 summaries explicitly say `BROWSER-NOT-TESTED`;
-Shiny `testServer()` is server-side only. P3 Slide-seq Grid and Flow remain
-`VISUAL-REVIEW`, including the integration warning on the default Flow plot.
-The 3D stack remains a non-public prototype without a verified multi-slice data
-and registration contract (P4-004); it is not counted as delivered.
+P4 HTML generation now has a 12-case Chrome CDP smoke result (Plotly
+initialization, point/cell coverage, 3D scene, and relayout), but this is not
+full browser-interaction acceptance. Mouse selection and a Shiny browser
+session remain untested. P3 Slide-seq Grid and Flow remain `VISUAL-REVIEW`,
+including the integration warning on the default Flow plot. The 3D stack
+remains a non-public prototype without a verified multi-slice data and
+registration contract (P4-004); it is not counted as delivered.
 
 The Agent Notes validator reports pre-existing errors in other records; the new
 merged-pairwise note itself validates. Do not claim that the full Note set is
@@ -181,3 +187,24 @@ with an error. Focused tests cover mismatched invalid names and invalid indices.
 
 When no pair passes the requested candidate threshold, the same consumer now
 returns a typed empty data frame instead of failing while binding an empty list.
+
+## P5-013: merged LR extraction used union metadata for dataset-local caches
+
+Location: `extractEnrichedLR()` and `extractEnrichedLR_internal()` in
+`R/analysis.R`.
+
+Cause: The merged wrapper passed the merged top-level LR union to every dataset
+snapshot. A pathway absent from one dataset could therefore be searched against
+the wrong candidate table; additionally, `searchPair()` can simplify a
+single-interaction result through `future_sapply()` into an unstable shape.
+
+Fix: Use each snapshot's own `LR$LRsig`, skip snapshots that do not contain a
+requested pathway, reject a pathway absent from the merged union, and perform
+the helper's exact pathway selection by direct data-frame filtering. The
+existing `LR.sig` cache intersection and call-time `thresh` behavior remain
+unchanged.
+
+Validation: `tests_dev/test-extractEnrichedLR.R` checks a one-interaction
+dataset-local candidate table, and `tests_dev/test-merge-spatialcellchat.R`
+checks merged extraction through the real producer when one dataset lacks a
+requested pathway.

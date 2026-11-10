@@ -65,6 +65,21 @@ check("dataset-specific LRsig tables are retained and unioned",
       nrow(merged@misc$.datasets[[1]]$LR$LRsig) == nrow(one@LR$LRsig) &&
         nrow(merged@misc$.datasets[[2]]$LR$LRsig) == nrow(two@LR$LRsig) &&
         nrow(merged@LR$LRsig) == nrow(one@LR$LRsig))
+merged.lr <- extractEnrichedLR(merged, signaling = "P1", geneLR.return = TRUE)
+check("merged LR extraction consumes the real producer snapshots",
+      is.data.frame(merged.lr$pairLR) &&
+        identical(merged.lr$pairLR$interaction_name,
+                  unique(c(one@LR$LRsig$interaction_name[
+                    one@LR$LRsig$pathway_name == "P1" &
+                      one@LR$LRsig$interaction_name %in% one@net$group$LR.sig],
+                    two@LR$LRsig$interaction_name[
+                      two@LR$LRsig$pathway_name == "P1" &
+                        two@LR$LRsig$interaction_name %in% two@net$group$LR.sig]))))
+merged.missing.pathway <- extractEnrichedLR(merged, signaling = "P2",
+                                            geneLR.return = TRUE,
+                                            enriched.only = FALSE)
+check("merged LR extraction skips snapshots missing a requested pathway",
+      identical(merged.missing.pathway$pairLR$interaction_name, "G2-R2"))
 check("group-level snapshot axes retain group names",
       identical(dimnames(merged@misc$.datasets[[1]]$net$group$prob)[[1]],
                 levels(one@idents)))

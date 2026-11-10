@@ -120,6 +120,10 @@ check("empty threshold selection returns an empty result",
       is.data.frame(none.enriched) && nrow(none.enriched) == 0L)
 
 merged <- mergeSpatialCellChat(list(one = one, two = two), show.plot = FALSE)
+check("netAnalysis_contribution rejects merged containers explicitly",
+      grepl("single-dataset entry point", tryCatch({
+        netAnalysis_contribution(merged, signaling = "P1"); ""
+      }, error = conditionMessage), fixed = TRUE))
 check("compareInteractions reads snapshot group matrices",
       identical(compareInteractions(merged, measure = "count")$data$count,
                 c(8, 8)))

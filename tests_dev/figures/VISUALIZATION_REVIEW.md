@@ -14,16 +14,16 @@
 - `P1/<dataset>/`：静态点图和统计图，Gi 在坐标对齐修复后重新绘制。早期 P1 全集汇总在 `summary-<dataset>-P1.csv`，Gi 最新单项汇总为 `summary-<dataset>-P1-spatialGiPlot.csv`。
 - `P2/<dataset>/`：单对象网络图，最终代码重跑汇总为 `summary-<dataset>-P2.csv`。总入口导出采用只有一个 LR 的 pathway，以控制页面大小；individual 图采用第一条 pathway 的全部 LR，Visium 为 88 个，Slide-seq 为 16 个。
 - `P3/<dataset>/`：场图、分解图以及通讯流 HTML。`netVisual_CommunFlowWidget-summary.csv` 标记 HTML 和浏览器测试状态。全量 Slide-seq Grid/Flow 已输出，但显示效果待修复，另有预览 PNG。
-- `P4/<dataset>/`：维度图、单基因表达图与单指标 Gi 的交互 HTML；每个目录的 `summary.csv` 记录细胞数与状态。`BROWSER-NOT-TESTED` 表示未完成对应图的交互验收，不代表文件不能打开。
+- `P4/<dataset>/`：维度图、单基因表达图与单指标 Gi 的交互 HTML；每个目录的 `summary.csv` 记录生成状态，`P4/browser-summary-2026-11-10.csv` 记录 12 个 CDP smoke case 均通过。该结果不等同于完整人工鼠标交互或 Shiny 浏览器验收。
 
 ## 未通过与覆盖边界
 
 - Visium `netVisual_chord_gene`：88 LR 的 sector 标签重叠，汇总记为 `VISUAL-REVIEW`。
 - Slide-seq `netVisual_CommunFieldGrid`、`netVisual_CommunFlow`：默认背景遮挡向量，Flow 出现仅一步积分警告，记为 `VISUAL-REVIEW`。全量数据的参数对照改善了 Flow 显示并消除了该警告，但 Grid 箭头仍稀疏；两项对照也需视觉检查，不算通过。
-- 比较/merged 图及 pairwise embedding 缺少当前结构的真实对象构建入口和完整契约，尚未迁移验收。
-- `netAnalysis_contribution()` 和 `rankNet()` 的单对象路径已迁移并完成三对象出图；`rankNet()` 的 comparison 仅通过 `misc$.datasets` 镜像测试，尚未用真实 `mergeSpatialCellChat()` producer 验收，详见 P2-017。
+- 比较/merged 图已由 `mergeSpatialCellChat()` 提供真实 producer；`tests_dev/test-merge-spatialcellchat.R` 覆盖 rankNet、pairwise embedding、差异图、bubble/heatmap、signaling-role 和 merged LR 提取。空间 merged 图仍因 dataset-local 坐标而明确拒绝，不能当作共享组织坐标比较。
+- `netAnalysis_contribution()` 和 `rankNet()` 的单对象路径已迁移并完成三对象出图；`rankNet()` comparison 及 merged LR 提取已用真实 `mergeSpatialCellChat()` producer 验收。`netAnalysis_contribution()` 当前仍是单对象入口，merged 对象不应被误当作共享坐标或统一网络输入。
 - 原始旧缓存对象缺少距离及通信概率来源快照，无法安全使用通信距离模式，需从原始输入重新推断。
-- HTML 浏览器截图仅为抽查，未完成全部图、动态 widget 和 Shiny 的浏览器交互测试。Shiny 模拟服务端会话测试不替代浏览器测试。
+- HTML 已完成 12 个页面的 CDP 初始化/覆盖/重布局 smoke；仍未完成全部图的人工鼠标操作、动态 widget 和 Shiny 浏览器交互测试。Shiny 模拟服务端会话测试不替代浏览器测试。
 - topic 示例只覆盖两条 pathway；Seurat TopicSignaling 已用单个合成 Seurat 对象及显式 interaction 表实绘，但未覆盖三套真实 Seurat 数据。其他参数、三维堆叠及多样本比较并未穷举。
 - `renv.lock` 已记录本轮额外所需的 Suggests 包及其依赖，但尚未在独立环境完成恢复；`renv::status()` 将新增 Suggests 包标为未被当前扫描设置使用。
 

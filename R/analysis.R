@@ -281,6 +281,12 @@ netAnalysis_computeCentrality <- function (
 netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, do.group = TRUE, width = 0.1, vertex.receiver = NULL, thresh = 0.05, return.data = FALSE,
                                      x.rotation = 0, title = "Contribution of each L-R pair",
                                      font.size = 10, font.size.title = 10) {
+  if (!methods::is(object, "SpatialCellChat"))
+    stop("object must be a SpatialCellChat object.", call. = FALSE)
+  if (identical(object@misc$.mode, "merged"))
+    stop("netAnalysis_contribution() is a single-dataset entry point; ",
+         "run it on one source SpatialCellChat object instead of a merged container.",
+         call. = FALSE)
   branch <- object@net$cell
   if (isTRUE(do.group)) branch <- object@net$group
   prob <- branch$prob
@@ -913,6 +919,15 @@ extractEnrichedLR <- function(object, signaling, geneLR.return = FALSE, enriched
   datasets <- if (identical(mode, "single")) list(object@net) else object@misc$.datasets
   if (!length(datasets))
     stop("merged object has no datasets in object@misc$.datasets", call. = FALSE)
+  if (identical(mode, "merged")) {
+    available.pathways <- if (is.data.frame(object@LR$LRsig) &&
+                              "pathway_name" %in% names(object@LR$LRsig))
+      unique(as.character(object@LR$LRsig$pathway_name)) else character()
+    missing.pathways <- setdiff(as.character(signaling), available.pathways)
+    if (length(missing.pathways))
+      stop("signaling pathway(s) not present in the merged LR table: ",
+           paste(missing.pathways, collapse = ", "), call. = FALSE)
+  }
 
   for (ii in seq_along(signaling)) {
     signaling.i <- signaling[ii]
@@ -927,7 +942,13 @@ extractEnrichedLR <- function(object, signaling, geneLR.return = FALSE, enriched
       geneLR.i <- character()
       pairLR.i <- character()
       for (dataset in datasets) {
-        res <- extractEnrichedLR_internal(dataset$net, object@LR, DB,
+        if (!is.list(dataset$LR) || !is.data.frame(dataset$LR$LRsig))
+          stop("merged dataset snapshot is missing its LR$LRsig table", call. = FALSE)
+        if (!"pathway_name" %in% names(dataset$LR$LRsig))
+          stop("merged dataset snapshot LR$LRsig is missing `pathway_name`", call. = FALSE)
+        if (!signaling.i %in% as.character(dataset$LR$LRsig$pathway_name))
+          next
+        res <- extractEnrichedLR_internal(dataset$net, dataset$LR, DB,
                                           signaling = signaling.i,
                                           enriched.only = enriched.only,
                                           thresh = thresh, do.group = do.group)
@@ -959,7 +980,17 @@ extractEnrichedLR <- function(object, signaling, geneLR.return = FALSE, enriched
 #'
 #' @return a list: list(geneLR, pairLR.name.use)
 extractEnrichedLR_internal <- function(net, LR, DB, signaling, enriched.only = TRUE, thresh = 0.05, do.group = TRUE){
-  pairLR.candidate <- searchPair(signaling = signaling, pairLR.use = LR$LRsig, key = "pathway_name", matching.exact = TRUE, pair.only = TRUE)
+  if (!is.data.frame(LR$LRsig) ||
+      !all(c("interaction_name", "pathway_name", "ligand", "receptor") %in% names(LR$LRsig)))
+    stop("LR$LRsig must contain interaction_name, pathway_name, ligand, and receptor columns",
+         call. = FALSE)
+  pairLR.candidate <- LR$LRsig[
+    as.character(LR$LRsig$pathway_name) %in% as.character(signaling),
+    c("interaction_name", "pathway_name", "ligand", "receptor"), drop = FALSE
+  ]
+  if (!nrow(pairLR.candidate))
+    stop("Cannot find ", paste(signaling, collapse = ", "),
+         ". Please input a correct name!", call. = FALSE)
   pairLR.name <- as.character(pairLR.candidate$interaction_name)
 
   if (isTRUE(enriched.only)) {

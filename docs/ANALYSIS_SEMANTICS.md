@@ -67,13 +67,13 @@
 依据：[R/analysis.R:836–946](../R/analysis.R#L836-L946)。
 
 1. **科学问题**：文档意图是提取 pathway 内显著 LR 及组成基因，供表达背景检查；不是对选中细胞重新检验通讯。
-2. **输入单位与轴**：候选从 `LR$LRsig` 按 pathway 查找，再按 group/cell 网络 LR 层及 `LR.sig`/`LR.sig.cell` 缓存筛选。基因通过 DB complex/geneInfo 展开；即使 `enriched.only=FALSE`，候选仍来自 `LR$LRsig`，不是无条件列出数据库全部 LR。
-3. **计算定义**：`enriched.only=TRUE` 的 group 分支虽计算 `prob[pval>thresh] <- 0`，最终 LR 名称取 `intersect(pairLR.name, LR.sig)`，**没有用本次门控后 prob 重选**。cell 同样用缓存。wrapper 对每 pathway 调 helper；旧 merged 分支对 dataset 取并集，多个 pathway 结果再串接。
+2. **输入单位与轴**：候选从对应对象或 merged dataset snapshot 的 `LR$LRsig` 按 pathway 精确查找，再按 group/cell 网络 LR 层及 `LR.sig` 缓存筛选。基因通过 DB complex/geneInfo 展开；即使 `enriched.only=FALSE`，候选仍来自 LRsig 表，不是无条件列出数据库全部 LR。
+3. **计算定义**：`enriched.only=TRUE` 时 LR 名称取候选、prob 层名及 `LR.sig` 的交集，**不会按本次 p 值重新筛选**；`thresh` 当前不改变该缓存选择。`enriched.only=FALSE` 返回该对象 LRsig 表中所选 pathway 的全部候选。merged wrapper 对每个 snapshot 使用其本地 LRsig 表并对结果取并集；未包含请求 pathway 的 snapshot 被跳过，merged LR union 中也不存在的 pathway 会报错。多个 pathway 结果仍按输入顺序串接。
 4. **视觉编码**：自身不画图；`plotGeneExpression` 等消费返回基因画表达，颜色/点大小属于表达量或表达比例，不能改称本次通讯显著性。
 5. **信息损失**：丢失具体 sender–receiver 边、权重、p 值及 dataset 来源；并集掩盖条件特异性。复合物拆基因也不证明所有亚基同时形成有效复合物。
-6. **统计边界**：`thresh` 参数不保证改变返回 LR；缓存生成时点决定 enrichment 选择。空交集分支只发消息而未清空 `pairLR`，随后仍可提取候选基因；[INFERENCE] 空 LR 与非空基因不应被解释为已证实的信号（A-02）。
-7. **前置计算及返回**：enriched 路径要求 `aggregateNet` 生成缓存；helper 返回 `list(geneLR, pairLR.name.use)`，wrapper 文档约定返回 LR data.frame，或 `list(pairLR, geneLR)`。`enriched.only=FALSE` 的 helper 初始 `pairLR.name.use` 是 data.frame，而 TRUE 分支变为向量；wrapper 的字符转换须单独核定，不能仅凭文案保证内容一致。当前 mode 从 `misc$.mode` 读取，参数仍通过 `misc$.param` 访问。
-8. **判别反例（未执行）**：缓存在 `0.05` 生成，某 LR 的唯一边 `p=0.04`；本次 `thresh=0.01`。源码缓存选择仍可能返回该 LR，实时重筛应排除它。再构造缓存交集为空，核对 LR 与基因是否同为空，而不只检查返回对象形状。
+6. **统计边界**：`thresh` 参数不保证改变返回 LR；缓存生成时点决定 `enriched.only=TRUE` 的选择。缓存交集为空时 pairLR 和 geneLR 都为空，并输出提示；这一行为由 `tests_dev/test-extractEnrichedLR.R` 覆盖。该缓存仍不能被解释为本次调用按 `thresh` 重检的显著性（A-02）。
+7. **前置计算及返回**：enriched 路径要求相应 group/cell 概率层和 `LR.sig` 缓存；helper 返回基因向量和 LR 名称向量，wrapper 返回 LR data.frame，或 `list(pairLR, geneLR)`。`mode` 在此指对象 `misc$.mode` 的 single/merged 状态，不是 `extractEnrichedLR()` 的筛选参数。
+8. **判别反例（已执行）**：`tests_dev/test-extractEnrichedLR.R` 覆盖单对象 group/cell 缓存、极小 thresh 不重筛、缓存空交集、merged snapshot union，以及某 snapshot 的 pathway 候选集与 merged union 不同的情形；`tests_dev/test-merge-spatialcellchat.R` 覆盖真实 merged producer。
 
 ### 1.4 `subsetCommunication` / `subsetCommunication_internal`
 
@@ -362,8 +362,9 @@
 | P-01：实际函数 `computeCentralityLocal` | 三节点正向/反向有向环，正边权重均为 2；[源码](../R/analysis.R#L9-L58) | 两网络不同，各节点 outdeg/indeg 均为 2 | 支持“边缘强度相同不等于路由相同”；未运行所有角色图、群/细胞 producer 路径或相似性入口 |
 | P-02：实际函数 `.sc_communication_field_layer` | 中心分别向坐标 `(−1,0)`、`(1,0)` 的邻居发权重 1，`top=1,sparse=FALSE`；[源码](../R/analysis.R#L4016-L4077) | outgoing 总强度 2，净向量 `(0,0)` | 支持“正通讯强度可以产生零净向量”；不是空间流图、widget 或浏览器验收。解释见 [可视化语义卡](VISUALIZATION_SEMANTICS.md) |
 | P-03：实际函数 `computeCommunProbPathway` | 单 LR、同一 P1 pathway；两边权重 `0.4/0.6`、p 值 `0.05/0.01`；[源码](../R/modeling.R#L1680-L1767) | `thresh=0.05` 时 group 总量 `0.6`、cell 总量 `1`；`thresh=0.10` 时 group 总量 `1`；`pval=NULL` 时 group 总量 `1` | 支持 group 的 `>=` 边界、无 p 值门控和 cell 分支不同；未调用 netVisual_aggregate。旧可视化 `p>0.05` 公式另算得总量 `1`，仅是公式对照 |
-| P-04：实际 helper `extractEnrichedLR_internal` | 旧式 plain-list 隔离输入；唯一 LR1 的 p 值 `0.9`，缓存 LR.sig 含 LR1；[源码](../R/analysis.R#L913-L946) | `thresh=0.01` 与 `0.95` 均保留 LR1；清空 LR.sig 后 selected 数为 0，但 geneLR 仍为 L、R | 支持 A-02 的缓存选择和空集合不一致；不是 wrapper 或最终 11-slot 对象的端到端运行证明 |
+| P-04：历史 helper 探针（2026-10-20） | 旧式 plain-list 隔离输入；历史 p 值/缓存场景；当时源码 | 当时记录了空缓存后仍提基因的问题 | 仅保留历史发现，不代表当前行为；空交集已由当前回归确认 pairLR/geneLR 同为空，见 P-07 |
 | P-05：仅源码归一化公式 | 全正 2×2×2 数组，两层分别全为 1 和全为 2；[对应公式](../R/analysis.R#L296-L308) | raw 份额为 `1/3,2/3`，min–max 后为 `0,1` | 支持 min–max 可改变 LR 份额；**未运行** netAnalysis_contribution 或其图形/返回分区分支 |
 | P-06：仅源码保留条件公式 | 差值向量 `(2,−2)`；[对应过滤](../R/analysis.R#L3087-L3089) | “任一方向改变”为 TRUE，但 `rowSums!=0` 保留条件为 FALSE | 支持 A-13 的等幅相反变化丢失；**未运行** netAnalysis_signalingChanges_scatter |
+| P-07：当前函数回归 `extractEnrichedLR` | `tests_dev/test-extractEnrichedLR.R` 与 `tests_dev/test-merge-spatialcellchat.R`；single、merged 快照及单 LR pathway | 缓存选择、空交集、dataset-local LR 元数据、缺少 pathway 的快照跳过及真实 producer 链均通过 | 支持当前 LR 选择契约；不将缓存解释为按本次 `thresh` 执行统计检验 |
 
 上述局部探针不等于全部 A-* 问题已解决。P0-P5 已补充主要分析入口、NMF/UMAP、rankNet、真实返回图形和 merged producer 的回归；仍未覆盖的可选包、完整浏览器交互、真实三对象的全部组合和尚未裁定的科学语义，继续留在 issue log 与各卡片的未决场景中。

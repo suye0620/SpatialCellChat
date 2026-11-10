@@ -18,7 +18,9 @@ Shiny 封装和 Plotly 输出需要分别实际验证；仅有 R 对象或静态
 
 ## 当前证据与限制
 
-三个对象各自生成了 2D/3D 维度图、单基因表达图与单指标 Gi 3D HTML；Slide-seq 每项数据 trace 均覆盖全部 29,536 个细胞。Chrome 静态截图已抽查模拟 2D/3D、Visium 表达图和 Gi 3D；未完成各图鼠标交互及 Shiny 浏览器端验收。Shiny 的连续两次框选、更新、反转和重置通过 `shiny::testServer()` 验证，不代表浏览器验收通过。所有 HTML 结果保留 `BROWSER-NOT-TESTED` 状态。
+三个对象各自生成了 2D/3D 维度图、单基因表达图与单指标 Gi 3D HTML；Slide-seq 每项数据 trace 均覆盖全部 29,536 个细胞。`tests_dev/test-p4-browser-cdp.js` 使用本地 Chrome CDP 对 2026-11-10 生成的 12 个页面执行了 Plotly 初始化、点数/细胞覆盖、3D scene 和一次 `Plotly.relayout` 检查，汇总见 `tests_dev/figures/P4/browser-summary-2026-11-10.csv`，12/12 为 PASS。
+
+该 smoke test 不是完整人工验收：尚未逐项完成浏览器中的鼠标框选、连续选择后的可视状态检查，也不覆盖 Shiny 浏览器会话。Shiny 的连续两次框选、更新、反转和重置已通过 `shiny::testServer()` 验证，但不能替代浏览器验收；因此 HTML 应标记为“CDP smoke PASS，完整交互未验收”，不能笼统写成浏览器交互已完成。
 
 ## P4-004：三维堆叠仅存在于审计原型
 
