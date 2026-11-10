@@ -1,0 +1,13 @@
+dataset,case,sectors,strict_crossings,pairs_with_crossings
+simulated,large-no-legend,3,0,0
+simulated,small-no-legend,3,0,0
+simulated,large-legend,3,0,0
+simulated,small-legend,3,0,0
+visium,large-no-legend,111,0,0
+visium,small-no-legend,111,0,0
+visium,large-legend,111,0,0
+visium,small-legend,111,0,0
+slideseq,large-no-legend,38,0,0
+slideseq,small-no-legend,38,0,0
+slideseq,large-legend,38,0,0
+slideseq,small-legend,38,0,0

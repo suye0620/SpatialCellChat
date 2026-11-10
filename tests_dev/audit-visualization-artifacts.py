@@ -118,6 +118,17 @@ def main():
         for row in rows(summary):
             add(ROOT / row['file'], rel(summary), 'DIAGNOSTIC', 'pdf')
 
+    # Dense chord prototype boundary cases are experiments, not visual acceptance.
+    chord_boundary = FIGURES / 'P2' / 'chord-external-boundaries-2026-11-11'
+    for dataset in ('simulated', 'visium', 'slideseq'):
+        summary = chord_boundary / dataset / 'summary.csv'
+        if not summary.is_file():
+            errors.append(f'missing chord boundary summary: {rel(summary)}')
+            continue
+        for row in rows(summary):
+            if row['status'] == 'DRAWN-REVIEW':
+                add(ROOT / row['file'], rel(summary), 'DIAGNOSTIC', 'pdf')
+
     # Producer-derived flow comparisons use the same field for both stats.
     production = FIGURES / 'P3' / 'streamline-production-comparison-2026-11-11'
     for dataset in ('simulated', 'visium', 'slideseq'):

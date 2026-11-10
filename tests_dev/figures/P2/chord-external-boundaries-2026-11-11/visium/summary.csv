@@ -1,0 +1,5 @@
+"dataset","case","signal","status","error","sectors","adjacent_text_overlaps","outside_canvas","file"
+"visium","large-no-legend","COLLAGEN","DRAWN-REVIEW","",111,0,0,"tests_dev/figures/P2/chord-external-boundaries-2026-11-11/visium/large-no-legend/external.pdf"
+"visium","small-no-legend","COLLAGEN","DRAWN-REVIEW","",111,109,0,"tests_dev/figures/P2/chord-external-boundaries-2026-11-11/visium/small-no-legend/external.pdf"
+"visium","large-legend","COLLAGEN","DRAWN-REVIEW","",111,0,0,"tests_dev/figures/P2/chord-external-boundaries-2026-11-11/visium/large-legend/external.pdf"
+"visium","small-legend","COLLAGEN","DRAWN-REVIEW","",111,109,0,"tests_dev/figures/P2/chord-external-boundaries-2026-11-11/visium/small-legend/external.pdf"

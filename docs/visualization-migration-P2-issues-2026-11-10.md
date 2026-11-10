@@ -201,3 +201,11 @@ hierarchy、circle、spatial、diffInteraction 等 renderer 调用 `options(warn
 本次隔离实验保留相同的排序和标签位置，把每条引线从对应扇区外缘沿圆环逐步展开，再水平连接标签。输入边、权重、扇区顺序和颜色与同次原图一致，仍为 2,344 条边和 111 个扇区。`tests_dev/audit-chord-leader-crossings.py` 读取保存的引线顶点，逐段检查所有不同引线对：这组实验数据的严格交叉数为 0；同时检查每条引线的起点和标签高度。脚本及对照 PDF、顶点坐标、映射、交叉汇总保存在 `tests_dev/diagnose-chord-external-unfold.R` 和 `tests_dev/figures/P2/visium/chord-external-unfold-2026-11-11/`。
 
 限制：严格交叉计数不检测相切、接近重合、线宽覆盖、文字溢出或人的可读性；这里仅验证 Visium、24×16 英寸、`lab.cex=0.7`、无图例这一组合。画布尺寸、标签文字长短、扇区数量、图例及不同绘图设备等边界仍需验证；2,344 条内部连线依然密集。当前仍是实验，不应视为生产修复或用户验收。预览转换仍提示缺少 ArialUnicode 字体，PDF 为主要产物。
+
+## P2-027：圆外 chord 原型的三对象和画布边界
+
+沿用 P2-026 的实验代码，不修改生产函数。`tests_dev/diagnose-chord-external-boundaries.R` 对模拟 P1（3 个扇区）、Visium COLLAGEN（111 个扇区）和完整 Slide-seq NOTCH（38 个扇区），分别在 24×16、9×7 英寸 PDF 上绘制有、无图例的四种组合，共 12 个实验。`lab.cex=0.7`、`small.gap=0.25`。每例保存扇区映射、标签测量、引线顶点及输入网络快照。
+
+12 个 PDF 均生成；逐段检测得到 12 例引线严格交叉数均为 0。模拟和 Slide-seq 这几组画布/字号下，基于 `strheight` 的相邻文字高度检查未发现重叠；Visium 大画布也未发现，而 9×7 英寸画布在左右两列共发现 109 对相邻标签高度重叠。该检查只衡量文字包围盒的垂直间距，不等同于完整可读性验证。查看 9×7 Visium 有图例的预览还发现右下角图例覆盖标签；24×16 预览中未观察到这一覆盖。其他图例位置、字号、字体、设备和更密集数据仍未经验证。PNG 转换提示缺少 ArialUnicode 字体，PDF 是主要产物。
+
+因此生产化必须能检测设备与标签容量，并处理图例和标签竞争空间，而不能仅以原型引线不交叉作为通过条件。引线检测仅统计严格交叉，不覆盖相切、近重合或线宽。图、汇总和坐标位于 `tests_dev/figures/P2/chord-external-boundaries-2026-11-11/`，检查脚本为 `tests_dev/audit-chord-boundaries.py`；所有结果标记为 `DRAWN-REVIEW`，等待人工视觉及生物学验收。

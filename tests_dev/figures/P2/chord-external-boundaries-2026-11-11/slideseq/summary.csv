@@ -1,0 +1,5 @@
+"dataset","case","signal","status","error","sectors","adjacent_text_overlaps","outside_canvas","file"
+"slideseq","large-no-legend","NOTCH","DRAWN-REVIEW","",38,0,0,"tests_dev/figures/P2/chord-external-boundaries-2026-11-11/slideseq/large-no-legend/external.pdf"
+"slideseq","small-no-legend","NOTCH","DRAWN-REVIEW","",38,0,0,"tests_dev/figures/P2/chord-external-boundaries-2026-11-11/slideseq/small-no-legend/external.pdf"
+"slideseq","large-legend","NOTCH","DRAWN-REVIEW","",38,0,0,"tests_dev/figures/P2/chord-external-boundaries-2026-11-11/slideseq/large-legend/external.pdf"
+"slideseq","small-legend","NOTCH","DRAWN-REVIEW","",38,0,0,"tests_dev/figures/P2/chord-external-boundaries-2026-11-11/slideseq/small-legend/external.pdf"
