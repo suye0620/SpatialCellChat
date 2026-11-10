@@ -984,7 +984,6 @@ selectK <- function(object, slot.name = "netP", pattern = c("outgoing","incoming
     data_receiver = sweep(data_receiver, 2L, apply(data_receiver, 2, function(x) max(x, na.rm = TRUE)), '/', check.margin = FALSE)
     data0 = as.matrix(data_receiver)
   }
-  options(warn = -1)
   data <- data0
   data <- data[rowSums(data)!=0,]
 
@@ -1250,11 +1249,19 @@ suggestK <- function(
 #' @export
 #'
 #' @examples
+.sc_group_prob_array <- function(object, slot.name) {
+  prob <- methods::slot(object, slot.name)$group$prob
+  if (!inherits(prob, "SparseChatArray"))
+    stop("Group communication probabilities are missing.", call. = FALSE)
+  array(unlist(lapply(seq_len(dim(prob)[3L]), function(i) as.matrix(prob[[i]])), use.names = FALSE),
+        dim = dim(prob), dimnames = dimnames(prob))
+}
+
 identifyCommunicationPatterns <- function(object, slot.name = "netP", pattern = c("outgoing","incoming"), k = NULL, k.range = seq(2,10), heatmap.show = TRUE,
                                           color.use = NULL, color.heatmap = "Spectral", title.legend = "Contributions",
                                           width = 4, height = 6, font.size = 8) {
   pattern <- match.arg(pattern)
-  prob <- methods::slot(object, slot.name)$prob
+  prob <- .sc_group_prob_array(object, slot.name)
   if (pattern == "outgoing") {
     data_sender <- apply(prob, c(1,3), sum)
     data_sender = sweep(data_sender, 2L, apply(data_sender, 2, function(x) max(x, na.rm = TRUE)), '/', check.margin = FALSE)
@@ -1264,7 +1271,6 @@ identifyCommunicationPatterns <- function(object, slot.name = "netP", pattern = 
     data_receiver = sweep(data_receiver, 2L, apply(data_receiver, 2, function(x) max(x, na.rm = TRUE)), '/', check.margin = FALSE)
     data0 = as.matrix(data_receiver)
   }
-  options(warn = -1)
   data <- data0
   data <- data[rowSums(data)!=0,]
   if (is.null(k)) {
@@ -1348,7 +1354,7 @@ identifyCommunicationPatterns <- function(object, slot.name = "netP", pattern = 
 #' @examples
 computeNetSimilarity <- function(object, slot.name = "netP", type = c("functional","structural"), k = NULL, thresh = NULL) {
   type <- match.arg(type)
-  prob = methods::slot(object, slot.name)$prob
+  prob = .sc_group_prob_array(object, slot.name)
   if (is.null(k)) {
     if (dim(prob)[3] <= 25) {
       k <- ceiling(sqrt(dim(prob)[3]))
@@ -1537,10 +1543,11 @@ computeNetSimilarityPairwise <- function(object, slot.name = "netP", type = c("f
 netEmbedding <- function(object, slot.name = "netP", type = c("functional","structural"), comparison = NULL, pathway.remove = NULL,
                          umap.method = c("umap-learn", "uwot"), n_neighbors = NULL,min_dist = 0.3,...) {
   umap.method <- match.arg(umap.method)
-  if (object@options$mode == "single") {
+  type <- match.arg(type)
+  if (identical(object@misc$.mode, "single")) {
     comparison <- "single"
     cat("Manifold learning of the signaling networks for a single dataset", '\n')
-  } else if (object@options$mode == "merged") {
+  } else if (identical(object@misc$.mode, "merged")) {
     if (is.null(comparison)) {
       comparison <- 1:length(unique(object@meta$datasets))
     }
@@ -1558,7 +1565,6 @@ netEmbedding <- function(object, slot.name = "netP", type = c("functional","stru
   if (is.null(n_neighbors)) {
     n_neighbors <- ceiling(sqrt(dim(Similarity)[1])) + 1
   }
-  options(warn = -1)
   # dimension reduction
   if (umap.method == "umap-learn") {
     Y <- runUMAP(Similarity, min_dist = min_dist, n_neighbors = n_neighbors,...)
@@ -1597,10 +1603,10 @@ netEmbedding <- function(object, slot.name = "netP", type = c("functional","stru
 #' @examples
 netClustering <- function(object, slot.name = "netP", type = c("functional","structural"), comparison = NULL, k = NULL, methods = "kmeans", do.plot = TRUE, fig.id = NULL, k.eigen = NULL) {
   type <- match.arg(type)
-  if (object@options$mode == "single") {
+  if (identical(object@misc$.mode, "single")) {
     comparison <- "single"
     cat("Classification learning of the signaling networks for a single dataset", '\n')
-  } else if (object@options$mode == "merged") {
+  } else if (identical(object@misc$.mode, "merged")) {
     if (is.null(comparison)) {
       comparison <- 1:length(unique(object@meta$datasets))
     }
@@ -2454,6 +2460,7 @@ subsetCommunication_internal <- function(net, LR, cells.level, slot.name = "net"
   # join columns may be missing from LR (e.g. `evidence`); back-fill with NA so the
   # select below cannot crash on schema drift, keeping the output column schema
   # identical to upstream.
+  if (!"interaction_name_2" %in% colnames(LR)) LR$interaction_name_2 <- LR$interaction_name
   for (col in c("interaction_name_2", "pathway_name", "ligand", "receptor", "annotation", "evidence")) {
     if (!col %in% colnames(LR)) LR[[col]] <- NA_character_
   }
@@ -2464,11 +2471,9 @@ subsetCommunication_internal <- function(net, LR, cells.level, slot.name = "net"
   }
 
   if (!is.null(signaling)) {
-    pairLR.use <- data.frame()
-    for (i in 1:length(signaling)) {
-      pairLR.use.i <- searchPair(signaling = signaling[i], pairLR.use = LR, key = "pathway_name", matching.exact = T, pair.only = T)
-      pairLR.use <- rbind(pairLR.use, pairLR.use.i)
-    }
+    missing <- setdiff(signaling, LR$pathway_name)
+    if (length(missing)) stop("Cannot find signaling pathway: ", paste(missing, collapse = ", "), call. = FALSE)
+    pairLR.use <- LR[LR$pathway_name %in% signaling, "interaction_name", drop = FALSE]
   }
 
   if (!is.null(pairLR.use)){
@@ -3483,49 +3488,30 @@ identifyCellTopics <- function(
     seed.use = 666L
 ){
   requireNamespace("Matrix", quietly = TRUE)
-  if (length(methods::slot(object, slot.name)[["centr.cell"]]) == 0) {
+  pattern <- match.arg(pattern)
+  net.slot <- methods::slot(object, slot.name)
+  centr.cell <- net.slot[["centr.cell"]]
+  if (length(centr.cell) == 0) {
     stop("Please run `netAnalysis_computeCentrality` with `do.group=F` to compute the network centrality scores! ")
   }
-  centr.cell <- methods::slot(object, slot.name)[["centr.cell"]]
-
-  pattern <- match.arg(pattern)
-
-  if (pattern == "outgoing") {
-    # data_sender is matrix of features-by-samples: nCells x nPathways(nLRs), same as previous nGroups x nPathways(nLRs)
-    data_sender <- centr.cell[c("outdeg"),,,drop=T]
-    region.name.prefix <- "OCR"
-    topic.key.name <- "topicOut"
-    data_sr <- Matrix::t(data_sender)
-  } else if (pattern == "incoming") {
-    # data_receiver is matrix of features-by-samples: nCells x nPathways(nLRs), same as previous nGroups x nPathways(nLRs)
-    data_receiver <- centr.cell[c("indeg"),,,drop=T]
-    region.name.prefix <- "ICR"
-    topic.key.name <- "topicIn"
-    data_sr <- Matrix::t(data_receiver)
-  }
+  measure <- if (pattern == "outgoing") "outdeg" else "indeg"
+  selected <- centr.cell[measure, , , drop = FALSE]
+  data_sr <- matrix(as.numeric(selected), nrow = dim(selected)[2],
+                    ncol = dim(selected)[3], dimnames = dimnames(selected)[2:3])
+  data_sr <- Matrix::t(data_sr)
 
   if(do.scale){
     # use Seurat to do scale
     seu_<- asSeurat(object, slot.name = "assay", counts = data_sr)
     seu_ <- seu_ %>%
-      # Seurat::NormalizeData(verbose = FALSE) %>%
-      # Seurat::FindVariableFeatures(
-      #   selection.method = "mean.var.plot",
-      #   verbose = FALSE,
-      #   mean.cutoff = c(0.01, 5),
-      #   dispersion.cutoff = c(0.1, Inf)
-      # ) %>%
-      # Seurat::FindVariableFeatures(selection.method = "vst", nfeatures = 1000) %>%
       Seurat::ScaleData(verbose = FALSE, do.center = FALSE)
     data_sr <- seu_@assays$Spatial@scale.data # dense mat
   }
-  # } else {
-  #   data_sr <- seu_@assays$Spatial@data # sparse mat
-  # }
 
-  # RcppML.NMF
-  # data_sr: matrix of features-by-samples in dense or sparse format (preferred classes are "matrix" or "Matrix::dgCMatrix", respectively)
   if(length(topic.k)>1){
+    if (!requireNamespace("RcppML", quietly = TRUE)) {
+      stop("Please install the suggested package `RcppML` to identify cell topics.", call. = FALSE)
+    }
     resSuggestK <- suggestK1(
       Mat = data_sr,
       k.test = topic.k,
@@ -3537,10 +3523,25 @@ identifyCellTopics <- function(
       seed.use = seed.use
     )
     show(resSuggestK$figure)
-    methods::slot(object, slot.name)[["tmp"]][["suggestK"]][[pattern]] <- resSuggestK
+    if (is.null(methods::slot(object, slot.name)[["tmp"]])) {
+      netobj <- methods::slot(object, slot.name)
+      netobj[["tmp"]] <- list()
+      methods::slot(object, slot.name) <- netobj
+    }
+    netobj <- methods::slot(object, slot.name)
+    if (is.null(netobj[["tmp"]][["suggestK"]])) netobj[["tmp"]][["suggestK"]] <- list()
+    netobj[["tmp"]][["suggestK"]][[pattern]] <- resSuggestK
+    methods::slot(object, slot.name) <- netobj
 
   } else if (length(topic.k) == 1){
+    if (!is.numeric(topic.k) || !is.finite(topic.k) || topic.k < 1L ||
+        topic.k > min(dim(data_sr))) {
+      stop("`topic.k` must be one integer between 1 and the smaller matrix dimension", call. = FALSE)
+    }
 
+    if (!requireNamespace("RcppML", quietly = TRUE)) {
+      stop("Please install the suggested package `RcppML` to identify cell topics.", call. = FALSE)
+    }
     outs_NMF <- RcppML::nmf(
       as(data_sr,"TsparseMatrix"),
       k = topic.k,
@@ -3552,15 +3553,18 @@ identifyCellTopics <- function(
     )
     W <- outs_NMF$w %*% Matrix::diag(sqrt(outs_NMF$d))
     H <- Matrix::diag(sqrt(outs_NMF$d)) %*% outs_NMF$h %>% Matrix::t()
-    rownames(H) <- colnames(data_sr);colnames(H) <- stringr::str_c("Topic_",1:NCOL(H))
-    rownames(W) <- rownames(data_sr);colnames(W) <- stringr::str_c("Topic_",1:NCOL(W))
+    rownames(H) <- colnames(data_sr)
+    colnames(H) <- stringr::str_c("Topic_", seq_len(NCOL(H)))
+    rownames(W) <- rownames(data_sr)
+    colnames(W) <- stringr::str_c("Topic_", seq_len(NCOL(W)))
 
-    methods::slot(object, slot.name)$topic[[pattern]] <- list("cell" = H, "signaling" = W)
-
+    netobj <- methods::slot(object, slot.name)
+    if (is.null(netobj[["topic"]])) netobj[["topic"]] <- list()
+    netobj[["topic"]][[pattern]] <- list("cell" = H, "signaling" = W)
+    methods::slot(object, slot.name) <- netobj
   }
   return(object)
 }
-
 
 
 #' Identifying topic communities

@@ -34,7 +34,7 @@ make_slideseq_chat <- function(
     assay(chat, "signaling") <- obj@assay$signaling
     chat <- computeCommunProb(chat, n = 1, interaction.range = 250,
                               scale.distance = 9, nthreads = 4L, verbose = FALSE)
-    chat <- filterProbability(chat, verbose = FALSE)
+    chat <- filterProbability(chat)
   }
 
   if (is.null(chat@LR$LRsig) || !nrow(chat@LR$LRsig)) {

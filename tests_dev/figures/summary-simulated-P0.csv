@@ -1,0 +1,4 @@
+"figure","status","detail"
+"P0/simulated/spatialC2CDistPlot","FAIL","The distance cache or inferred probabilities are stale for the current spatial data; rerun `computeCommunProb()` before using `mode = ""communication""`"
+"P0/simulated/spatialC2CDistPlot-geometry","PASS",""
+"P0/simulated/spatialDimPlot","PASS",""

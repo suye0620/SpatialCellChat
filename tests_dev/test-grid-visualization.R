@@ -65,10 +65,27 @@ check("computeCommunField stores cell-level sparse fields",
 check("computeCommunField does not mutate its input",
       is.null(chat@netP$cell$field))
 chat <- chat_with_field
+field.matrix <- as(chat@netP$cell$field$outgoing[["signal"]], "dgCMatrix")
+chat@netP$cell$field$outgoing <- SparseChatArray(
+  list(signal = field.matrix), dimnames = list(cells, colnames(field.matrix), "signal")
+)
+
+for (fn in c("netVisual_CommunField", "netVisual_CommunFieldZoomIn")) {
+  result <- get(fn)(chat, signaling = "signal", pattern = "outgoing")
+  check(paste0(fn, " reads computed cell-level field"), inherits(result, "ggplot"))
+  output <- tempfile(fileext = ".pdf")
+  ggplot2::ggsave(output, result, width = 7, height = 5.5)
+  check(paste0(fn, " actually renders PDF"), file.exists(output) && file.info(output)$size > 1000L)
+  unlink(output)
+}
 
 options(SpatialCellChat.verbose = 2L)
 for (fn in c("netVisual_CommunFieldGrid", "netVisual_CommunFlow")) {
   fun <- get(fn)
+  reordered <- chat
+  reordered@images$coordinates <- reordered@images$coordinates[rev(seq_len(n)), , drop = FALSE]
+  check(paste0(fn, " rejects mismatched field and coordinate order"),
+        inherits(try(fun(reordered, signaling = "signal"), silent = TRUE), "try-error"))
   input.before.explicit <- chat
   explicit <- capture.output(
     result <- fun(chat, signaling = "signal", pattern = "outgoing",

@@ -9,7 +9,8 @@
 make_visium_chat <- function(
     rdata = "tests_dev/test_data/visium_human_psoriasis_PP1_correctedLocations202401_annotated.RData",
     json = "tests_dev/test_data/scalefactors_json.json",
-    cache = TRUE, cache.path = "tests_dev/test_data/visium_pp1_chat.rds") {
+    cache = TRUE, cache.path = "tests_dev/test_data/visium_pp1_chat.rds",
+    distance.only = FALSE) {
   if (isTRUE(cache) && file.exists(cache.path)) {
     return(readRDS(cache.path))
   }
@@ -89,6 +90,7 @@ make_visium_chat <- function(
   chat <- computeAvgCommunProb_Visium(chat, cell.type.decomposition = as.matrix(decon),
                                       nboot = 20, do.permutation = FALSE)
   chat <- filterCommunication(chat, min.cells = 10)
+  if (isTRUE(distance.only)) return(chat)
   chat <- computeCommunProbPathway(chat)
   chat <- aggregateNet(chat)
   chat <- netAnalysis_computeCentrality(chat, slot.name = "net", do.group = TRUE)

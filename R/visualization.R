@@ -999,45 +999,20 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
       vertex.size.max <- 15
     }
   }
-  pairLR <- searchPair(signaling = signaling, pairLR.use = object@LR$LRsig, key = "pathway_name", matching.exact = T, pair.only = F)
-
   if (is.null(signaling.name)) {
     signaling.name <- signaling
   }
-  net <- object@net
-
-  pairLR.use.name <- dimnames(net$prob)[[3]]
-  pairLR.name <- intersect(rownames(pairLR), pairLR.use.name)
-  pairLR <- pairLR[pairLR.name, ]
-  prob <- net$prob
-  pval <- net$pval
-
-  prob[pval > thresh] <- 0
-  if (length(pairLR.name) > 1) {
-    pairLR.name.use <- pairLR.name[apply(prob[,,pairLR.name], 3, sum) != 0]
-  } else {
-    pairLR.name.use <- pairLR.name[sum(prob[,,pairLR.name]) != 0]
-  }
-
-
-  if (length(pairLR.name.use) == 0) {
-    stop(paste0('There is no significant communication of ', signaling.name))
-  } else {
-    pairLR <- pairLR[pairLR.name.use,]
-  }
+  selected <- .sc_viz_group_lr(object, signaling, thresh)
+  pairLR <- selected$pairs
+  pairLR.name.use <- selected$names
+  prob <- selected$prob
+  if (!"interaction_name_2" %in% names(pairLR)) pairLR$interaction_name_2 <- pairLR$interaction_name
   nRow <- length(pairLR.name.use)
-
-  prob <- prob[,,pairLR.name.use]
-  pval <- pval[,,pairLR.name.use]
 
   if (is.null(nCol)) {
     nCol <- min(length(pairLR.name.use), 2)
   }
 
-  if (length(dim(prob)) == 2) {
-    prob <- replicate(1, prob, simplify="array")
-    pval <- replicate(1, pval, simplify="array")
-  }
   #  prob <-(prob-min(prob))/(max(prob)-min(prob))
   if (is.null(edge.weight.max.individual)) {
     edge.weight.max.individual = max(prob)
@@ -1171,65 +1146,33 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
     }
   } else if (layout == "spatial") {
     coordinates <- object@images$coordinates
-    if (is.element("svg", out.format)) {
-      svglite::svglite(file = paste0(signaling.name,"_", layout, "_individual.svg"), width = height, height = nRow*height)
-      # par(mfrow=c(nRow,1))
-      par(mfrow = c(ceiling(length(pairLR.name.use)/nCol), nCol), xpd=TRUE)
-      for (i in 1:length(pairLR.name.use)) {
-        #signalName_i <- paste0(pairLR$ligand[i], "-",pairLR$receptor[i], sep = "")
-        signalName_i <- pairLR$interaction_name_2[i]
-        prob.i <- prob[,,i]
-
-        netVisual_spatial(prob.i, coordinates = coordinates, labels = labels, alpha.image = alpha.image, point.size = point.size, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = signalName_i, vertex.label.cex = vertex.label.cex,...)
-
-      }
-      dev.off()
-    }
-    if (is.element("png", out.format)) {
-      grDevices::png(paste0(signaling.name,"_", layout, "_individual.png"), width = height, height = nRow*height, units = "in",res = 300)
-      # par(mfrow=c(nRow,1))
-      par(mfrow = c(ceiling(length(pairLR.name.use)/nCol), nCol), xpd=TRUE)
-      for (i in 1:length(pairLR.name.use)) {
-        #signalName_i <- paste0(pairLR$ligand[i], "-",pairLR$receptor[i], sep = "")
-        signalName_i <- pairLR$interaction_name_2[i]
-        prob.i <- prob[,,i]
-        netVisual_spatial(prob.i, coordinates = coordinates, labels = labels, alpha.image = alpha.image, point.size = point.size, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = signalName_i, vertex.label.cex = vertex.label.cex,...)
-
-      }
-      dev.off()
-    }
-    if (is.element("pdf", out.format)) {
-      # grDevices::pdf(paste0(signaling.name,"_", layout, "_individual.pdf"), width = height, height = nRow*height)
-      grDevices::cairo_pdf(paste0(signaling.name,"_", layout, "_individual.pdf"), width = height, height = nRow*height)
-      # par(mfrow=c(nRow,1))
-      par(mfrow = c(ceiling(length(pairLR.name.use)/nCol), nCol), xpd=TRUE)
-      for (i in 1:length(pairLR.name.use)) {
-        #signalName_i <- paste0(pairLR$ligand[i], "-",pairLR$receptor[i], sep = "")
-        signalName_i <- pairLR$interaction_name_2[i]
-        prob.i <- prob[,,i]
-        netVisual_spatial(prob.i, coordinates = coordinates, labels = labels, alpha.image = alpha.image, point.size = point.size, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = signalName_i, vertex.label.cex = vertex.label.cex,...)
-
-      }
-      dev.off()
-    }
-
-    #  prob.sum <- apply(prob, c(1,2), sum)
-    #  prob.sum <-(prob.sum-min(prob.sum))/(max(prob.sum)-min(prob.sum))
-    if (is.element("svg", out.format)) {
-      svglite(file = paste0(signaling.name,"_", layout,  "_aggregate.svg"), width = height, height = 1*height)
-      netVisual_spatial(prob.sum, coordinates = coordinates, labels = labels, alpha.image = alpha.image, point.size = point.size, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = paste0(signaling.name, " signaling pathway network"), vertex.label.cex = vertex.label.cex,...)
-      dev.off()
-    }
-    if (is.element("png", out.format)) {
-      grDevices::png(paste0(signaling.name,"_", layout,  "_aggregate.png"), width = height, height = 1*height, units = "in",res = 300)
-      netVisual_spatial(prob.sum, coordinates = coordinates, labels = labels, alpha.image = alpha.image, point.size = point.size, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = paste0(signaling.name, " signaling pathway network"), vertex.label.cex = vertex.label.cex,...)
-      dev.off()
-    }
-    if (is.element("pdf", out.format)) {
-      # grDevices::pdf(paste0(signaling.name,"_", layout,  "_aggregate.pdf"), width = height, height = 1*height)
-      grDevices::cairo_pdf(paste0(signaling.name,"_", layout,  "_aggregate.pdf"), width = height, height = 1*height)
-      netVisual_spatial(prob.sum, coordinates = coordinates, labels = labels, alpha.image = alpha.image, point.size = point.size, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = paste0(signaling.name, " signaling pathway network"), vertex.label.cex = vertex.label.cex,...)
-      dev.off()
+    labels <- object@idents
+    plots <- lapply(seq_along(pairLR.name.use), function(i) {
+      netVisual_spatial(prob[, , i], coordinates = coordinates, labels = labels,
+                        alpha.image = alpha.image, point.size = point.size,
+                        sources.use = sources.use, targets.use = targets.use,
+                        remove.isolate = remove.isolate, top = top, color.use = color.use,
+                        vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max,
+                        vertex.size.max = vertex.size.max, weight.scale = weight.scale,
+                        edge.weight.max = edge.weight.max.individual, edge.width.max = edge.width.max,
+                        title.name = pairLR$interaction_name_2[i], vertex.label.cex = vertex.label.cex, ...)
+    })
+    individual <- patchwork::wrap_plots(plots, ncol = nCol)
+    aggregate <- netVisual_spatial(prob.sum, coordinates = coordinates, labels = labels,
+                                   alpha.image = alpha.image, point.size = point.size,
+                                   sources.use = sources.use, targets.use = targets.use,
+                                   remove.isolate = remove.isolate, top = top, color.use = color.use,
+                                   vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max,
+                                   vertex.size.max = vertex.size.max, weight.scale = weight.scale,
+                                   edge.weight.max = edge.weight.max.aggregate, edge.width.max = edge.width.max,
+                                   title.name = paste0(signaling.name, " signaling pathway network"),
+                                   vertex.label.cex = vertex.label.cex, ...)
+    for (format in intersect(out.format, c("svg", "png", "pdf"))) {
+      ggplot2::ggsave(paste0(signaling.name, "_spatial_individual.", format), individual,
+                      width = height * nCol, height = height * ceiling(nRow / nCol),
+                      units = "in", limitsize = FALSE)
+      ggplot2::ggsave(paste0(signaling.name, "_spatial_aggregate.", format), aggregate,
+                      width = height, height = height, units = "in", limitsize = FALSE)
     }
   } else if (layout == "chord") {
     if (is.element("svg", out.format)) {
@@ -1314,6 +1257,79 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
 }
 
 
+.sc_viz_group_lr <- function(object, signaling, thresh, pairLR.use = NULL) {
+  prob <- object@net$group$prob
+  pval <- object@net$group$pval
+  if (!inherits(prob, "SparseChatArray")) {
+    stop("Please run `computeAvgCommunProb` to compute group-level communication.", call. = FALSE)
+  }
+  lr <- object@LR$LRsig
+  pairs <- lr[lr$pathway_name %in% signaling, , drop = FALSE]
+  if (!nrow(pairs)) stop("Cannot find the requested signaling pathway.", call. = FALSE)
+  rownames(pairs) <- pairs$interaction_name
+  selected <- intersect(rownames(pairs), dimnames(prob)[[3]])
+  if (!is.null(pairLR.use)) {
+    requested <- if (is.data.frame(pairLR.use)) pairLR.use$interaction_name else pairLR.use
+    selected <- intersect(selected, as.character(requested))
+    if (!length(selected)) stop("There is no significant communication for the input L-R pairs!", call. = FALSE)
+  }
+  dn <- dimnames(prob)
+  layers <- lapply(selected, function(name) {
+    mat <- as.matrix(prob[[name]])
+    if (!is.null(pval)) mat[as.matrix(pval[[name]]) > thresh] <- 0
+    mat
+  })
+  keep <- vapply(layers, function(mat) sum(mat) != 0, logical(1))
+  selected <- selected[keep]
+  layers <- layers[keep]
+  if (!length(selected)) stop(paste0("There is no significant communication of ", paste(signaling, collapse = ", ")), call. = FALSE)
+  values <- array(unlist(layers, use.names = FALSE), dim = c(dim(prob)[1:2], length(layers)),
+                  dimnames = list(dn[[1]], dn[[2]], selected))
+  list(prob = values, pairs = pairs[selected, , drop = FALSE], names = selected)
+}
+
+.sc_viz_group_matrix <- function(object, slot.name, signaling = NULL, measure = NULL, thresh = NULL) {
+  branch <- slot(object, slot.name)$group
+  if (is.null(signaling)) {
+    mat <- branch[[measure]]
+    if (is.null(mat)) stop("Group network is missing; run aggregateNet() first.", call. = FALSE)
+    return(as.matrix(mat))
+  }
+  prob <- branch$prob
+  if (!inherits(prob, "SparseChatArray") || length(signaling) != 1L ||
+      !signaling %in% dimnames(prob)[[3L]])
+    stop("Select one available group-level signaling layer.", call. = FALSE)
+  mat <- as.matrix(prob[[signaling]])
+  if (!is.null(thresh) && slot.name == "net" && !is.null(branch$pval))
+    mat[as.matrix(branch$pval[[signaling]]) > thresh] <- 0
+  mat
+}
+
+.sc_viz_group_edges <- function(object, thresh) {
+  branch <- object@net$group
+  prob <- branch$prob
+  if (!inherits(prob, "SparseChatArray"))
+    stop("Group communication is missing; run computeAvgCommunProb() first.", call. = FALSE)
+  dn <- dimnames(prob)
+  edges <- lapply(dn[[3L]], function(name) {
+    mat <- as.matrix(prob[[name]])
+    if (!is.null(branch$pval)) mat[as.matrix(branch$pval[[name]]) > thresh] <- 0
+    idx <- which(mat > 0, arr.ind = TRUE)
+    if (!nrow(idx)) return(NULL)
+    data.frame(source = dn[[1L]][idx[, 1L]], target = dn[[2L]][idx[, 2L]],
+               interaction_name = name, prob = mat[idx], stringsAsFactors = FALSE)
+  })
+  edges <- do.call(rbind, edges)
+  if (is.null(edges)) stop("No signaling links are inferred!", call. = FALSE)
+  lr <- object@LR$LRsig
+  if (!"interaction_name_2" %in% names(lr)) lr$interaction_name_2 <- lr$interaction_name
+  for (field in c("pathway_name", "ligand", "receptor", "annotation", "evidence")) {
+    if (!field %in% names(lr)) lr[[field]] <- NA_character_
+  }
+  idx <- match(edges$interaction_name, lr$interaction_name)
+  cbind(edges, lr[idx, c("interaction_name_2", "pathway_name", "ligand", "receptor", "annotation", "evidence"), drop = FALSE])
+}
+
 #' Visualize the inferred signaling network of signaling pathways by aggregating all L-R pairs
 #'
 #' @param object CellChat object
@@ -1385,41 +1401,10 @@ netVisual_aggregate <- function(object, signaling, signaling.name = NULL, color.
       vertex.size.max <- 15
     }
   }
-  pairLR <- searchPair(signaling = signaling, pairLR.use = object@LR$LRsig, key = "pathway_name", matching.exact = T, pair.only = T)
-
   if (is.null(signaling.name)) {
     signaling.name <- signaling
   }
-  net <- object@net
-
-  pairLR.use.name <- dimnames(net$prob)[[3]]
-  pairLR.name <- intersect(rownames(pairLR), pairLR.use.name)
-  pairLR <- pairLR[pairLR.name, ]
-  prob <- net$prob
-  pval <- net$pval
-
-  prob[pval > thresh] <- 0
-  if (length(pairLR.name) > 1) {
-    pairLR.name.use <- pairLR.name[apply(prob[,,pairLR.name], 3, sum) != 0]
-  } else {
-    pairLR.name.use <- pairLR.name[sum(prob[,,pairLR.name]) != 0]
-  }
-
-
-  if (length(pairLR.name.use) == 0) {
-    stop(paste0('There is no significant communication of ', signaling.name))
-  } else {
-    pairLR <- pairLR[pairLR.name.use,]
-  }
-  nRow <- length(pairLR.name.use)
-
-  prob <- prob[,,pairLR.name.use]
-  pval <- pval[,,pairLR.name.use]
-
-  if (length(dim(prob)) == 2) {
-    prob <- replicate(1, prob, simplify="array")
-    pval <- replicate(1, pval, simplify="array")
-  }
+  prob <- .sc_viz_group_lr(object, signaling, thresh)$prob
   # prob <-(prob-min(prob))/(max(prob)-min(prob))
 
   if (layout == "hierarchy") {
@@ -1442,14 +1427,14 @@ netVisual_aggregate <- function(object, signaling, signaling.name = NULL, color.
     gg <- netVisual_circle(prob.sum, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = paste0(signaling.name, " signaling pathway network"), vertex.label.cex = vertex.label.cex,...)
   }  else if (layout == "spatial") {
     prob.sum <- apply(prob, c(1,2), sum)
-    if (vertex.weight == "incoming"){
+    if (identical(vertex.weight, "incoming")){
       if (length(slot(object, "netP")$centr) == 0) {
         stop("Please run `netAnalysis_computeCentrality` to compute the network centrality scores! ")
       }
       # vertex.weight = object@netP$centr[[signaling]]$indeg
       vertex.weight = object@netP$centr["indeg", , signaling]
     }
-    if (vertex.weight == "outgoing"){
+    if (identical(vertex.weight, "outgoing")){
       if (length(slot(object, "netP")$centr) == 0) {
         stop("Please run `netAnalysis_computeCentrality` to compute the network centrality scores! ")
       }
@@ -1552,56 +1537,20 @@ netVisual_individual <- function(object, signaling, signaling.name = NULL, pairL
     }
   }
 
-  pairLR <- searchPair(signaling = signaling, pairLR.use = object@LR$LRsig, key = "pathway_name", matching.exact = T, pair.only = F)
-
   if (is.null(signaling.name)) {
     signaling.name <- signaling
   }
-  net <- object@net
-
-  pairLR.use.name <- dimnames(net$prob)[[3]]
-  pairLR.name <- intersect(rownames(pairLR), pairLR.use.name)
-  if (!is.null(pairLR.use)) {
-    if (is.data.frame(pairLR.use)) {
-      pairLR.name <- intersect(pairLR.name, as.character(pairLR.use$interaction_name))
-    } else {
-      pairLR.name <- intersect(pairLR.name, as.character(pairLR.use))
-    }
-
-    if (length(pairLR.name) == 0) {
-      stop("There is no significant communication for the input L-R pairs!")
-    }
+  selected <- .sc_viz_group_lr(object, signaling, thresh, pairLR.use)
+  pairLR <- selected$pairs
+  pairLR.name.use <- selected$names
+  prob <- selected$prob
+  if (!"interaction_name_2" %in% names(pairLR)) {
+    pairLR$interaction_name_2 <- pairLR$interaction_name
   }
-
-  pairLR <- pairLR[pairLR.name, ]
-  prob <- net$prob
-  pval <- net$pval
-
-  prob[pval > thresh] <- 0
-  if (length(pairLR.name) > 1) {
-    pairLR.name.use <- pairLR.name[apply(prob[,,pairLR.name], 3, sum) != 0]
-  } else {
-    pairLR.name.use <- pairLR.name[sum(prob[,,pairLR.name]) != 0]
-  }
-
-  if (length(pairLR.name.use) == 0) {
-    stop(paste0('There is no significant communication of ', signaling.name))
-  } else {
-    pairLR <- pairLR[pairLR.name.use,]
-  }
-
   nRow <- length(pairLR.name.use)
-
-  prob <- prob[,,pairLR.name.use]
-  pval <- pval[,,pairLR.name.use]
 
   if (is.null(nCol)) {
     nCol <- min(length(pairLR.name.use), 2)
-  }
-
-  if (length(dim(prob)) == 2) {
-    prob <- replicate(1, prob, simplify="array")
-    pval <- replicate(1, pval, simplify="array")
   }
 
   # prob <-(prob-min(prob))/(max(prob)-min(prob))
@@ -1641,11 +1590,12 @@ netVisual_individual <- function(object, signaling, signaling.name = NULL, pairL
       par(mfrow = c(ceiling(length(pairLR.name.use)/nCol), nCol), xpd=TRUE)
     }
     coordinates <- object@images$coordinates
+    labels <- object@idents
     gg <- vector("list", length(pairLR.name.use))
     for (i in 1:length(pairLR.name.use)) {
       signalName_i <- pairLR$interaction_name_2[i]
       prob.i <- prob[,,i]
-      gg[[i]] <- netVisual_spatial(prob.i, coordinates = coordinates, labels = labels, alpha.image = alpha.image, point.size = point.size, sources.use = sources.use, targets.use = targets.use, idents.use = idents.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = signalName_i, vertex.label.cex = vertex.label.cex,...)
+      gg[[i]] <- netVisual_spatial(prob.i, coordinates = coordinates, labels = labels, alpha.image = alpha.image, point.size = point.size, sources.use = sources.use, targets.use = targets.use, remove.isolate = remove.isolate, top = top, color.use = color.use, vertex.weight = vertex.weight, vertex.weight.max = vertex.weight.max, vertex.size.max = vertex.size.max, weight.scale = weight.scale, edge.weight.max = edge.weight.max, edge.width.max=edge.width.max,title.name = signalName_i, vertex.label.cex = vertex.label.cex,...)
     }
   } else if (layout == "chord") {
     if (graphics.init) {
@@ -1736,7 +1686,6 @@ netVisual_hierarchy1 <- function(net, vertex.receiver, color.use = NULL, title.n
       vertex.size.max <- 15
     }
   }
-  options(warn = -1)
   thresh <- stats::quantile(net, probs = 1-top)
   net[net < thresh] <- 0
   cells.level <- rownames(net)
@@ -1926,7 +1875,6 @@ netVisual_hierarchy2 <-function(net, vertex.receiver, color.use = NULL, title.na
       vertex.size.max <- 15
     }
   }
-  options(warn = -1)
   thresh <- stats::quantile(net, probs = 1-top)
   net[net < thresh] <- 0
 
@@ -2117,7 +2065,6 @@ netVisual_circle <-function(net, color.use = NULL,title.name = NULL, sources.use
       vertex.size.max <- 15
     }
   }
-  options(warn = -1)
   thresh <- stats::quantile(net, probs = 1-top)
   net[net < thresh] <- 0
 
@@ -2333,7 +2280,6 @@ netVisual_spatial <-function(net, coordinates, labels, color.use = NULL,title.na
       vertex.size.max <- 15
     }
   }
-  options(warn = -1)
   thresh <- stats::quantile(net, probs = 1-top)
   net[net < thresh] <- 0
 
@@ -2503,7 +2449,6 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
                                       edge.weight.max = NULL, edge.width.max=8, alpha.edge = 0.6, label.edge = FALSE,edge.label.color='black',edge.label.cex=0.8,
                                       edge.curved=0.2,shape='circle',layout=in_circle(), margin=0.2,
                                       arrow.width=1,arrow.size = 0.2){
-  options(warn = -1)
   measure <- match.arg(measure)
   obj1 <- object@net[[comparison[1]]][[measure]]
   obj2 <- object@net[[comparison[2]]][[measure]]
@@ -2690,7 +2635,7 @@ netVisual_heatmap <- function(
     measure <- match.arg(measure)
   }
   slot.name <- match.arg(slot.name)
-  if (object@options$mode=="merged") {
+  if (identical(object@misc$.mode, "merged")) {
     message("Do heatmap based on a merged object \n")
     obj1 <- object@net[[comparison[1]]][[measure]]
     obj2 <- object@net[[comparison[2]]][[measure]]
@@ -2709,17 +2654,13 @@ netVisual_heatmap <- function(
   } else {
     message("Do heatmap based on a single object \n")
     if (!is.null(signaling)) {
-      prob <- slot(object, slot.name)$prob
-      if (slot.name == "net") {
-        prob[object@net$pval > thresh] <- 0
-      }
-      net.diff <- prob[,,signaling]
+      net.diff <- .sc_viz_group_matrix(object, slot.name, signaling, thresh = thresh)
       if (is.null(title.name)) {
         title.name = paste0(signaling, " signaling network")
       }
       legend.name <- "Communication Prob."
     } else if (!is.null(measure)) {
-      net.diff <- object@net[[measure]]
+      net.diff <- .sc_viz_group_matrix(object, "net", measure = measure)
       if (measure == "count") {
         if (is.null(title.name)) {
           title.name = "Number of interactions"
@@ -2764,11 +2705,8 @@ netVisual_heatmap <- function(
     idx1 <- which(Matrix::rowSums(net) == 0)
     idx2 <- which(Matrix::colSums(net) == 0)
     idx <- intersect(idx1, idx2)
-    net <- net[-idx, ]
-    net <- net[, -idx]
     if (length(idx) > 0) {
-      net <- net[-idx, ]
-      net <- net[, -idx]
+      net <- net[-idx, -idx, drop = FALSE]
     }
   }
   if (remove.diagonal) {
@@ -2820,13 +2758,13 @@ netVisual_heatmap <- function(
   if (sum(mat) == 0) {
     stop("No significant cell-cell communication is inferred!",'\n')
   } else if (sum(abs(unique(as.vector(mat))) > 0) == 1) {
-    color.heatmap.use = c("white", color.heatmap.use)
+    if (!is.function(color.heatmap.use)) color.heatmap.use = c("white", color.heatmap.use)
   } else {
     mat[mat == 0] <- NA
   }
   ht1 = Heatmap(mat, col = color.heatmap.use, na_col = "white", name = legend.name,
                 bottom_annotation = col_annotation, left_annotation =row_annotation, top_annotation = ha2, right_annotation = ha1,
-                cluster_rows = cluster.rows,cluster_columns = cluster.rows,
+                cluster_rows = cluster.rows,cluster_columns = cluster.cols,
                 row_names_side = "left",row_names_rot = 0,row_names_gp = gpar(fontsize = font.size),column_names_gp = gpar(fontsize = font.size),
                 # width = unit(width, "cm"), height = unit(height, "cm"),
                 column_title = title.name,column_title_gp = gpar(fontsize = font.size.title),column_names_rot = x.lab.rot,
@@ -2863,7 +2801,7 @@ netVisual_barplot <- function(object, comparison = c(1,2), measure = c("count", 
     measure <- match.arg(measure)
   }
   slot.name <- match.arg(slot.name)
-  if (is.list(object@net[[1]])) {
+  if (identical(object@misc$.mode, "merged")) {
     message("Show differential number of interactions based on a merged object \n")
     obj1 <- object@net[[comparison[1]]][[measure]]
     obj2 <- object@net[[comparison[2]]][[measure]]
@@ -2881,12 +2819,12 @@ netVisual_barplot <- function(object, comparison = c(1,2), measure = c("count", 
   } else {
     message("Show number of interactions based on a single object \n")
     if (!is.null(signaling)) {
-      net.diff <- slot(object, slot.name)$prob[,,signaling]
+      net.diff <- .sc_viz_group_matrix(object, slot.name, signaling)
       if (is.null(title.name)) {
         title.name = paste0(signaling, " signaling network")
       }
     } else if (!is.null(measure)) {
-      net.diff <- object@net[[measure]]
+      net.diff <- .sc_viz_group_matrix(object, "net", measure = measure)
       if (measure == "count") {
         if (is.null(title.name)) {
           title.name = "Number of interactions"
@@ -2902,9 +2840,10 @@ netVisual_barplot <- function(object, comparison = c(1,2), measure = c("count", 
   net <- net.diff
   cells.level <- rownames(net.diff)
 
+  df.net <- reshape2::melt(net, value.name = "value")
+  colnames(df.net)[1:2] <- c("source", "target")
+
   if ((!is.null(sources.use)) | (!is.null(targets.use))) {
-    df.net <- reshape2::melt(net, value.name = "value")
-    colnames(df.net)[1:2] <- c("source","target")
     # keep the interactions associated with sources and targets of interest
     if (!is.null(sources.use)){
       if (is.numeric(sources.use)) {
@@ -3012,7 +2951,7 @@ netVisual_bubble <- function(object, sources.use = NULL, targets.use = NULL, sig
                              grid.on = TRUE, color.grid = "grey90", angle.x = 90, vjust.x = NULL, hjust.x = NULL,
                              return.data = FALSE){
   color.heatmap <- match.arg(color.heatmap)
-  if (is.list(object@net[[1]])) {
+  if (identical(object@misc$.mode, "merged")) {
     message("Comparing communications on a merged object \n")
   } else {
     message("Comparing communications on a single object \n")
@@ -3075,7 +3014,7 @@ netVisual_bubble <- function(object, sources.use = NULL, targets.use = NULL, sig
     idx1 <- which(is.infinite(df.net$prob) | df.net$prob < 0)
     if (sum(idx1) > 0) {
       values.assign <- seq(max(df.net$prob, na.rm = T)*1.1, max(df.net$prob, na.rm = T)*1.5, length.out = length(idx1))
-      position <- sort(prob.original[idx1], index.return = TRUE)$ix
+      position <- sort(df.net$prob.original[idx1], index.return = TRUE)$ix
       df.net$prob[idx1] <- values.assign[match(1:length(idx1), position)]
     }
     # rownames(df.net) <- df.net$interaction_name_2
@@ -3225,8 +3164,13 @@ netVisual_bubble <- function(object, sources.use = NULL, targets.use = NULL, sig
     stop("No interactions are detected. Please consider changing the cell groups for analysis. ")
   }
   # Re-order y-axis
-  interaction_name_2.order <- intersect(object@DB$interaction[pairLR.use$interaction_name, ]$interaction_name_2, unique(df$interaction_name_2))
-  df$interaction_name_2 <- factor(df$interaction_name_2, levels = interaction_name_2.order)
+  if (!is.null(pairLR.use) && "interaction_name" %in% names(pairLR.use)) {
+    lr <- object@LR$LRsig
+    wanted <- lr$interaction_name_2[match(pairLR.use$interaction_name, lr$interaction_name)]
+    current <- levels(df$interaction_name_2)
+    interaction_name_2.order <- c(intersect(wanted, current), setdiff(current, wanted))
+    df$interaction_name_2 <- factor(df$interaction_name_2, levels = interaction_name_2.order)
+  }
 
   # Re-order x-axis
   df$source.target = droplevels(df$source.target, exclude = setdiff(levels(df$source.target),unique(df$source.target)))
@@ -3263,8 +3207,10 @@ netVisual_bubble <- function(object, sources.use = NULL, targets.use = NULL, sig
     }
   }
 
-  g <- ggplot(df, aes(x = source.target, y = interaction_name_2, color = prob, size = pval)) +
-    geom_point(pch = 16) +
+  has.pval <- any(!is.na(df$pval))
+  if (!has.pval) message("P-values are unavailable; using a fixed point size.")
+  g <- ggplot(df, aes(x = source.target, y = interaction_name_2, color = prob)) +
+    (if (has.pval) geom_point(aes(size = pval), pch = 16) else geom_point(pch = 16, size = 2)) +
     theme_linedraw() + theme(panel.grid.major = element_blank()) +
     theme(axis.text.x = element_text(angle = angle.x, hjust= hjust.x, vjust = vjust.x),
           axis.title.x = element_blank(),
@@ -3272,7 +3218,9 @@ netVisual_bubble <- function(object, sources.use = NULL, targets.use = NULL, sig
     scale_x_discrete(position = "bottom")
 
   values <- c(1,2,3); names(values) <- c("p > 0.05", "0.01 < p < 0.05","p < 0.01")
-  g <- g + scale_radius(range = c(min(df$pval), max(df$pval)), breaks = sort(unique(df$pval)),labels = names(values)[values %in% sort(unique(df$pval))], name = "p-value")
+  if (has.pval) {
+    g <- g + scale_radius(range = c(min(df$pval, na.rm = TRUE), max(df$pval, na.rm = TRUE)), breaks = sort(unique(df$pval)),labels = names(values)[values %in% sort(unique(df$pval))], name = "p-value")
+  }
   #g <- g + scale_radius(range = c(1,3), breaks = values,labels = names(values), name = "p-value")
   if (min(df$prob, na.rm = T) != max(df$prob, na.rm = T)) {
     g <- g + scale_colour_gradientn(colors = colorRampPalette(color.use)(99), na.value = "white", limits=c(quantile(df$prob, 0,na.rm= T), quantile(df$prob, 1,na.rm= T)),
@@ -3383,34 +3331,12 @@ netVisual_chord_cell <- function(object, signaling = NULL, net = NULL, slot.name
                                  thresh = 0.05,...){
 
   if (!is.null(signaling)) {
-    pairLR <- searchPair(signaling = signaling, pairLR.use = object@LR$LRsig, key = "pathway_name", matching.exact = T, pair.only = F)
-    net <- object@net
-
-    pairLR.use.name <- dimnames(net$prob)[[3]]
-    pairLR.name <- intersect(rownames(pairLR), pairLR.use.name)
-    pairLR <- pairLR[pairLR.name, ]
-    prob <- net$prob
-    pval <- net$pval
-
-    prob[pval > thresh] <- 0
-    if (length(pairLR.name) > 1) {
-      pairLR.name.use <- pairLR.name[apply(prob[,,pairLR.name], 3, sum) != 0]
-    } else {
-      pairLR.name.use <- pairLR.name[sum(prob[,,pairLR.name]) != 0]
-    }
-
-    if (length(pairLR.name.use) == 0) {
-      stop(paste0('There is no significant communication of ', signaling))
-    } else {
-      pairLR <- pairLR[pairLR.name.use,]
-    }
+    selected <- .sc_viz_group_lr(object, signaling, thresh)
+    pairLR <- selected$pairs
+    pairLR.name.use <- selected$names
+    prob <- selected$prob
+    if (!"interaction_name_2" %in% names(pairLR)) pairLR$interaction_name_2 <- pairLR$interaction_name
     nRow <- length(pairLR.name.use)
-
-    prob <- prob[,,pairLR.name.use]
-
-    if (length(dim(prob)) == 2) {
-      prob <- replicate(1, prob, simplify="array")
-    }
 
     if (slot.name == "netP") {
       message("Plot the aggregated cell-cell communication network at the signaling pathway level")
@@ -3687,24 +3613,11 @@ netVisual_chord_gene <- function(object, slot.name = "net", color.use = NULL,
   }
 
   if (is.null(net)) {
-    prob <- slot(object, "net")$prob
-    pval <- slot(object, "net")$pval
-    prob[pval > thresh] <- 0
-    net <- reshape2::melt(prob, value.name = "prob")
-    colnames(net)[1:3] <- c("source","target","interaction_name")
-
-    pairLR = dplyr::select(object@LR$LRsig, c("interaction_name_2", "pathway_name",  "ligand",  "receptor" ,"annotation","evidence"))
-    idx <- match(net$interaction_name, rownames(pairLR))
-    temp <- pairLR[idx,]
-    net <- cbind(net, temp)
+    net <- .sc_viz_group_edges(object, thresh)
   }
 
   if (!is.null(signaling)) {
-    pairLR.use <- data.frame()
-    for (i in 1:length(signaling)) {
-      pairLR.use.i <- searchPair(signaling = signaling[i], pairLR.use = object@LR$LRsig, key = "pathway_name", matching.exact = T, pair.only = T)
-      pairLR.use <- rbind(pairLR.use, pairLR.use.i)
-    }
+    net <- subset(net, pathway_name %in% signaling)
   }
 
   if (!is.null(pairLR.use)){
@@ -4177,7 +4090,6 @@ netAnalysis_dot <- function(object, slot.name = "netP", pattern = c("outgoing","
   if (is.null(cutoff)) {
     cutoff <- 1/length(unique(data1$Pattern))
   }
-  options(warn = -1)
   data1$Contribution[data1$Contribution < cutoff] <- 0
   data2$Contribution[data2$Contribution < cutoff] <- 0
   data3 = merge(data1, data2, by.x="Pattern", by.y="Pattern")
@@ -4263,6 +4175,37 @@ netAnalysis_dot <- function(object, slot.name = "netP", pattern = c("outgoing","
 #' @export
 #'
 #' @examples
+.sc_viz_embedding_data <- function(object, slot.name, type, pathway.remove = NULL) {
+  result <- methods::slot(object, slot.name)
+  similarity <- result$similarity[[type]]
+  Y <- similarity$dr[["single"]]
+  groups <- similarity$group[["single"]]
+  prob <- result$group$prob
+  if (!is.matrix(Y) || ncol(Y) < 2L || is.null(rownames(Y)) ||
+      !inherits(prob, "SparseChatArray") || is.null(groups))
+    stop("Compute group similarity, embedding and clustering with named pathways first.", call. = FALSE)
+  if (is.null(pathway.remove)) {
+    sim <- similarity$matrix[["single"]]
+    pathway.remove <- if (!is.null(sim)) rownames(sim)[which(colSums(sim) == 1)] else character()
+  }
+  keep <- !rownames(Y) %in% pathway.remove
+  Y <- Y[keep, , drop = FALSE]
+  if (!nrow(Y)) stop("No pathways remain in the embedding.", call. = FALSE)
+  if (!is.null(names(groups))) {
+    groups <- groups[rownames(Y)]
+  } else if (length(groups) == length(keep)) {
+    groups <- groups[keep]
+  } else stop("Embedding clusters cannot be aligned to pathway names.", call. = FALSE)
+  totals <- vapply(unclass(prob), function(layer) sum(layer), numeric(1L))
+  names(totals) <- dimnames(prob)[[3L]]
+  totals <- totals[rownames(Y)]
+  if (anyNA(totals) || anyNA(groups) || max(totals) <= 0)
+    stop("Embedding pathways, clusters and group probability layers must match.", call. = FALSE)
+  list(data = data.frame(x = Y[, 1L], y = Y[, 2L], Commun.Prob. = totals / max(totals),
+                         labels = rownames(Y), Groups = as.factor(groups)),
+       removed = pathway.remove)
+}
+
 netVisual_embedding <- function(object, slot.name = "netP", type = c("functional","structural"), color.use = NULL, pathway.labeled = NULL, top.label = 1, pathway.remove = NULL, pathway.remove.show = TRUE, dot.size = c(2, 6), label.size = 2, dot.alpha = 0.5,
                                 xlabel = "Dim 1", ylabel = "Dim 2", title = NULL,
                                 font.size = 10, font.size.title = 12, do.label = T, show.legend = T, show.axes = T) {
@@ -4270,21 +4213,10 @@ netVisual_embedding <- function(object, slot.name = "netP", type = c("functional
   comparison <- "single"
   comparison.name <- paste(comparison, collapse = "-")
 
-  Y <- methods::slot(object, slot.name)$similarity[[type]]$dr[[comparison.name]]
-  Groups <- methods::slot(object, slot.name)$similarity[[type]]$group[[comparison.name]]
-  prob <- methods::slot(object, slot.name)$prob
-  if (is.null(pathway.remove)) {
-    similarity <- methods::slot(object, slot.name)$similarity[[type]]$matrix[[comparison.name]]
-    pathway.remove <- rownames(similarity)[which(colSums(similarity) == 1)]
-  }
-
-  if (length(pathway.remove) > 0) {
-    pathway.remove.idx <- which(dimnames(prob)[[3]] %in% pathway.remove)
-    prob <- prob[ , , -pathway.remove.idx]
-  }
-
-  prob_sum <- apply(prob, 3, sum)
-  df <- data.frame(x = Y[,1], y = Y[, 2], Commun.Prob. = prob_sum/max(prob_sum), labels = as.character(unlist(dimnames(prob)[3])), Groups = as.factor(Groups))
+  prepared <- .sc_viz_embedding_data(object, slot.name, type, pathway.remove)
+  df <- prepared$data
+  pathway.remove <- prepared$removed
+  Groups <- df$Groups
   if (is.null(color.use)) {
     color.use <- ggPalette(length(unique(Groups)))
   }
@@ -4359,23 +4291,13 @@ netVisual_embedding <- function(object, slot.name = "netP", type = c("functional
 #' @examples
 netVisual_embeddingZoomIn <- function(object, slot.name = "netP", type = c("functional","structural"), color.use = NULL, pathway.remove = NULL,  nCol = 1, dot.size = c(2, 6), label.size = 2.8, dot.alpha = 0.5,
                                       xlabel = NULL, ylabel = NULL, do.label = T, show.legend = F, show.axes = T) {
+  type <- match.arg(type)
   comparison <- "single"
   comparison.name <- paste(comparison, collapse = "-")
-  Y <- methods::slot(object, slot.name)$similarity[[type]]$dr[[comparison.name]]
-  clusters <- methods::slot(object, slot.name)$similarity[[type]]$group[[comparison.name]]
-  prob <- methods::slot(object, slot.name)$prob
-  if (is.null(pathway.remove)) {
-    similarity <- methods::slot(object, slot.name)$similarity[[type]]$matrix[[comparison.name]]
-    pathway.remove <- rownames(similarity)[which(colSums(similarity) == 1)]
-  }
-
-  if (length(pathway.remove) > 0) {
-    pathway.remove.idx <- which(dimnames(prob)[[3]] %in% pathway.remove)
-    prob <- prob[ , , -pathway.remove.idx]
-  }
-
-  prob_sum <- apply(prob, 3, sum)
-  df <- data.frame(x = Y[,1], y = Y[, 2], Commun.Prob. = prob_sum/max(prob_sum), labels = as.character(unlist(dimnames(prob)[3])), clusters = as.factor(clusters))
+  prepared <- .sc_viz_embedding_data(object, slot.name, type, pathway.remove)
+  df <- prepared$data
+  df$clusters <- df$Groups
+  clusters <- df$clusters
 
   if (is.null(color.use)) {
     color.use <- ggPalette(length(unique(clusters)))
@@ -4721,6 +4643,7 @@ netVisual_TopicComposition <- function(
     col.show = NULL,
     remove.isolate = TRUE
 ) {
+  meta.data <- if (inherits(object, "SpatialCellChat")) object@meta else if (inherits(object, "Seurat")) object@meta.data else NULL
   if (is.character(x.group) | is.null(x.group)) {
     if (is.null(x.group)) {
       if (inherits(object,what = c("SpatialCellChat"))) {
@@ -4730,10 +4653,10 @@ netVisual_TopicComposition <- function(
         x.cell.state <- Seurat::Idents(object)
         x.cell.state.level <- levels(x.cell.state)
       }
-    } else if (x.group %in% colnames(object@meta.data) == TRUE) {
-      x.cell.state <- object@meta.data[, x.group]
+    } else if (x.group %in% colnames(meta.data) == TRUE) {
+      x.cell.state <- as.factor(meta.data[, x.group])
       x.cell.state.level <- levels(x.cell.state)
-    } else if (x.group %in% colnames(object@meta.data) == FALSE) {
+    } else if (x.group %in% colnames(meta.data) == FALSE) {
       stop("'x.group' is not the column of `object@meta.data`! \n")
     }
 
@@ -4759,8 +4682,8 @@ netVisual_TopicComposition <- function(
           }
           #ylabel <- "Incoming communication topics"
         }
-      } else if (y.group %in% colnames(object@meta.data) == TRUE) {
-        y.cell.state <- object@meta.data[, y.group]
+      } else if (y.group %in% colnames(meta.data) == TRUE) {
+        y.cell.state <- as.factor(meta.data[, y.group])
         y.cell.state.level <- levels(y.cell.state)
         pred <-
           matrix(0,
@@ -4804,8 +4727,8 @@ netVisual_TopicComposition <- function(
   } else if (inherits(x.group, what = c("data.frame", "matrix", "Matrix", "dgCMatrix"))) {
     pred <- x.group # this is the prediction score of each cell type for each spot for 10X visium
     cat("The rownames of the input `x.group` are ", toString(rownames(x.group)), " which will be used as group names. \n")
-    if (all(y.group %in% colnames(object@meta.data)) == TRUE) {
-      y.cell.state <- object@meta.data[, y.group]
+    if (is.character(y.group) && all(y.group %in% colnames(meta.data)) == TRUE) {
+      y.cell.state <- as.factor(meta.data[, y.group])
       y.cell.state.level <- levels(y.cell.state)
 
       labels <- y.cell.state
@@ -4857,7 +4780,7 @@ netVisual_TopicComposition <- function(
   if (remove.isolate) {
     idx <- which(apply(mat, 1, max) < cutoff.prop)
     if (length(idx) > 0) {
-      mat <- mat[,-idx]
+      mat <- mat[-idx, , drop = FALSE]
     }
   }
 
@@ -5034,9 +4957,6 @@ netVisual_TopicSignaling <- function(
     topic.key.name <- paste0(topic.key,".",pattern)
     loadings <- object@reductions[[topic.key.name]]@feature.loadings
 
-    # loadings: nFeatures x nPCs
-    loadings <- Loadings(object = object[[reduction]], projected = projected)
-
     # if(is.null(colnames(loadings)))
     colnames(loadings) <- stringr::str_c(topic.key,1:NCOL(loadings)) # signaling.name x topic
   } else if(inherits(object,what = c("matrix","array"))){
@@ -5056,7 +4976,6 @@ netVisual_TopicSignaling <- function(
         stop("Only mouse and human are supported currently. Please provide a `db` instead! ")
       }
     } else if (!is.null(db)) {
-      CellChatDB <- db
       if (all(c("ligand","receptor") %in% colnames(db)) == FALSE) {
         stop("The input `db` must contain at least two columns named as ligand,receptor")
       }
@@ -5071,6 +4990,10 @@ netVisual_TopicSignaling <- function(
           stop("The input `db` must contain a column named as pathway_name when feature_cat == signaling !")
         }
       }
+      if (anyDuplicated(db$interaction_name))
+        stop("The input `db` must have unique interaction_name values.", call. = FALSE)
+      rownames(db) <- db$interaction_name
+      CellChatDB <- list(interaction = db)
     } else {
       stop("Please provide either `species` or db` when the input is not a SpatialCellChat object! ")
     }
@@ -5441,10 +5364,10 @@ netVisual_CommunField <- function(
     }
   }
 
-  net0 <- methods::slot(object, slot.name)
-  field <- my_as_sparse3Darray(net0$field[[pattern]])
-  rm(net0)
-  gc()
+  field <- methods::slot(object, slot.name)$cell$field[[pattern]]
+  if (!inherits(field, "SparseChatArray")) {
+    stop("Please run computeCommunField() for the requested pattern first.", call. = FALSE)
+  }
 
   siganling_name = dimnames(field)[[3]]
   if (!(signaling %in% siganling_name)) {
@@ -5454,11 +5377,14 @@ netVisual_CommunField <- function(
   }
 
   # x->y;y->x
-  field.use = data.frame(field[, , signaling])
+  field.use = as.data.frame(as.matrix(field[[signaling]]))
   temp_field.use = field.use
   field.use[, 1] = temp_field.use[, 2]
   field.use[, 2] = temp_field.use[, 1]
   coordinates <- object@images$coordinates
+  if (!identical(rownames(coordinates), rownames(field.use))) {
+    stop("Communication field cell names must match coordinate row names.", call. = FALSE)
+  }
   temp_coordinates = coordinates
   coordinates[, 1] = temp_coordinates[, 2]
   coordinates[, 2] = temp_coordinates[, 1]
@@ -5478,9 +5404,9 @@ netVisual_CommunField <- function(
       x_breaks <- seq(x_range[1], x_range[2], length.out = n.breaks + 1)
       y_range <- range(df.field[["y_cent"]])
       y_breaks <- seq(y_range[1], y_range[2], length.out = n.breaks + 1)
-      df.field[["x_cent_cut"]] <- cut(df.field[["x_cent"]], breaks = x_breaks)
+      df.field[["x_cent_cut"]] <- cut(df.field[["x_cent"]], breaks = x_breaks, include.lowest = TRUE)
       levels_x_cent <- levels(df.field[["x_cent_cut"]])
-      df.field[["y_cent_cut"]] <- cut(df.field[["y_cent"]], breaks = y_breaks)
+      df.field[["y_cent_cut"]] <- cut(df.field[["y_cent"]], breaks = y_breaks, include.lowest = TRUE)
       levels_y_cent <- levels(df.field[["y_cent_cut"]])
 
       anchor.Interval <- seq(0, 1, len = (n.breaks + 1))
@@ -5526,6 +5452,7 @@ netVisual_CommunField <- function(
     color.use = scPalette(length(cells.level))
     names(color.use) <- cells.level
   }
+  if (is.null(names(color.use))) names(color.use) <- cells.level
 
   if (length(setdiff(levels(df.field.use$labels), unique(df.field.use$labels))) > 0) {
     color.use.field <-
@@ -5568,7 +5495,7 @@ netVisual_CommunField <- function(
   }
 
   # Add arrows
-  if (is.null(arrow.color)) {
+  if (nrow(df.field.use) > 0L && is.null(arrow.color)) {
     gg <-
       gg + metR::geom_arrow(
         data = df.field.use,
@@ -5588,7 +5515,7 @@ netVisual_CommunField <- function(
           type = "closed"
         )
       ) +  metR::scale_mag(guide = "none")
-  } else {
+  } else if (nrow(df.field.use) > 0L) {
     gg <-
       gg + metR::geom_arrow(
         data = df.field.use,
@@ -5639,7 +5566,7 @@ netVisual_CommunField <- function(
     )
   }
 
-  gg <- gg + scale_color_manual(values = color.use.field) +
+  gg <- gg + scale_color_manual(values = color.use) +
     theme(
       legend.key = element_blank(),
       legend.text = element_text(size = legend.text.size),
@@ -5791,12 +5718,15 @@ netVisual_CommunFieldGrid <- function(
     stop("Please check the input 'signaling' and make sure it has been computed via `computeCommunField`.")
   }
 
-  field.use = data.frame(field[, , signaling,drop=T]) # return a matrix
+  field.use = as.data.frame(as.matrix(field[[signaling]]))
   temp_field.use = field.use
   field.use[, 1] = temp_field.use[, 2]
   field.use[, 2] = temp_field.use[, 1]
 
   coordinates <- object@images$coordinates[, seq_len(2L), drop = FALSE]
+  if (!identical(rownames(coordinates), rownames(field.use))) {
+    stop("Communication field cell names must match coordinate row names.", call. = FALSE)
+  }
   temp_coordinates = coordinates
   coordinates[, 1] = temp_coordinates[, 2]
   coordinates[, 2] = temp_coordinates[, 1]
@@ -6138,12 +6068,15 @@ netVisual_CommunFlow <- function(
     stop("Please check the input 'signaling' and make sure it has been computed via `computeCommunField`.")
   }
 
-  field.use = data.frame(field[, , signaling,drop=T]) # return a matrix
+  field.use = as.data.frame(as.matrix(field[[signaling]]))
   temp_field.use = field.use
   field.use[, 1] = temp_field.use[, 2]
   field.use[, 2] = temp_field.use[, 1]
 
   coordinates <- object@images$coordinates[, seq_len(2L), drop = FALSE]
+  if (!identical(rownames(coordinates), rownames(field.use))) {
+    stop("Communication field cell names must match coordinate row names.", call. = FALSE)
+  }
   temp_coordinates = coordinates
   coordinates[, 1] = temp_coordinates[, 2]
   coordinates[, 2] = temp_coordinates[, 1]
@@ -6699,7 +6632,6 @@ StackedVlnPlot<- function(object, features, idents = NULL, split.by = NULL,
                           pt.size = 0,
                           plot.margin = margin(0, 0, 0, 0, "cm"),
                           ...) {
-  options(warn=-1)
   if (is.null(color.use)) {
     numCluster <- length(levels(Seurat::Idents(object)))
     if (colors.ggplot) {
@@ -6763,7 +6695,6 @@ modify_vlnplot<- function(object,
                           pt.size = 0,
                           plot.margin = margin(0, 0, 0, 0, "cm"),
                           ...) {
-  options(warn=-1)
   p<- Seurat::VlnPlot(object, features = features, cols = cols, pt.size = pt.size, idents = idents, split.by = split.by,  ... )  +
     xlab("") + ylab(features) + ggtitle("")
   if (show.median) {
@@ -7077,36 +7008,38 @@ spatialTopicPlot <- function(
     show.legend = TRUE,
     show.legend.combined = FALSE
 ){
-  # Column number of combined plots
-  if (is.null(x = ncol)) {
-    ncol <- 2
-    if (length(x = topics) == 1) {
-      ncol <- 1
-    }
-    if (length(x = topics) > 6) {
-      ncol <- 3
-    }
-    if (length(x = topics) > 9) {
-      ncol <- 4
-    }
-  }
-
-
-  coords <- object@images$coordinates
-  if (ncol(coords) == 2) {
-    colnames(coords) <- c("x_cent", "y_cent")
-    temp_coord = coords
-    coords[, 1] = temp_coord[, 2]
-    coords[, 2] = temp_coord[, 1]
-  } else {
-    stop("Please check the input 'coordinates' and make sure it is a two column matrix.")
-  }
-
   pattern <- match.arg(pattern)
   pattern.res <- methods::slot(object, slot.name)$topic[[pattern]]
-  cell.embeddings <- pattern.res$cell %>% Matrix::t() # topic x cell
-  rownames(cell.embeddings) <- paste0(topics.key,seq_len(NROW(cell.embeddings)))
-  meta <- object@meta
+  if (is.null(pattern.res) || is.null(pattern.res$cell)) {
+    stop("Please run `identifyCellTopics` for the selected slot and pattern before calling `spatialTopicPlot`!",
+         call. = FALSE)
+  }
+
+  # identifyCellTopics stores cell x topic loadings.  Keep cell names as the
+  # alignment key so reordered metadata/coordinates cannot silently change the
+  # plotted topic.
+  cell.loadings <- as.matrix(pattern.res$cell)
+  if (is.null(rownames(cell.loadings))) {
+    stop("topic cell loadings must have cell names", call. = FALSE)
+  }
+  coords <- object@images$coordinates
+  if (ncol(coords) != 2L) {
+    stop("Please check the input 'coordinates' and make sure it is a two column matrix.", call. = FALSE)
+  }
+  if (is.null(rownames(coords)) || anyDuplicated(rownames(coords)) ||
+      anyDuplicated(rownames(cell.loadings)) ||
+      !setequal(rownames(coords), rownames(cell.loadings))) {
+    stop("topic loadings and coordinates must contain the same unique cell names", call. = FALSE)
+  }
+  cell.loadings <- cell.loadings[rownames(coords), , drop = FALSE]
+  coords <- as.matrix(coords)
+  colnames(coords) <- c("x_cent", "y_cent")
+  temp_coord <- coords
+  coords[, 1] <- temp_coord[, 2]
+  coords[, 2] <- temp_coord[, 1]
+
+  cell.embeddings <- Matrix::t(cell.loadings) # topic x cell
+  rownames(cell.embeddings) <- paste0(topics.key, seq_len(ncol(cell.loadings)))
 
   if (length(color.heatmap) == 1) {
     colormap <- tryCatch({
@@ -7114,10 +7047,8 @@ spatialTopicPlot <- function(
     }, error = function(e) {
       scales::viridis_pal(option = color.heatmap, direction = -1)(n.colors)
     })
-    if (direction == -1) {
-      colormap <- rev(colormap)
-    }
-    colormap <- colorRampPalette(colormap)(99)
+    if (direction == -1) colormap <- rev(colormap)
+    colormap <- grDevices::colorRampPalette(colormap)(99)
     colormap[1] <- "#E5E5E5"
   } else {
     colormap <- color.heatmap
@@ -7125,41 +7056,41 @@ spatialTopicPlot <- function(
 
   if (is.null(topics)) {
     feature.use <- rownames(cell.embeddings)
+  } else if (is.numeric(topics)) {
+    if (any(topics < 1 | topics > nrow(cell.embeddings))) {
+      stop("`topics` contains an index outside the available topic range", call. = FALSE)
+    }
+    feature.use <- rownames(cell.embeddings)[topics]
   } else {
-    feature.use <- topics
+    feature.use <- as.character(topics)
+    if (!all(feature.use %in% rownames(cell.embeddings))) {
+      stop("`topics` contains a topic that is not available", call. = FALSE)
+    }
   }
 
+  if (is.null(ncol)) {
+    ncol <- 2L
+    if (length(feature.use) == 1L) ncol <- 1L
+    if (length(feature.use) > 6L) ncol <- 3L
+    if (length(feature.use) > 9L) ncol <- 4L
+  }
 
-  df <- data.frame(x = coords[, 1], y = coords[, 2])
+  df <- data.frame(x = coords[, 1], y = coords[, 2], row.names = rownames(coords))
   data.use <- cell.embeddings[feature.use, , drop = FALSE]
-
-
   if (!is.null(cutoff)) {
     cat("Applying a cutoff of ", cutoff, "to the values...", '\n')
     data.use[data.use <= cutoff] <- NA
   }
 
-  numFeature = length(feature.use)
-  gg <- vector("list", numFeature)
-  for (i in seq_len(numFeature)) {
+  gg <- vector("list", length(feature.use))
+  for (i in seq_along(feature.use)) {
     feature.name <- rownames(data.use)[i]
-
-    df$feature.data <- data.use[i, , drop = T]
+    df$feature.data <- as.numeric(data.use[i, , drop = TRUE])
     g <- ggplot(data = df, aes(x, y)) +
-      geom_point(
-        aes(colour = feature.data),
-        alpha = alpha,
-        size = point.size,
-        shape = shape.by
-      ) +
+      geom_point(aes(colour = feature.data), alpha = alpha, size = point.size, shape = shape.by) +
       scale_colour_gradientn(
         colours = colormap,
-        guide = guide_colorbar(
-          title = NULL,
-          ticks = T,
-          label = T,
-          barwidth = 0.5
-        ),
+        guide = guide_colorbar(title = NULL, ticks = T, label = T, barwidth = 0.5),
         na.value = "grey90"
       ) +
       theme(legend.position = "right") +
@@ -7167,39 +7098,24 @@ spatialTopicPlot <- function(
         legend.title = element_blank(),
         legend.text = element_text(size = legend.text.size),
         legend.key.size = grid::unit(0.15, "inches")
-      )  + # , legend.key.size = grid::unit(0.4, "inches")
-      ggtitle(feature.name) + theme(plot.title = element_text(
-        hjust = 0.5,
-        vjust = 0,
-        size = 10
-      )) +
-      theme(
-        panel.background = element_blank(),
-        axis.ticks = element_blank(),
-        axis.text = element_blank()
-      ) + xlab(NULL) + ylab(NULL) +
-      theme(legend.key = element_blank())
-    g <- g + coord_fixed() + scale_y_reverse()
-    #g <- g + coord_fixed(ratio = 1*diff(range(coords$x_cent))/diff(range(coords$y_cent))) + scale_y_reverse()
-    if (!show.legend) {
-      g <- g + theme(legend.position = "none")
-    }
-    if (show.legend.combined & i == numFeature) {
-      g <-
-        g + theme(
-          legend.position = "right",
-          legend.key.height = grid::unit(0.15, "in"),
-          legend.key.width = grid::unit(0.5, "in"),
-          legend.title = element_blank(),
-          legend.key = element_blank()
-        )
+      ) +
+      ggtitle(feature.name) +
+      theme(plot.title = element_text(hjust = 0.5, vjust = 0, size = 10)) +
+      theme(panel.background = element_blank(), axis.ticks = element_blank(), axis.text = element_blank()) +
+      xlab(NULL) + ylab(NULL) + theme(legend.key = element_blank()) +
+      coord_fixed() + scale_y_reverse()
+    if (!show.legend) g <- g + theme(legend.position = "none")
+    if (show.legend.combined && i == length(feature.use)) {
+      g <- g + theme(
+        legend.position = "right", legend.key.height = grid::unit(0.15, "in"),
+        legend.key.width = grid::unit(0.5, "in"), legend.title = element_blank(),
+        legend.key = element_blank()
+      )
     }
     gg[[i]] <- g
   }
-  if (combine) {
-    gg <- patchwork::wrap_plots(gg, ncol = ncol)
-  }
-  return(gg)
+  if (combine) gg <- patchwork::wrap_plots(gg, ncol = ncol)
+  gg
 }
 
 
@@ -7237,6 +7153,7 @@ plotly_spatialLRpairPlot <- function (
     nohighlight.alpha = 0.3,
     do.plot=T
 ){
+  object <- .sc_assert_spatial_cell_chat(object)
   coords <- object@images$coordinates
   if (ncol(coords) == 2) {
     colnames(coords) <- c("x_cent", "y_cent")
@@ -7248,11 +7165,12 @@ plotly_spatialLRpairPlot <- function (
     stop("Please check the input 'coordinates' and make sure it is a two column matrix.")
   }
 
-  # add idents info
-  spot_labels <- object@idents
-
-  data <- as.matrix(object@data)
-  meta <- object@meta
+  data <- assay(object, "norm")
+  cell.names <- rownames(coords)
+  if (is.null(cell.names) || anyDuplicated(cell.names) ||
+      !setequal(cell.names, colnames(data)) || !setequal(cell.names, rownames(object@meta)))
+    stop("Coordinates, normalized expression and metadata must have matching cell names.", call. = FALSE)
+  meta <- object@meta[cell.names, , drop = FALSE]
 
   if (!is.null(features) & !is.null(pairLR.use)) {
     stop("Please don't input features or pairLR.use simultaneously.")
@@ -7260,38 +7178,23 @@ plotly_spatialLRpairPlot <- function (
   if (!is.null(features) & length(features) > 2) {
     stop("Please don't input more than 2 features.")
   }
-  if (!is.null(pairLR.use) & length(pairLR.use) > 1) {
+  if (!is.null(pairLR.use) && (if (is.data.frame(pairLR.use)) nrow(pairLR.use) else length(pairLR.use)) > 1L) {
     stop("Please don't input more than 1 LR pair.")
   }
 
-  df <- coords
+  df <- as.data.frame(coords)
 
 
   if (!is.null(pairLR.use)) {
     if (is.character(pairLR.use)) {
       pairLR.use <- data.frame(interaction_name = pairLR.use)
     }
+    if (!is.data.frame(pairLR.use) || !"interaction_name" %in% names(pairLR.use))
+      stop("pairLR.use must identify one interaction_name.", call. = FALSE)
 
     if (enriched.only) {
-      if (do.group) {
-        object@net$prob[object@net$pval > thresh] <- 0
-        pairLR.use.name <- pairLR.use$interaction_name[pairLR.use$interaction_name %in% dimnames(object@net$prob)[[3]]]
-        prob <- object@net$prob[, , pairLR.use.name,drop = F] # return an array
-        prob.sum <- apply(prob > 0, 3L, sum)
-        names(prob.sum) <- pairLR.use.name
-        signaling.includes <- names(prob.sum)[prob.sum > 0]
-        pairLR.use <- pairLR.use[pairLR.use$interaction_name %in% signaling.includes, , drop = F]
-      } else {
-        pairLR.use.name <-
-          pairLR.use$interaction_name[pairLR.use$interaction_name %in% dimnames(object@net$prob.cell)[[3]]]
-        prob.cell <-
-          object@net$prob.cell[, , pairLR.use.name,drop = FALSE]
-        prob.sum <- apply(prob.cell > 0, 3L, sum)
-        names(prob.sum) <- pairLR.use.name
-        signaling.includes <- names(prob.sum)[prob.sum > 0]
-        pairLR.use <-
-          pairLR.use[pairLR.use$interaction_name %in% signaling.includes, , drop = FALSE]
-      }
+      signaling.includes <- .sc_spatial_feature_active_lr(object, pairLR.use$interaction_name, do.group, thresh)
+      pairLR.use <- pairLR.use[pairLR.use$interaction_name %in% signaling.includes, , drop = FALSE]
       if (length(pairLR.use$interaction_name) == 0) {
         stop(
           paste0(
@@ -7314,7 +7217,7 @@ plotly_spatialLRpairPlot <- function (
 
   if (length(intersect(feature.use, rownames(data))) > 0) {
     feature.use <- feature.use[feature.use %in% rownames(data)]
-    data.use <- data[feature.use, , drop = FALSE]
+    data.use <- as.matrix(data[feature.use, cell.names, drop = FALSE])
   } else if (length(intersect(feature.use, colnames(meta))) > 0) {
     feature.use <- feature.use[feature.use %in% colnames(meta)]
     data.use <- t(meta[, feature.use, drop = FALSE])
@@ -7324,8 +7227,6 @@ plotly_spatialLRpairPlot <- function (
 
   numFeature = length(feature.use)
   list_pl <- vector("list", numFeature)
-  max.feature.data <- max(data.use)
-
   if(do.plot){
     # Custom Hover Text: https://plotly.com/r/text-and-annotations/
     for (i in seq_len(numFeature)) {
@@ -7420,6 +7321,8 @@ plotFeatures <- function(
   method <- match.arg(method)
 
   # rename the cols
+  df_score <- as.data.frame(df_score)
+  if (ncol(df_score) != 3L) stop("df_score must contain x, y, and score columns", call. = FALSE)
   colnames(df_score) <- c("x", "y", "score")
 
   # set the title of plot
@@ -7940,7 +7843,7 @@ plotly_spatialLRpairPlot_shiny <- function(
       shiny::tagList(output_list())
     })
 
-    observe({
+    shiny::observe({
       p <- plotly_spatialDimPlot(
         object,
         point.size = point.size.dimplot,
@@ -7987,7 +7890,7 @@ plotly_spatialLRpairPlot_shiny <- function(
       else {
         cells.highlight <- d$customdata
         c_ <- cells.highlight %>% paste0("\'",.,"\',")
-        for (i in 1:length(c_)) {
+        for (i in seq_along(c_)) {
           if (i%%6==0) {
             cat(c_[[i]],sep = "\n")
           }else{
@@ -7999,7 +7902,7 @@ plotly_spatialLRpairPlot_shiny <- function(
     })
     output$selecting2 <- shiny::renderPrint({
       c_ <- vals$keepcells %>% paste0("\'",.,"\',")
-      for (i in 1:length(c_)) {
+      for (i in seq_along(c_)) {
         if (i%%6==0) {
           cat(c_[[i]],sep = "\n")
         }else{
@@ -8019,13 +7922,9 @@ plotly_spatialLRpairPlot_shiny <- function(
         }
       }
     })
-    shiny::observeEvent(plotly::event_data("plotly_selecting"), {
+    shiny::observeEvent(input$update, {
       d <- plotly::event_data("plotly_selecting")
-      if (!is.null(d)){
-        shiny::observeEvent(input$update, {
-          vals$keepcells <- d$customdata
-        })
-      }
+      if (!is.null(d)) vals$keepcells <- d$customdata
     })
 
     # Reset all points
@@ -8038,11 +7937,7 @@ plotly_spatialLRpairPlot_shiny <- function(
       vals$rev = !vals$rev
     })
     # close
-    shiny::observe({
-      if(input$done > 0){
-        shiny::stopApp(0)
-      }
-    })
+    shiny::observeEvent(input$done, shiny::stopApp(0), ignoreInit = TRUE)
 
   }
 
@@ -8100,15 +7995,23 @@ plotly_spatialDimPlot <- function(
   names(coordinates)[seq_len(2L)] <- c("x_cent", "y_cent")
   coordinates <- coordinates[, seq_len(2L), drop = FALSE]
   cell_id <- rownames(coordinates)
-  if (is.null(cell_id)) cell_id <- as.character(seq_len(nrow(coordinates)))
+  if (is.null(cell_id) || anyDuplicated(cell_id))
+    stop("coordinates must have unique cell names", call. = FALSE)
   coordinates$cell_id <- as.character(cell_id)
 
   if (is.null(group.by)) {
     labels <- object@idents
+    if (is.null(names(labels)) || anyDuplicated(names(labels)) ||
+        !setequal(names(labels), cell_id))
+      stop("group identities must have matching cell names", call. = FALSE)
+    labels <- labels[cell_id]
   } else {
     if (length(group.by) != 1L || !group.by %in% colnames(object@meta))
       stop("group.by must name one metadata column", call. = FALSE)
-    labels <- factor(object@meta[[group.by]])
+    if (is.null(rownames(object@meta)) || anyDuplicated(rownames(object@meta)) ||
+        !setequal(rownames(object@meta), cell_id))
+      stop("metadata must have matching cell names", call. = FALSE)
+    labels <- factor(object@meta[cell_id, group.by])
   }
   labels <- factor(as.character(labels))
   if (length(labels) != nrow(coordinates))
@@ -8418,13 +8321,13 @@ spatialLeePlot <- function(
       if(lw.type == "contact.range"){
         print("lw.type = contact.range")
         weight.Mat <- resCellDistance[["adj.contact"]]
-        lw <- spdep::mat2listw(weight.Mat,style = "B") # all weights are 1.
+        lw <- spdep::mat2listw(weight.Mat, style = "B") # all weights are 1.
       } else if (lw.type == "interaction.range"){
         print("lw.type = interaction.range")
         d.spatial <- resCellDistance[["d.spatial"]]
         P.spatial <- SpatialCellChat::createPspatialFrom_dspatial(d.spatial,distance.use = T)
         Matrix::diag(P.spatial) <- 1
-        lw <- spdep::mat2listw(P.spatial,style = "W") # all weights.
+        lw <- spdep::mat2listw(P.spatial, style = "W") # all weights.
       }
       # View(lw)
       plotStatistics_Lee(
@@ -8591,7 +8494,7 @@ plotStatistics_Lee <- function(
       index1 = T,
       dimnames = NULL
     )
-    lw <- spdep::mat2listw(weight.Mat,style = "B")
+    lw <- spdep::mat2listw(weight.Mat, style = "B")
   }
 
 
@@ -8603,13 +8506,8 @@ plotStatistics_Lee <- function(
         .x = seq_len(NCOL(labels2.Mat)),
         .f = function(L2) {
           label2 <- labels2.Mat[, L2, drop = T]
-          Lee.S <- spdep::lee(
-            label1,
-            label2,
-            listw = lw ,
-            n = length(lw$neighbours),
-            zero.policy = TRUE
-          )
+          Lee.S <- spdep::lee(label1, label2, listw = lw,
+                              n = length(lw$neighbours), zero.policy = TRUE)
           return(Lee.S$L)
         }
       )
@@ -8712,10 +8610,21 @@ plotStatistics_Lee <- function(
     # mat[mat == 0] <- NA
     # color.heatmap.use = c("white", color.heatmap.use)
 
-    # View(mat)
+    # A constant or entirely missing matrix needs explicit distinct color breaks.
+    finite.values <- mat[is.finite(mat)]
+    if (length(finite.values) == 0L) {
+      heatmap.colors <- circlize::colorRamp2(c(0, 1), color.heatmap.use[c(1, 100)])
+    } else if (length(unique(finite.values)) == 1L) {
+      value <- finite.values[1L]
+      delta <- max(abs(value) * 1e-6, 1e-6)
+      heatmap.colors <- circlize::colorRamp2(c(value - delta, value + delta),
+                                             color.heatmap.use[c(1, 100)])
+    } else {
+      heatmap.colors <- color.heatmap.use
+    }
     ht1 = ComplexHeatmap::Heatmap(
       mat,
-      col = color.heatmap.use,
+      col = heatmap.colors,
       na_col = "white",
       name = "Proportion",
       bottom_annotation = col_annotation,
@@ -8828,7 +8737,17 @@ spatialGiPlot <- function(
 
   # get the corresponding scores of each spot according to 'measure'
   # centr's dim: centr.measure x nCell x nLR/nPathway
-  centr <- slot(object, slot.name)$centr.cell[measure, , ,drop=F]
+  centr <- slot(object, slot.name)$centr.cell
+  cell.names <- rownames(coords)
+  if (is.null(cell.names) || anyDuplicated(cell.names) ||
+      is.null(dimnames(centr)[[2L]]) || anyDuplicated(dimnames(centr)[[2L]]) ||
+      !setequal(cell.names, dimnames(centr)[[2L]]) ||
+      is.null(names(object@idents)) || anyDuplicated(names(object@idents)) ||
+      !setequal(cell.names, names(object@idents)) ||
+      is.null(rownames(object@meta)) || anyDuplicated(rownames(object@meta)) ||
+      !setequal(cell.names, rownames(object@meta)))
+    stop("Coordinates, centrality, identities and metadata must have matching cell names.", call. = FALSE)
+  centr <- centr[measure, cell.names, , drop = FALSE]
   if (!is.null(signaling.name)) {
     signaling.use <- dimnames(centr)[[3]]
     if (is.numeric(signaling.name)) signaling.name <- signaling.use[signaling.name]
@@ -8845,11 +8764,11 @@ spatialGiPlot <- function(
   centr.sum <- apply(centr,c(1,2),sum,simplify = T) %>% Matrix::t()
 
   # combine the coordinates and communication scores by columns
-  df_score <- cbind(coords, centr.sum)
+  df_score <- as.data.frame(cbind(coords, centr.sum), check.names = FALSE)
   colnames(df_score) <- c("x_cent", "y_cent", measure)
 
   # add idents info
-  spot_labels <- object@idents
+  spot_labels <- object@idents[cell.names]
 
   # highlight the selected groups
   if (is.null(group.highlight)) {
@@ -8896,7 +8815,7 @@ spatialGiPlot <- function(
     }
 
     # only 3 cols, because knn2nb can only accept 3 cols
-    df_sub <- df_score[c("x_cent", "y_cent", measure[i])]
+    df_sub <- df_score[, c("x_cent", "y_cent", measure[i]), drop = FALSE]
 
     g <- df_sub %>% plotStatistics_Gi(
       df_score = .,
@@ -8936,9 +8855,9 @@ spatialGiPlot <- function(
       three.dim.z = three.dim.z
     )
     Gi.feature.name <- paste0("Getis-Ord Gi ",feature.name) %>% make.names()
-    object@meta[[Gi.feature.name]] <- g.info[["statistic_G"]]
+    object@meta[[Gi.feature.name]] <- g.info[["statistic_G"]][match(rownames(object@meta), cell.names)]
     Gip.feature.name <- paste0("Getis-Ord Gi P ",feature.name) %>% make.names()
-    object@meta[[Gip.feature.name]] <- g.info[["Pr(z != E(Gi))"]]
+    object@meta[[Gip.feature.name]] <- g.info[["Pr(z != E(Gi))"]][match(rownames(object@meta), cell.names)]
 
     gg[[i]] <- g
   }
@@ -9039,6 +8958,10 @@ plotStatistics_Gi <- function(df_score,
                               colorbar.y = 0.5,
                               three.dim.z = 0) {
   # rename the cols
+  df_score <- as.data.frame(df_score)
+  if (ncol(df_score) != 3L) {
+    stop("df_score must contain x, y, and score columns", call. = FALSE)
+  }
   colnames(df_score) <- c("x", "y", "score")
 
   # set the title of plot
@@ -9050,27 +8973,19 @@ plotStatistics_Gi <- function(df_score,
 
   # calculate the statistic-Gi(Gi*)
   if (gstar) {
-    knn_nb <-
-      spdep::knearneigh(df_score[c("x", "y")],
-                        k = n,
-                        longlat = FALSE,
-                        use_kd_tree = T) %>%
-      spdep::knn2nb() %>%
-      spdep::include.self()
+    knn_nb <- spdep::knearneigh(df_score[c("x", "y")], k = n,
+                                longlat = FALSE, use_kd_tree = T) %>%
+      spdep::knn2nb() %>% spdep::include.self()
     p.value.label <- "Pr(z != E(G*i))"
     gstar.label <- "Gi*"
-  } else{
-    knn_nb <-
-      spdep::knearneigh(df_score[c("x", "y")],
-                        k = n,
-                        longlat = FALSE,
-                        use_kd_tree = T) %>%
+  } else {
+    knn_nb <- spdep::knearneigh(df_score[c("x", "y")], k = n,
+                                longlat = FALSE, use_kd_tree = T) %>%
       spdep::knn2nb()
     p.value.label <- "Pr(z != E(Gi))"
     gstar.label <- "Gi"
   }
-  G_knn <-
-    spdep::localG(df_score$score, spdep::nb2listw(knn_nb, style = "B"))
+  G_knn <- spdep::localG(df_score$score, spdep::nb2listw(knn_nb, style = "B"))
 
   # update the score-data.frame, with the values of Gi, Gi's p.value and so on
   df_score$statistic_G <- c(G_knn)
@@ -9842,6 +9757,8 @@ generate_RedsBlues_colormap <- function(
     # mid.color = "#fffbff",
     switch.RedsBlues = F
 ){
+  vec <- vec[is.finite(vec)]
+  if (!length(vec) || all(vec == 0)) return(rep(mid.color, 99L))
   min_vec <- min(vec,na.rm = T)
   max_vec <- max(vec,na.rm = T)
   Colors.length <- 6

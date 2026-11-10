@@ -1,0 +1,2 @@
+"figure","status","detail","file"
+"P0/slideseq/spatialC2CDistPlot","PASS","fresh inference; cells=29536; LR layers=1563; n=1; interaction.range=250; scale.distance=9","tests_dev/figures/P0/slideseq/spatialC2CDistPlot.pdf"
