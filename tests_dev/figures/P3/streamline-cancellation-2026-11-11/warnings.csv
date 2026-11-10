@@ -1,0 +1,3 @@
+"case","warning"
+"exact-cancellation-construction","st_centroid assumes attributes are constant over geometries"
+"near-cancellation-construction","st_centroid assumes attributes are constant over geometries"

@@ -103,6 +103,17 @@ def main():
                     if asset.name in ('plotly-latest.min.js', 'typedarray.min.js'):
                         add(asset.parent / 'LICENSE', rel(asset), 'LICENSE', 'license')
 
+    diagnostics = [
+        FIGURES / 'P3' / 'slideseq' / 'display-diagnostics-2026-11-11' / 'summary.csv',
+        FIGURES / 'P3' / 'streamline-cancellation-2026-11-11' / 'summary.csv',
+    ]
+    for summary in diagnostics:
+        if not summary.is_file():
+            errors.append(f'missing diagnostic summary: {rel(summary)}')
+            continue
+        for row in rows(summary):
+            add(ROOT / row['file'], rel(summary), 'DIAGNOSTIC', 'pdf')
+
     # Browser screenshots and explicitly documented visual-review previews are
     # included as supporting evidence, separate from PASS or visual acceptance.
     for phase in ('P0', 'P2', 'P3', 'P4'):

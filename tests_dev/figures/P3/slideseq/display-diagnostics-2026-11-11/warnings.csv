@@ -1,0 +1,5 @@
+"case","warning"
+"grid-construction","st_centroid assumes attributes are constant over geometries"
+"flow-construction","st_centroid assumes attributes are constant over geometries"
+"flow_default-build","Performing only 1 integration step, please consider increasing the resolution."
+"flow_default-pdf","Performing only 1 integration step, please consider increasing the resolution."

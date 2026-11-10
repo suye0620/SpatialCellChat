@@ -92,3 +92,20 @@ Slide-seq LAMININ outgoing 的诊断中，29,536 个细胞有 19,474 个非零�
 ## P3-016：场图帮助文件与函数签名不一致
 
 `man/netVisual_CommunFieldGrid.Rd` 与 `man/netVisual_CommunFlow.Rd` 仍描述旧的参数、默认值和尺寸规则，例如 Flow 的 `L`、`n`、`image.alpha` 和 `arrow.line.width`。用户参考帮助会误判实际展示。已按当前 R 函数和 roxygen 注释同步两份帮助；`test-grid-visualization.R` 解析 Rd 并逐项检查参数顺序、默认值。当前环境未安装 roxygen2，因此直接同步 Rd，未执行全项目文档重生成。
+
+
+## P3-017：依赖 metR 在部分非零对角场上丢弃流线（未修复）
+
+位置：`netVisual_CommunFlow()` 将插值场以 `dx = u, dy = -v` 交给 `metR::geom_streamline()`。本机 `metR` 0.19.0 的流线积分内部使用 `dx + dy != 0` 判定向量是否继续积分；当两个分量数值相反、和恰为零时，非零向量也被当作零向量。依赖上游对应实现可参考 [metR 源码](https://github.com/eliocamp/metR/blob/master/R/geom_streamline.R)。
+
+复现：`tests_dev/diagnose-streamline-cancellation.R` 使用 25 个细胞的常量非零场，通过项目公开入口作图。图层坐标中的方向为 `(1, -1)` 时，3,721 个插值位置均有非零向量但输出 0 个流线点；只把一个原始场分量改为 0.999 后，输出 324 个流线点、323 个不同位置。两张实际 PDF、预览和汇总在 `tests_dev/figures/P3/streamline-cancellation-2026-11-11/`。仅凭空白图不能推断该区域没有通讯。该实验未证明完整 Slide-seq 结果实际遇到此精确抵消条件。
+
+修复方向：在适当的依赖修复中按两个分量均为零判断停止条件，避免修改全局安装的 metR 或扰动场向量；以常量对角场、近似对角场、真正零场和常规曲线场验证，同时比较未受影响的旧输出。当前尚未引入修复，Flow 仍不能视为科学或视觉验收通过。
+
+## P3-018：Slide-seq 场图默认采样、箭头尺寸与积分步数诊断
+
+位置：`netVisual_CommunFieldGrid()` 和 `netVisual_CommunFlow()`。完整 Slide-seq 的 LAMININ outgoing 场中 29,536 个细胞有 19,474 个非零向量；2,401 个插值位置中 540 个非零。默认 `arrow.skip = 4` 后图层有 100 行，其中 22 个非零箭头、78 个透明零向量；设 `arrow.skip = 0` 后分别为 540 和 1,861。`metR::GeomArrow` 将图层 `mag` 用作厘米单位的向量长度；不跳格时非零箭头的长度中位数约 0.00746 cm（0.0746 mm），最大约 0.250 cm。因此箭头难辨不仅由跳格与背景遮挡造成，当前强度尺度本身也使大部分箭头极短。
+
+Flow 默认 `res = 0.5`，该对象依赖层在每个方向仅执行 1 步积分，记录 114 个非空绘图组且没有含 3 个以上点的组；对照 `res = 8` 时每个方向为 3 步，记录 116 个非空绘图组且均含至少 3 点。绘图组是 metR 输出的线段分组，不能直接等同独立生物流线数量。对照同时缩小背景点并调节透明度；两项对照未改变输入场，但也不意味着曲线已获生物学解释或人工验收。
+
+验证：`tests_dev/diagnose-slideseq-field-display.R` 复用同一完整场的绘图图层，防止对照时改变输入数据，结果、四张 PDF、预览与警告记录见 `tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/`。R 启动仍有 locale 和 renv 状态警告；PNG 预览转换提示缺少 ArialUnicode 字体。下一步应区分可公开说明的箭头显示倍率与原始场强，并先解决 P3-017，再评估默认积分分辨率；不能用增加跳格、放大场值或伪造积分结果掩盖问题。

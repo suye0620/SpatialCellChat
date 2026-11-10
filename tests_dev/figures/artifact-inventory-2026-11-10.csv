@@ -117,6 +117,14 @@ tests_dev/figures/P3/simulated/netVisual_embedding.pdf,pdf,PASS,4913,4d66d8bf6a4
 tests_dev/figures/P3/simulated/netVisual_embeddingZoomIn.pdf,pdf,PASS,4608,44c17b76f57fa057b64e44698ef03e21fa3782502481cef44f34f435355256f7,tests_dev/figures/summary-simulated-P3.csv
 tests_dev/figures/P3/simulated/plotGeneExpression.pdf,pdf,PASS,5817,fdb1f30289e5ff993e9bc118fd5733079f909b5cdb55a7a6d46dad84140c42f0,tests_dev/figures/summary-simulated-P3.csv
 tests_dev/figures/P3/slideseq/aggregation-check/preview.png,image,REVIEW,1557325,48d4d48d9f34e82e16d53307df1f84bdd0c326b0c64151d1ce8b02f64440a40d,visual-review capture
+tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/flow_default-preview.png,image,REVIEW,587904,1b8659b44e286b64d28d580c4e2f642806cf659112e75e711309f69e6fb40ac9,visual-review capture
+tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/flow_default.pdf,pdf,DIAGNOSTIC,1750015,379da2985ef6eed0b3884d182141b8e4fc2faf8784a5c456cb5d2685d294998c,tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/summary.csv
+tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/flow_res8-preview.png,image,REVIEW,975334,7c70a5bc101f4f54f75efe4207dc1d29fefc9e3463922a75af36cbafcaeef972,visual-review capture
+tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/flow_res8.pdf,pdf,DIAGNOSTIC,1691496,7ba4f4ae043c038595e18e5d38402051bcd4f3041f5f8edb63c3e73810111c9b,tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/summary.csv
+tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/grid_default-preview.png,image,REVIEW,696938,ea402b9c756d6ded24ef1ba358491a49bb5a14891681443f640e9e70a3e25fc0,visual-review capture
+tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/grid_default.pdf,pdf,DIAGNOSTIC,1748375,e9b1d72790751549b30032e42b0ebf3d13375158173fb1c0c50ae4c44ae2a4e5,tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/summary.csv
+tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/grid_no_skip-preview.png,image,REVIEW,964881,f35b8612a6dc2bb2f461830dff9566686f229b7c8b6b9d2a5fa298a9cbdd0f5b,visual-review capture
+tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/grid_no_skip.pdf,pdf,DIAGNOSTIC,1697167,9d538b66d469a971c7413a89a1cf83d6d6f0933f16de99ca7fe27989e600903c,tests_dev/figures/P3/slideseq/display-diagnostics-2026-11-11/summary.csv
 tests_dev/figures/P3/slideseq/flow-widget-browser.png,image,REVIEW,1354792,e16431acf4af0f9c49c5c1c244d87a87357a25f2b1941aa5b9ff77397a84c1a7,visual-review capture
 tests_dev/figures/P3/slideseq/netAnalysis_dot.pdf,pdf,PASS,23577,b6af6ab6ffeec44d3200e194d5038e59bdd3914ba9fb41dec571dd5c64e6a862,tests_dev/figures/summary-slideseq-P3.csv
 tests_dev/figures/P3/slideseq/netAnalysis_river.pdf,pdf,PASS,107656,9529c7bb809d99c9dec19cbbf4c668f85f388be89631bc7a5951b6304e5211dd,tests_dev/figures/summary-slideseq-P3.csv
@@ -140,6 +148,10 @@ tests_dev/figures/P3/slideseq/netVisual_embedding.pdf,pdf,PASS,15506,6e747a8dcbb
 tests_dev/figures/P3/slideseq/netVisual_embeddingZoomIn.pdf,pdf,PASS,15005,bb907963ad7a12c0ec960dc948b1f08ab777eb2975f26b3e897cf48e2e8fd71b,tests_dev/figures/summary-slideseq-P3.csv
 tests_dev/figures/P3/slideseq/plotGeneExpression.pdf,pdf,PASS,6488,6944c72de52fdf32bf99dd9e61021c4e60359d9b44b24f7a455e63bb205735a6,tests_dev/figures/summary-slideseq-P3.csv
 tests_dev/figures/P3/slideseq/zero-vector-display-check/netVisual_CommunFieldGrid-no-skip-preview.png,image,REVIEW,1520454,31c843d574eec22f0b3afb62e5997cb63eeeef8a19d3727df6c2d756a0a45fa7,visual-review capture
+tests_dev/figures/P3/streamline-cancellation-2026-11-11/exact-cancellation-preview.png,image,REVIEW,19950,51dc0cf76d7e1f68d3fd3af8afee99c21e864a05aaadc7262f8039d45f5588ea,visual-review capture
+tests_dev/figures/P3/streamline-cancellation-2026-11-11/exact-cancellation.pdf,pdf,DIAGNOSTIC,5626,1e84db998368a38501bf8dea17c33bf6de0a4a9fb8615a45e242e0fbeb10a7b8,tests_dev/figures/P3/streamline-cancellation-2026-11-11/summary.csv
+tests_dev/figures/P3/streamline-cancellation-2026-11-11/near-cancellation-preview.png,image,REVIEW,21225,19f0eaee2b051890fe34292c21a41ce6d1849ae62484730ef1ee24d08472837a,visual-review capture
+tests_dev/figures/P3/streamline-cancellation-2026-11-11/near-cancellation.pdf,pdf,DIAGNOSTIC,7737,6134b82ab42417054184a299dabd2e744b54b040233a0cde650b3fc297e4d918,tests_dev/figures/P3/streamline-cancellation-2026-11-11/summary.csv
 tests_dev/figures/P3/visium/flow-widget-browser.png,image,REVIEW,242567,42f5ab9e306ac8045ff63beb8c0f5f4a6b72798a74ec8c8964c7091d31bfb525,visual-review capture
 tests_dev/figures/P3/visium/netAnalysis_dot.pdf,pdf,PASS,32286,c4e9d0b4432ea510617e1e9885f6cb578dc750c9361bc787d14900c5f4f00f3c,tests_dev/figures/summary-visium-P3.csv
 tests_dev/figures/P3/visium/netAnalysis_river.pdf,pdf,PASS,117974,1dbeb271f826c559c7eff96001cfa9daac281ec5102070d6a984f8556448c60c,tests_dev/figures/summary-visium-P3.csv
