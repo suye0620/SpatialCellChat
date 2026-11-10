@@ -90,4 +90,6 @@ ggplot object
 }
 \description{
 Positive values indicate the increase in the second dataset while negative values indicate the increase in the first dataset
+
+When no pathways pass the existing change filter, the plot displays an explanatory message rather than points.
 }

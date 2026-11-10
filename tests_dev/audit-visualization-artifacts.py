@@ -140,6 +140,18 @@ def main():
             if row['status'] == 'DRAWN-REVIEW':
                 add(ROOT / row['file'], rel(summary), 'REVIEW', 'pdf')
 
+    # Real Visium self-comparison: technical control, not biological replication.
+    visium_control = FIGURES / 'merged' / 'visium-self-control-2026-11-11'
+    control_summary = visium_control / 'summary.csv'
+    if not control_summary.is_file():
+        errors.append(f'missing Visium self-control summary: {rel(control_summary)}')
+    else:
+        for row in rows(control_summary):
+            if row['status'] == 'DRAWN-REVIEW':
+                add(ROOT / row['file'], rel(control_summary), 'REVIEW', 'pdf')
+        for preview in visium_control.glob('*-preview.png'):
+            add(preview, rel(control_summary), 'REVIEW', 'image')
+
     # Producer-derived flow comparisons use the same field for both stats.
     production = FIGURES / 'P3' / 'streamline-production-comparison-2026-11-11'
     for dataset in ('simulated', 'visium', 'slideseq'):

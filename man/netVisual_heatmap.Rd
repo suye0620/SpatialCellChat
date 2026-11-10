@@ -85,4 +85,5 @@ When show differential number of interactions or interaction strength in the cel
 Red (or blue) colored edges represent increased (or decreased) signaling in the second dataset compared to the first one.
 
 The top colored bar plot represents the sum of column of values displayed in the heatmap. The right colored bar plot represents the sum of row of values.
+A merged comparison with a nonempty all-zero displayed matrix is shown in a neutral color, indicating no difference in that selection.
 }

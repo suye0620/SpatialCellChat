@@ -3208,6 +3208,8 @@ dataset.record <- object@misc$.datasets[[dataset.name[comparison[ii]]]]
 #'
 #'
 #' @param object A merged CellChat object of a list of CellChat objects
+#' When no pathways pass the existing change filter, the plot displays an explanatory message rather than points.
+#'
 #' @param idents.use the cell group names of interest. Should be one of `levels(object@idents)`
 #' @param color.use a vector with three elements: the first is for coloring shared pathways, the second is for specific pathways in the first dataset, and the third is for specific pathways in the second dataset
 #' @param comparison an index vector giving the two datasets for comparison
@@ -3319,6 +3321,23 @@ dataset.record <- object@misc$.datasets[[dataset.name[comparison[ii]]]]
   mat.diff <- mat.all.merged.use[[2]] -  mat.all.merged.use[[1]]
   idx <- rowSums(mat.diff) != 0
   mat.diff <- mat.diff[idx, , drop = FALSE]
+  if (nrow(mat.diff) == 0L) {
+    # The historical row-sum filter can also drop cancelling changes, so do
+    # not describe this as proof that all underlying directions are zero.
+    gg <- ggplot(as.data.frame(mat.diff), aes(outgoing, incoming)) +
+      geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50", linewidth = 0.25) +
+      geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50", linewidth = 0.25) +
+      annotate("text", x = -Inf, y = Inf, hjust = -0.05, vjust = 1.2,
+               label = "No pathways passed the current change filter") +
+      theme_linedraw() + theme(panel.grid = element_blank(), text = element_text(size = font.size),
+                               plot.title = element_text(size = font.size.title, hjust = 0.5)) +
+      labs(title = title, x = xlabel, y = ylabel)
+    if (!is.null(xlims)) gg <- gg + xlim(xlims)
+    if (!is.null(ylims)) gg <- gg + ylim(ylims)
+    if (!show.legend) gg <- gg + theme(legend.position = "none")
+    if (!show.axes) gg <- gg + theme_void()
+    return(gg)
+  }
   out.specific.signaling <- rownames(mat.diff) %in% out.specific.signaling
   in.specific.signaling <- rownames(mat.diff) %in% in.specific.signaling
   out.in.specific.signaling <- as.logical(out.specific.signaling * in.specific.signaling)

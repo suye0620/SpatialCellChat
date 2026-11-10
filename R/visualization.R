@@ -2678,7 +2678,7 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
   net[abs(net) < stats::quantile(abs(net), probs = 1-top)] <- 0
 
   g <- graph_from_adjacency_matrix(net, mode = "directed", weighted = T)
-  edge.start <- igraph::ends(g, es=igraph::E(g), names=FALSE)
+  edge.start <- if (igraph::ecount(g)) igraph::ends(g, es=igraph::E(g), names=FALSE) else matrix(integer(), nrow = 0L, ncol = 2L)
   coords<-layout_(g,layout)
   if(nrow(coords)!=1){
     coords_scale=scale(coords)
@@ -2699,35 +2699,37 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
   igraph::V(g)$frame.color <- color.use[igraph::V(g)]
   igraph::V(g)$label.color <- vertex.label.color
   igraph::V(g)$label.cex<-vertex.label.cex
-  if(label.edge){
-    igraph::E(g)$label<-igraph::E(g)$weight
-    igraph::E(g)$label <- round(igraph::E(g)$label, digits = 1)
-  }
-  if (length(arrow.width) != 1L) igraph::E(g)$arrow.width <- arrow.width
-  igraph::E(g)$arrow.size<-arrow.size
-  igraph::E(g)$label.color<-edge.label.color
-  igraph::E(g)$label.cex<-edge.label.cex
-  #igraph::E(g)$color<- grDevices::adjustcolor(igraph::V(g)$color[edge.start[,1]],alpha.edge)
-  igraph::E(g)$color <- ifelse(igraph::E(g)$weight > 0, color.edge[1],color.edge[2])
-  igraph::E(g)$color <- grDevices::adjustcolor(igraph::E(g)$color, alpha.edge)
+  if (igraph::ecount(g) > 0L) {
+    if(label.edge){
+      igraph::E(g)$label<-igraph::E(g)$weight
+      igraph::E(g)$label <- round(igraph::E(g)$label, digits = 1)
+    }
+    if (length(arrow.width) != 1L) igraph::E(g)$arrow.width <- arrow.width
+    igraph::E(g)$arrow.size<-arrow.size
+    igraph::E(g)$label.color<-edge.label.color
+    igraph::E(g)$label.cex<-edge.label.cex
+    #igraph::E(g)$color<- grDevices::adjustcolor(igraph::V(g)$color[edge.start[,1]],alpha.edge)
+    igraph::E(g)$color <- ifelse(igraph::E(g)$weight > 0, color.edge[1],color.edge[2])
+    igraph::E(g)$color <- grDevices::adjustcolor(igraph::E(g)$color, alpha.edge)
 
-  igraph::E(g)$weight <- abs(igraph::E(g)$weight)
+    igraph::E(g)$weight <- abs(igraph::E(g)$weight)
 
-  if (is.null(edge.weight.max)) {
-    edge.weight.max <- max(igraph::E(g)$weight)
-  }
-  if (weight.scale == TRUE) {
-    #E(g)$width<-0.3+edge.width.max/(max(E(g)$weight)-min(E(g)$weight))*(E(g)$weight-min(E(g)$weight))
-    igraph::E(g)$width<- 0.3+igraph::E(g)$weight/edge.weight.max*edge.width.max
-  }else{
-    igraph::E(g)$width<-0.3+edge.width.max*igraph::E(g)$weight
-  }
+    if (is.null(edge.weight.max)) {
+      edge.weight.max <- max(igraph::E(g)$weight)
+    }
+    if (weight.scale == TRUE) {
+      #E(g)$width<-0.3+edge.width.max/(max(E(g)$weight)-min(E(g)$weight))*(E(g)$weight-min(E(g)$weight))
+      igraph::E(g)$width<- 0.3+igraph::E(g)$weight/edge.weight.max*edge.width.max
+    }else{
+      igraph::E(g)$width<-0.3+edge.width.max*igraph::E(g)$weight
+    }
 
 
-  if(sum(edge.start[,2]==edge.start[,1])!=0){
-    # Assign a valid value to every edge before setting self-loop angles.
-    igraph::E(g)$loop.angle <- rep(0, igraph::ecount(g))
-    igraph::E(g)$loop.angle[which(edge.start[,2]==edge.start[,1])]<-loop.angle[edge.start[which(edge.start[,2]==edge.start[,1]),1]]
+    if(sum(edge.start[,2]==edge.start[,1])!=0){
+      # Assign a valid value to every edge before setting self-loop angles.
+      igraph::E(g)$loop.angle <- rep(0, igraph::ecount(g))
+      igraph::E(g)$loop.angle[which(edge.start[,2]==edge.start[,1])]<-loop.angle[edge.start[which(edge.start[,2]==edge.start[,1]),1]]
+    }
   }
   radian.rescale <- function(x, start=0, direction=1) {
     c.rotate <- function(x) (x + start) %% (2 * pi) * direction
@@ -2736,7 +2738,7 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
   label.locs <- radian.rescale(x=1:length(igraph::V(g)), direction=-1, start=0)
   label.dist <- vertex.weight/max(vertex.weight)+2
   plot(g,edge.curved=edge.curved,vertex.shape=shape,layout=coords_scale,margin=margin, vertex.label.dist=label.dist,
-       edge.arrow.width = if (length(arrow.width) == 1L) arrow.width else igraph::E(g)$arrow.width,
+       edge.arrow.width = if (length(arrow.width) == 1L || igraph::ecount(g) == 0L) arrow.width[1L] else igraph::E(g)$arrow.width,
        vertex.label.degree=label.locs, vertex.label.family="Helvetica", edge.label.family="Helvetica") # "sans"
   if (!is.null(title.name)) {
     text(0,1.5,title.name, cex = 1.1)
@@ -2759,6 +2761,7 @@ netVisual_diffInteraction <- function(object, comparison = c(1,2), measure = c("
 #' Red (or blue) colored edges represent increased (or decreased) signaling in the second dataset compared to the first one.
 #'
 #' The top colored bar plot represents the sum of column of values displayed in the heatmap. The right colored bar plot represents the sum of row of values.
+#' A merged comparison with a nonempty all-zero displayed matrix is shown in a neutral color, indicating no difference in that selection.
 #'
 #'
 #' @param object A merged CellChat object or a single CellChat object
@@ -2912,11 +2915,17 @@ netVisual_heatmap <- function(
 
   # Opposite signed differences can cancel in the total while individual
   # entries still carry changes. Test for an entirely zero matrix instead.
-  if (all(mat == 0)) {
+  zero.comparison <- length(mat) > 0L && identical(object@misc$.mode, "merged") && all(mat == 0)
+  if (all(mat == 0) && !zero.comparison) {
     stop("No significant cell-cell communication is inferred!", '\n')
   }
 
-  if (min(mat) < 0) {
+  if (zero.comparison) {
+    # The comparison is valid: all displayed differences are exactly zero.
+    # A uniform neutral map and no numeric legend avoid inventing a range.
+    color.heatmap.use <- colorRamp3(c(-1, 1), c("#f7f7f7", "#f7f7f7"))
+    title.name <- paste0(title.name, " (no difference in displayed selection)")
+  } else if (min(mat) < 0) {
     color.heatmap.use = colorRamp3(c(min(mat), 0, max(mat)), c(color.heatmap[1], "#f7f7f7", color.heatmap[2]))
     colorbar.break <- c(round(min(mat, na.rm = T), digits = nchar(sub(".*\\.(0*).*","\\1",min(mat, na.rm = T)))+1), 0, round(max(mat, na.rm = T), digits = nchar(sub(".*\\.(0*).*","\\1",max(mat, na.rm = T)))+1))
     # color.heatmap.use = colorRamp3(c(seq(min(mat), -(max(mat)-min(max(mat)))/9, length.out = 4), 0, seq((max(mat)-min(max(mat)))/9, max(mat), length.out = 4)), RColorBrewer::brewer.pal(n = 9, name = color.heatmap))
@@ -2940,15 +2949,23 @@ netVisual_heatmap <- function(
                                       show_legend = FALSE, show_annotation_name = FALSE,
                                       simple_anno_size = grid::unit(0.2, "cm"))
 
-  ha1 = rowAnnotation(Strength = anno_barplot(rowSums(abs(mat)), border = FALSE,gp = gpar(fill = color.use, col=color.use)), show_annotation_name = FALSE)
-  ha2 = HeatmapAnnotation(Strength = anno_barplot(colSums(abs(mat)), border = FALSE,gp = gpar(fill = color.use, col=color.use)), show_annotation_name = FALSE)
-
-  if (sum(abs(unique(as.vector(mat))) > 0) == 1) {
-    if (!is.function(color.heatmap.use)) color.heatmap.use = c("white", color.heatmap.use)
+  if (zero.comparison) {
+    # An automatic bar axis on all-zero values invents a tiny positive range.
+    ha1 <- ha2 <- NULL
   } else {
-    mat[mat == 0] <- NA
+    ha1 = rowAnnotation(Strength = anno_barplot(rowSums(abs(mat)), border = FALSE,gp = gpar(fill = color.use, col=color.use)), show_annotation_name = FALSE)
+    ha2 = HeatmapAnnotation(Strength = anno_barplot(colSums(abs(mat)), border = FALSE,gp = gpar(fill = color.use, col=color.use)), show_annotation_name = FALSE)
+  }
+
+  if (!zero.comparison) {
+    if (sum(abs(unique(as.vector(mat))) > 0) == 1) {
+      if (!is.function(color.heatmap.use)) color.heatmap.use = c("white", color.heatmap.use)
+    } else {
+      mat[mat == 0] <- NA
+    }
   }
   ht1 = Heatmap(mat, col = color.heatmap.use, na_col = "white", name = legend.name,
+                show_heatmap_legend = !zero.comparison,
                 bottom_annotation = col_annotation, left_annotation =row_annotation, top_annotation = ha2, right_annotation = ha1,
                 cluster_rows = cluster.rows,cluster_columns = cluster.cols,
                 row_names_side = "left",row_names_rot = 0,row_names_gp = gpar(fontsize = font.size),column_names_gp = gpar(fontsize = font.size),

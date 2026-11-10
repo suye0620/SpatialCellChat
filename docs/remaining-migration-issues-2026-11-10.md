@@ -221,3 +221,22 @@ Location: `.sc_merge_assert_inputs()` and `mergeSpatialCellChat()` in `R/merging
 Cause and significance: the current contract intentionally requires identical assay gene order and identical group levels, and the downstream comparison paths interpret groups as corresponding named biological populations. A group missing from one dataset is not necessarily a measured zero. Automatically padding groups or relabeling these unrelated annotations could produce plausible but misleading comparisons. The current test evidence therefore does not establish an independent-sample biological comparison.
 
 Next direction: use independently acquired compatible samples with a defensible common annotation and aligned gene/DB inputs; separately decide how comparisons should represent groups or genes missing from one dataset before relaxing the existing contract. Merely having an identical stored DB does not establish sample comparability.
+
+
+## P5-015：真实 Visium 对象的零差异 merged 技术对照
+
+位置：`mergeSpatialCellChat()` 和比较绘图入口。此前 10 张比较图主要来自模拟对象和人为修改的副本，无法证明真实 fixture 经生产者进入同一链条后可以绘图。本次 `tests_dev/render-merged-visium-self-control.R` 将真实 Visium PP1（905 个 spot、6 个群、160 条 pathway）与其自身分别作为 `control_a`、`control_b` 传入真实生产者；逐项核对群 count、weight 和群中心性一致后，生成 10 个比较入口的 PDF，包括成对相似性、嵌入及其两种绘图。结果及警告记录位于 `tests_dev/figures/merged/visium-self-control-2026-11-11/`。
+
+性质与限制：这两个输入是同一份样本，结果是可验证的技术零差异，不能当作两个独立样本，也不能用于声称组间生物学等价。现有 Visium 和 Slide-seq 的原始基因轴及群注释不符合合并契约（P5-014），独立样本比较仍需合适数据。所有图像仍待人工视觉和生物学验收；依赖弃用等警告保存在 `warnings.csv`，PNG 转换提示缺少 ArialUnicode 字体。
+
+## P5-016：零差异热图错误地报告未推断到通讯
+
+位置：`R/visualization.R:netVisual_heatmap()`。原因：合并对象的矩阵是第二个数据集减第一个数据集；两者完全相同时，差异矩阵为零，但旧的全零检查把它解释成“未推断到通讯”并报错。本质：混淆了“有效比较的差异为零”和“单对象没有推断到通讯”。影响所有合并比较中显示范围恰好全零的 count/weight 热图。
+
+修复：对非空的全零 merged 比较保留原矩阵和群名称，以中性色绘制并明确标注“显示范围内无差异”，不生成虚构色标或零值柱图的自动微小刻度；单对象全零以及移除所有孤立群后的空选择仍沿用错误行为。`tests_dev/test-merged-heatmap-edgecases.R` 检查正负抵消、纯负变化、零矩阵和孤立群；`tests_dev/test-merged-zero-comparison.R` 检查 count/weight、轴名及单对象边界。
+
+## P5-017：零行信号变化和空连边网络
+
+位置：`R/analysis.R:netAnalysis_signalingChanges_scatter()` 和 `R/visualization.R:netVisual_diffInteraction()`。原因：既有 `rowSums(mat.diff) != 0` 筛选可能留下零行，随后给零行数据框赋单个值而报错；全零差异网络虽然能绘图，却对空边集求最大值并设置边属性，产生无意义警告。影响相同数据或筛选后没有保留通路/连边的 merged 比较。
+
+修复：零行散点图返回无点 ggplot，并说明“没有通路通过当前变化筛选”；不更改 `rowSums` 筛选或将此结果解释为所有方向均无变化。空边网络跳过边属性处理，保留原节点。聚焦测试包含真实零差异、非零相反方向抵消、`do.label` 开关，以及原有非零比较回归。该图提示不能替代后续对 P5-010 方向抵消语义的单独决策。

@@ -1,0 +1,14 @@
+"figure","warning"
+"rankNet","Vectorized input to `element_text()` is not officially supported.
+i Results may be unexpected or may change in future versions of ggplot2."
+"netVisual_barplot","`aes_string()` was deprecated in ggplot2 3.0.0.
+i Please use tidy evaluation idioms with `aes()`.
+i See also `vignette(""ggplot2-in-packages"")` for more information."
+"netVisual_barplot","The `<scale>` argument of `guides()` cannot be `FALSE`. Use ""none"" instead as
+of ggplot2 3.3.4."
+"netVisual_bubble","Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+i Please use `linewidth` instead."
+"netVisual_bubble","Vectorized input to `element_text()` is not officially supported.
+i Results may be unexpected or may change in future versions of ggplot2."
+"netAnalysis_diff_signalingRole_scatter","The `size` argument of `element_line()` is deprecated as of ggplot2 3.4.0.
+i Please use the `linewidth` argument instead."

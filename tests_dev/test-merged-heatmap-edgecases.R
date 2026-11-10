@@ -1,7 +1,7 @@
 # Reproduce signed cancellation, negative-only and zero merged heatmap cases.
 setwd(local({ a <- commandArgs(FALSE); f <- sub("^--file=", "", grep("^--file=", a, value=TRUE)); if (length(f)) dirname(dirname(normalizePath(f))) else getwd() }))
 source("tests_dev/test-merge-spatialcellchat.R", local = FALSE)
-out.dir <- "tests_dev/figures/merged/heatmap-edgecases"
+out.dir <- Sys.getenv("SCC_HEATMAP_TEST_OUT", "tests_dev/figures/merged/heatmap-edgecases")
 dir.create(out.dir, recursive = TRUE, showWarnings = FALSE)
 probe <- function(case) {
   obj <- merged
@@ -30,6 +30,7 @@ probe <- function(case) {
       delta <- delta[1:2, 1:2, drop = FALSE]
     }
     stopifnot(all(plotted[delta != 0] == delta[delta != 0]))
+    if (case == "zero") stopifnot(identical(dimnames(plotted), dimnames(delta)), all(plotted == 0))
     ""
   }, error = conditionMessage)
   if (nzchar(message) && file.exists(file)) unlink(file)
@@ -41,6 +42,7 @@ summary <- do.call(rbind, lapply(c("cancel", "negative", "balanced_isolates", "z
 print(summary)
 write.csv(summary, file.path(out.dir, "summary.csv"), row.names = FALSE)
 if (summary$status[1] != "PDF-WRITTEN" || summary$status[2] != "PDF-WRITTEN" ||
-    summary$status[3] != "PDF-WRITTEN" || any(summary$status[4:5] != "ERROR") ||
-    !all(grepl("No significant cell-cell communication", summary$detail[4:5], fixed = TRUE)))
+    summary$status[3] != "PDF-WRITTEN" || summary$status[4] != "PDF-WRITTEN" ||
+    summary$status[5] != "ERROR" ||
+    !grepl("No significant cell-cell communication", summary$detail[5], fixed = TRUE))
   quit(status = 1L)
