@@ -72,3 +72,12 @@
 浏览器 CDP 实测模拟、Visium、完整 Slide-seq 三套通讯流 widget 的初始化、细胞数量、动画移动、暂停、恢复及粒子数、透明度、缩放控件，结果见 `tests_dev/figures/P3/commun-flow-widget-browser-summary-2026-11-10.csv`。截图是在修改控件后捕获；hover、窗口尺寸变化及方向的科学正确性不在本次覆盖范围。
 
 Slide-seq LAMININ outgoing 的诊断中，29,536 个细胞有 19,474 个非零场向量；插值网格 2,401 个点中有 540 个非零。默认 skip=4 时统计层保留 100 行，不跳格保留 2,401 行；保留行可能含零向量，不能直接当作可见箭头数量。无跳格对照见 `tests_dev/figures/P3/slideseq/netVisual_CommunFieldGrid-no-skip.pdf`。对照预览仍有大量细小点且箭头不普遍清晰，不能把跳格视为唯一原因。这是显示抽样和场稀疏性诊断，不证明默认图已可读，也不能证明矢量的生物学正确性。
+
+
+## P3-014：网格向量聚合重复提取 sf 对象
+
+位置：`netVisual_CommunFieldGrid()` 和 `netVisual_CommunFlow()` 中按网格聚合 dx/dy 的环节。原实现为每个网格、每个分量分别对完整 `sf` 对象取行；完整 Slide-seq 生成 122,138 个网格，包含 93,317 个空网格，产生大量重复的空间对象子集开销。现在仅在此步骤预先提取 dx/dy 数值列，再按原始成员索引调用同一个 `median` 或 `sum`；网格、成员关系、空网格、缺失值、插值和向量方向均未改动。
+
+验证：`tests_dev/test-grid-visualization.R` 对空集合、零值、缺失值、无穷值和重复成员逐项比较原 sf 子集法，median 与 sum 均完全一致，并实绘两个入口。`tests_dev/benchmark-grid-field-aggregation.R` 的同进程单次合成对照（2,000 点、6,000 网格）中，median 聚合旧/新分别约 3.58/0.12 秒，sum 约 3.22/小于计时分辨率的 0.01 秒；仅为此聚合步骤，不是整个绘图的加速倍数。
+
+完整 Slide-seq 的 LAMININ outgoing 本次 Grid 和 Flow 对象构造分别约 23.97 和 23.79 秒，未包含字段计算和 PDF 输出。对照 PDF 以相同 `pdftoppm` 参数转为 PNG 后，优化前后 Grid 与 Flow 的 PNG 哈希均相同；对应原始 Grid 对照和 Flow 对照分别见 `tests_dev/figures/P3/slideseq/netVisual_CommunFieldGrid-no-skip.pdf` 和 `tests_dev/figures/P3/slideseq/netVisual_CommunFlow-adjusted.pdf`。旧的约 273 秒记录覆盖范围不同，不能计算整体加速倍数。显示问题和 `st_centroid` 警告仍待处理。

@@ -32,3 +32,8 @@
 在 R 4.4.3 下再次运行 `tests_dev/test-netvisual-group-migration.R`、`tests_dev/test-viz-p3-migration.R`、`tests_dev/test-viz-p4-migration.R` 和 `tests_dev/test-analysis-network-migration.R`，四项退出码均为 0。P2 新增的 `netAnalysis_contribution()`、`rankNet-netP` 和 `rankNet-net` 均在三套对象上写出 PDF。P3 测试仍报告部分点被移除、UMAP 初始嵌入尺度提示以及依赖包弃用提示；群网络测试也有绘图库弃用提示。另已在浏览器中检查三对象的 Shiny 选择与重置，具体范围见上述汇总。复测环境启动时报告 locale 设置失败和 renv out-of-sync，不能据此认定环境已独立复现。
 
 详细位置、原因、修复与待确认事项见 `docs/visualization-migration-P0-issues-2026-11-10.md` 至 `docs/visualization-migration-P4-issues-2026-11-10.md`。
+
+
+## 网格聚合性能复测
+
+Grid/Flow 的网格向量聚合已去除逐网格 `sf` 子集开销，并通过空网格、缺失值及两种聚合方法的等价性检查；完整 Slide-seq 两幅参数对照的优化前后渲染结果哈希一致。性能证据和比较范围见 `docs/visualization-migration-P3-issues-2026-11-10.md` 的 P3-014。该优化不意味着场图可读性问题已经解决。

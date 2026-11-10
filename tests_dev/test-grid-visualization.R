@@ -28,6 +28,23 @@ check <- function(label, condition) {
   cat("[PASS] ", label, "\n", sep = "")
 }
 
+
+# Compare the same membership indices against the previous sf-subsetting
+# implementation, including empty and multiply assigned boundary positions.
+field.fixture <- sf::st_as_sf(
+  data.frame(x = 1:5, y = 1:5, dx = c(0, 2, NA, Inf, -1),
+             dy = c(NA, -2, 0, -Inf, 4)), coords = c("x", "y"))
+groups.fixture <- list(integer(), 1L, c(1L, 2L), c(2L, 3L, 5L), 3L, c(4L, 5L))
+for (stat in list(median = stats::median, sum = base::sum)) {
+  expected.u <- vapply(groups.fixture, function(index)
+    stat(field.fixture[index, , drop = FALSE]$dx, na.rm = TRUE), numeric(1))
+  expected.v <- vapply(groups.fixture, function(index)
+    stat(field.fixture[index, , drop = FALSE]$dy, na.rm = TRUE), numeric(1))
+  actual <- .sc_grid_field_components(field.fixture, groups.fixture, stat)
+  check("grid field aggregation preserves sf-subsetting results including empty and missing values",
+        identical(actual$u, expected.u) && identical(actual$v, expected.v))
+}
+
 required <- c("oce", "metR")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing)) {

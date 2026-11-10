@@ -5750,6 +5750,18 @@ netVisual_CommunField <- function(
 }
 
 
+# Keep grid membership and empty-grid statistics unchanged while avoiding
+# repeated sf row subsetting for each grid cell and vector component.
+.sc_grid_field_components <- function(field, contained, field.mean) {
+  dx <- field$dx
+  dy <- field$dy
+  list(
+    u = vapply(contained, function(index) field.mean(dx[index], na.rm = TRUE), numeric(1)),
+    v = vapply(contained, function(index) field.mean(dy[index], na.rm = TRUE), numeric(1))
+  )
+}
+
+
 #' @title netVisual_CommunFieldGrid
 #' @description
 #' Aggregate and plot a communication vector field on a spatial grid.
@@ -5932,17 +5944,14 @@ netVisual_CommunFieldGrid <- function(
   } else {
     field.mean <- sum
   }
+  components <- .sc_grid_field_components(df.field, contained, field.mean)
   field.gridded <- square_grid_sf %>%
     mutate(
       id = seq_len(n()),
       contained = unname(contained),
       obs = vapply(contained, length, integer(1)),
-      u = vapply(contained, function(x) {
-        field.mean(df.field[x, , drop = FALSE]$dx, na.rm = TRUE)
-      }, numeric(1)),
-      v = vapply(contained, function(x) {
-        field.mean(df.field[x, , drop = FALSE]$dy, na.rm = TRUE)
-      }, numeric(1))
+      u = components$u,
+      v = components$v
     )
 
   # field.gridded = field.gridded %>% select(obs, u, v) %>% na.omit()
@@ -6308,17 +6317,14 @@ netVisual_CommunFlow <- function(
   } else {
     field.mean <- sum
   }
+  components <- .sc_grid_field_components(df.field, contained, field.mean)
   field.gridded <- square_grid_sf %>%
     mutate(
       id = seq_len(n()),
       contained = unname(contained),
       obs = vapply(contained, length, integer(1)),
-      u = vapply(contained, function(x) {
-        field.mean(df.field[x, , drop = FALSE]$dx, na.rm = TRUE)
-      }, numeric(1)),
-      v = vapply(contained, function(x) {
-        field.mean(df.field[x, , drop = FALSE]$dy, na.rm = TRUE)
-      }, numeric(1))
+      u = components$u,
+      v = components$v
     )
 
   # field.gridded = field.gridded %>% select(obs, u, v) %>% na.omit()
