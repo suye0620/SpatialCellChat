@@ -1,4 +1,4 @@
-Package: SpatialCellChat
+Package: SpatialCellChatDev
 Type: Package
 Title: Inference and analysis of cell-cell communication from spatial transcriptomics data
 Version: 0.1.0

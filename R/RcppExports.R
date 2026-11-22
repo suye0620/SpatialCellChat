@@ -2,22 +2,22 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 ComputeSNN <- function(nn_ranked, prune) {
-    .Call(`_SpatialCellChat_ComputeSNN`, nn_ranked, prune)
+    .Call(`_SpatialCellChatDev_ComputeSNN`, nn_ranked, prune)
 }
 
 cpp_sum_layers <- function(matrices) {
-    .Call(`_SpatialCellChat_cpp_sum_layers`, matrices)
+    .Call(`_SpatialCellChatDev_cpp_sum_layers`, matrices)
 }
 
 cpp_prob_layer <- function(x0, row0, col0, L, R, Kh, n, contact_mask, fAG, fAN, nC, nthreads = 1L) {
-    .Call(`_SpatialCellChat_cpp_prob_layer`, x0, row0, col0, L, R, Kh, n, contact_mask, fAG, fAN, nC, nthreads)
+    .Call(`_SpatialCellChatDev_cpp_prob_layer`, x0, row0, col0, L, R, Kh, n, contact_mask, fAG, fAN, nC, nthreads)
 }
 
 cpp_group_avg_obs <- function(x, idx, p, suppL, suppR, sr_out, sr_in, group_int, K, thr, min_cells_sr, avg_sum, nC) {
-    .Call(`_SpatialCellChat_cpp_group_avg_obs`, x, idx, p, suppL, suppR, sr_out, sr_in, group_int, K, thr, min_cells_sr, avg_sum, nC)
+    .Call(`_SpatialCellChatDev_cpp_group_avg_obs`, x, idx, p, suppL, suppR, sr_out, sr_in, group_int, K, thr, min_cells_sr, avg_sum, nC)
 }
 
 cpp_group_avg_perm <- function(x, idx, p, suppL, suppR, sr_out, sr_in, group_int, K, thr, min_cells_sr, avg_sum, perm, nthreads = 1L) {
-    .Call(`_SpatialCellChat_cpp_group_avg_perm`, x, idx, p, suppL, suppR, sr_out, sr_in, group_int, K, thr, min_cells_sr, avg_sum, perm, nthreads)
+    .Call(`_SpatialCellChatDev_cpp_group_avg_perm`, x, idx, p, suppL, suppR, sr_out, sr_in, group_int, K, thr, min_cells_sr, avg_sum, perm, nthreads)
 }
 

@@ -59,7 +59,7 @@ print.SparseChatArray <- function(x, ...) { ... }
     function = funcname,
     time = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
     params = params,
-    version = as.character(packageVersion("SpatialCellChat"))
+    version = as.character(packageVersion("SpatialCellChatDev"))
   )
   object@log <- c(object@log, list(entry))
   return(object)

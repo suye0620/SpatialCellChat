@@ -1,7 +1,7 @@
 args <- commandArgs(TRUE)
 if (length(args) != 3L) stop('usage: Rscript test-installed-visualization-smoke.R LIB CHAT OUTDIR')
 .libPaths(c(normalizePath(args[[1L]]), .libPaths()))
-suppressPackageStartupMessages(library(SpatialCellChat))
+suppressPackageStartupMessages(library(SpatialCellChatDev))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(ComplexHeatmap))
 suppressPackageStartupMessages(library(plotly))

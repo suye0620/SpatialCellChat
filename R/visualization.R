@@ -8952,7 +8952,7 @@ spatialLeePlot <- function(
         tol = tol.distance
       )
       if (!has_distance) {
-        resCellDistance <- SpatialCellChat::computeCellDistance(
+        resCellDistance <- computeCellDistance(
           coordinates = distance.coordinates,
           interaction.range = interaction.range,
           contact.range = contact.range,
@@ -8968,7 +8968,7 @@ spatialLeePlot <- function(
       } else if (lw.type == "interaction.range"){
         print("lw.type = interaction.range")
         d.spatial <- resCellDistance[["d.spatial"]]
-        P.spatial <- SpatialCellChat::createPspatialFrom_dspatial(d.spatial,distance.use = T)
+        P.spatial <- createPspatialFrom_dspatial(d.spatial,distance.use = T)
         Matrix::diag(P.spatial) <- 1
         lw <- spdep::mat2listw(P.spatial, style = "W") # all weights.
       }

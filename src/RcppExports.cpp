@@ -13,7 +13,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 
 // ComputeSNN
 Eigen::SparseMatrix<double> ComputeSNN(Eigen::MatrixXd nn_ranked, double prune);
-RcppExport SEXP _SpatialCellChat_ComputeSNN(SEXP nn_rankedSEXP, SEXP pruneSEXP) {
+RcppExport SEXP _SpatialCellChatDev_ComputeSNN(SEXP nn_rankedSEXP, SEXP pruneSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -25,7 +25,7 @@ END_RCPP
 }
 // cpp_sum_layers
 S4 cpp_sum_layers(List matrices);
-RcppExport SEXP _SpatialCellChat_cpp_sum_layers(SEXP matricesSEXP) {
+RcppExport SEXP _SpatialCellChatDev_cpp_sum_layers(SEXP matricesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -36,7 +36,7 @@ END_RCPP
 }
 // cpp_prob_layer
 Rcpp::List cpp_prob_layer(Rcpp::NumericVector x0, Rcpp::IntegerVector row0, Rcpp::IntegerVector col0, Rcpp::NumericVector L, Rcpp::NumericVector R, double Kh, double n, Rcpp::NumericVector contact_mask, Rcpp::Nullable<Rcpp::NumericVector> fAG, Rcpp::Nullable<Rcpp::NumericVector> fAN, int nC, int nthreads);
-RcppExport SEXP _SpatialCellChat_cpp_prob_layer(SEXP x0SEXP, SEXP row0SEXP, SEXP col0SEXP, SEXP LSEXP, SEXP RSEXP, SEXP KhSEXP, SEXP nSEXP, SEXP contact_maskSEXP, SEXP fAGSEXP, SEXP fANSEXP, SEXP nCSEXP, SEXP nthreadsSEXP) {
+RcppExport SEXP _SpatialCellChatDev_cpp_prob_layer(SEXP x0SEXP, SEXP row0SEXP, SEXP col0SEXP, SEXP LSEXP, SEXP RSEXP, SEXP KhSEXP, SEXP nSEXP, SEXP contact_maskSEXP, SEXP fAGSEXP, SEXP fANSEXP, SEXP nCSEXP, SEXP nthreadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -58,7 +58,7 @@ END_RCPP
 }
 // cpp_group_avg_obs
 Rcpp::NumericVector cpp_group_avg_obs(Rcpp::NumericVector x, Rcpp::IntegerVector idx, Rcpp::IntegerVector p, Rcpp::NumericVector suppL, Rcpp::NumericVector suppR, Rcpp::NumericVector sr_out, Rcpp::NumericVector sr_in, Rcpp::IntegerVector group_int, int K, Rcpp::IntegerVector thr, double min_cells_sr, int avg_sum, int nC);
-RcppExport SEXP _SpatialCellChat_cpp_group_avg_obs(SEXP xSEXP, SEXP idxSEXP, SEXP pSEXP, SEXP suppLSEXP, SEXP suppRSEXP, SEXP sr_outSEXP, SEXP sr_inSEXP, SEXP group_intSEXP, SEXP KSEXP, SEXP thrSEXP, SEXP min_cells_srSEXP, SEXP avg_sumSEXP, SEXP nCSEXP) {
+RcppExport SEXP _SpatialCellChatDev_cpp_group_avg_obs(SEXP xSEXP, SEXP idxSEXP, SEXP pSEXP, SEXP suppLSEXP, SEXP suppRSEXP, SEXP sr_outSEXP, SEXP sr_inSEXP, SEXP group_intSEXP, SEXP KSEXP, SEXP thrSEXP, SEXP min_cells_srSEXP, SEXP avg_sumSEXP, SEXP nCSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -81,7 +81,7 @@ END_RCPP
 }
 // cpp_group_avg_perm
 Rcpp::NumericMatrix cpp_group_avg_perm(Rcpp::NumericVector x, Rcpp::IntegerVector idx, Rcpp::IntegerVector p, Rcpp::NumericVector suppL, Rcpp::NumericVector suppR, Rcpp::NumericVector sr_out, Rcpp::NumericVector sr_in, Rcpp::IntegerVector group_int, int K, Rcpp::IntegerVector thr, double min_cells_sr, int avg_sum, Rcpp::IntegerMatrix perm, int nthreads);
-RcppExport SEXP _SpatialCellChat_cpp_group_avg_perm(SEXP xSEXP, SEXP idxSEXP, SEXP pSEXP, SEXP suppLSEXP, SEXP suppRSEXP, SEXP sr_outSEXP, SEXP sr_inSEXP, SEXP group_intSEXP, SEXP KSEXP, SEXP thrSEXP, SEXP min_cells_srSEXP, SEXP avg_sumSEXP, SEXP permSEXP, SEXP nthreadsSEXP) {
+RcppExport SEXP _SpatialCellChatDev_cpp_group_avg_perm(SEXP xSEXP, SEXP idxSEXP, SEXP pSEXP, SEXP suppLSEXP, SEXP suppRSEXP, SEXP sr_outSEXP, SEXP sr_inSEXP, SEXP group_intSEXP, SEXP KSEXP, SEXP thrSEXP, SEXP min_cells_srSEXP, SEXP avg_sumSEXP, SEXP permSEXP, SEXP nthreadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -105,15 +105,15 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_SpatialCellChat_ComputeSNN", (DL_FUNC) &_SpatialCellChat_ComputeSNN, 2},
-    {"_SpatialCellChat_cpp_sum_layers", (DL_FUNC) &_SpatialCellChat_cpp_sum_layers, 1},
-    {"_SpatialCellChat_cpp_prob_layer", (DL_FUNC) &_SpatialCellChat_cpp_prob_layer, 12},
-    {"_SpatialCellChat_cpp_group_avg_obs", (DL_FUNC) &_SpatialCellChat_cpp_group_avg_obs, 13},
-    {"_SpatialCellChat_cpp_group_avg_perm", (DL_FUNC) &_SpatialCellChat_cpp_group_avg_perm, 14},
+    {"_SpatialCellChatDev_ComputeSNN", (DL_FUNC) &_SpatialCellChatDev_ComputeSNN, 2},
+    {"_SpatialCellChatDev_cpp_sum_layers", (DL_FUNC) &_SpatialCellChatDev_cpp_sum_layers, 1},
+    {"_SpatialCellChatDev_cpp_prob_layer", (DL_FUNC) &_SpatialCellChatDev_cpp_prob_layer, 12},
+    {"_SpatialCellChatDev_cpp_group_avg_obs", (DL_FUNC) &_SpatialCellChatDev_cpp_group_avg_obs, 13},
+    {"_SpatialCellChatDev_cpp_group_avg_perm", (DL_FUNC) &_SpatialCellChatDev_cpp_group_avg_perm, 14},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_SpatialCellChat(DllInfo *dll) {
+RcppExport void R_init_SpatialCellChatDev(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

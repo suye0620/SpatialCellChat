@@ -49,8 +49,8 @@
     "function" = funcname,
     time = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
     params = params,
-    version = if (requireNamespace("SpatialCellChat", quietly = TRUE))
-      as.character(utils::packageVersion("SpatialCellChat")) else "development"
+    version = if (requireNamespace("SpatialCellChatDev", quietly = TRUE))
+      as.character(utils::packageVersion("SpatialCellChatDev")) else "development"
   )
   object@misc$.log <- c(object@misc$.log, list(entry))
   object

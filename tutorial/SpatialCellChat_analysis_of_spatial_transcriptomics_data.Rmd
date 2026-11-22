@@ -36,7 +36,7 @@ Upon infering the intercellular communication network, Spatial CellChat's variou
 
 ## Load the required libraries
 ```{r, message=FALSE, warning=FALSE}
-library(SpatialCellChat)
+library(SpatialCellChatDev)
 library(Matrix)
 library(patchwork)
 options(stringsAsFactors = F)

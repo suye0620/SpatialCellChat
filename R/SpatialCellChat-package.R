@@ -1,5 +1,5 @@
 ## usethis namespace: start
-#' @useDynLib SpatialCellChat, .registration = TRUE
+#' @useDynLib SpatialCellChatDev, .registration = TRUE
 ## usethis namespace: end
 NULL
 

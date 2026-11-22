@@ -82,7 +82,7 @@ asset.package <- attr(widget, "package")
 asset.dir <- if (identical(asset.package, "htmlwidgets")) {
   file.path(getwd(), "inst", "htmlwidgets")
 } else {
-  system.file("htmlwidgets", package = "SpatialCellChat")
+  system.file("htmlwidgets", package = "SpatialCellChatDev")
 }
 check("widget resolves local frontend assets in source or installed mode",
       ((identical(asset.package, "htmlwidgets") && length(widget$dependencies) == 1L &&
@@ -90,7 +90,7 @@ check("widget resolves local frontend assets in source or installed mode",
           identical(dependency$name, "spatialcellchat-commun-flow") &&
           identical(dependency$script, "spatialcellchat-commun-flow.js") &&
           identical(dependency$stylesheet, "spatialcellchat-commun-flow.css")) ||
-       (identical(asset.package, "SpatialCellChat") && is.null(dependency))) &&
+       (identical(asset.package, "SpatialCellChatDev") && is.null(dependency))) &&
         all(file.exists(file.path(asset.dir, c(
           "spatialcellchat-commun-flow.js", "spatialcellchat-commun-flow.css")))))
 

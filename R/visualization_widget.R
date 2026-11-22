@@ -63,7 +63,7 @@
     file.path(getwd(), "inst", "htmlwidgets"),
     winslash = "/", mustWork = FALSE
   )
-  installed.assets <- system.file("htmlwidgets", package = "SpatialCellChat")
+  installed.assets <- system.file("htmlwidgets", package = "SpatialCellChatDev")
   asset.dir <- if (nzchar(installed.assets) &&
                    all(file.exists(file.path(installed.assets, files)))) {
     installed.assets
@@ -71,7 +71,7 @@
     source.assets
   } else {
     stop(
-      "cannot locate communication-flow widget assets; reinstall SpatialCellChat or run from the package root",
+      "cannot locate communication-flow widget assets; reinstall SpatialCellChatDev or run from the package root",
       call. = FALSE
     )
   }
@@ -483,7 +483,7 @@ netVisual_CommunFlowWidget <- function(
       browser.fill = TRUE,
       knitr.figure = TRUE
     ),
-    package = if (assets$from.source) "htmlwidgets" else "SpatialCellChat",
+    package = if (assets$from.source) "htmlwidgets" else "SpatialCellChatDev",
     dependencies = if (assets$from.source) list(.sc_widget_dependency(assets)) else NULL
   )
 }
