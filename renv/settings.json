@@ -6,7 +6,8 @@
   "package.dependency.fields": [
     "Imports",
     "Depends",
-    "LinkingTo"
+    "LinkingTo",
+    "Config/Needs/renv"
   ],
   "ppm.enabled": null,
   "ppm.ignored.urls": [],

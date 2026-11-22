@@ -26,3 +26,4 @@ VignetteBuilder: knitr
 NeedsCompilation: yes
 Packaged: 2026-02
 Config/roxygen2/version: 8.0.0
+Config/Needs/renv: devtools, RcppML, metR, oce, spdep
