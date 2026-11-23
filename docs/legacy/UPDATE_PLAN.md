@@ -2,7 +2,7 @@
 
 > 2026-06-25 · 早期计划文档
 >
-> **状态：已过时，不作为当前实现依据。** 本文档记录的是早期 v3 讨论版，使用 `expression`、`communication`、`spatial` 等命名；当前开发应以 `DATA_STRUCTURE.md` 的最终 11-slot schema 和 `REFACTORING_PLAN.md` 的实施顺序为准。当前最终设计中，`.mode`、`.datatype` 位于 `misc` 内部，通信结果位于 `net` / `netP`，`SparseChatArray` 作为其中 `prob` / `pval` 的底层类型。
+> **状态：已过时，不作为当前实现依据。** 本文档记录的是早期 v3 讨论版，使用 `expression`、`communication`、`spatial` 等命名；当前开发应以 [DATA_STRUCTURE.md](../DATA_STRUCTURE.md) 的最终 11-slot schema 和 [REFACTORING_PLAN.md](../REFACTORING_PLAN.md) 的实施顺序为准。当前最终设计中，`.mode`、`.datatype` 位于 `misc` 内部，通信结果位于 `net` / `netP`，`SparseChatArray` 作为其中 `prob` / `pval` 的底层类型。
 
 ---
 
