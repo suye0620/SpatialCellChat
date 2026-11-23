@@ -17,6 +17,11 @@ pieChart(df, label.size = 2.5, color.use = NULL, title = "")
 
 \item{title}{the title of plot}
 }
+\value{
+A ggplot pie chart of category proportions.
+
+A ggplot pie chart of category proportions.
+}
 \description{
 Plot pie chart
 

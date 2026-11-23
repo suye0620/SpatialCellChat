@@ -65,6 +65,9 @@ netVisual_embeddingPairwise(
 
 \item{show.axes}{whether show the axes}
 }
+\value{
+A ggplot of pathway similarity embeddings across datasets.
+}
 \description{
 2D visualization of the joint manifold learning of signaling networks from two datasets
 }

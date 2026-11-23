@@ -2,7 +2,7 @@
 % Please edit documentation in R/analysis.R
 \name{computeCommunField}
 \alias{computeCommunField}
-\title{computeCommunField}
+\title{Compute communication vector fields from cell-level probabilities}
 \usage{
 computeCommunField(
   object,
@@ -13,19 +13,23 @@ computeCommunField(
 )
 }
 \arguments{
-\item{object}{SpatialCellChat object}
+\item{object}{A SpatialCellChat object.}
 
-\item{slot.name}{the slot name of object that is used for analysis}
+\item{slot.name}{Either `"net"` for ligand-receptor results or `"netP"`
+for pathway results.}
 
-\item{signaling.name}{alternative signaling pathway name used for analysis. If NULL, all the signaling pathways will be used}
+\item{signaling.name}{Optional layer names or numeric indices. `NULL`
+computes every cell-level probability layer.}
 
-\item{top}{the cutoff for selecting top signalings}
+\item{top}{Non-negative finite cutoff for selecting the strongest links.}
 
-\item{sparse}{whether to apply a sparse strategy for selecting top signalings}
+\item{sparse}{Logical; when `TRUE`, retain links whose cumulative weight is
+strictly below `top` times the node's total weight.}
 }
 \value{
-A SpatialCellChat object
+The object with `cell$field$outgoing` and `cell$field$incoming`
+  stored as `SparseChatArray` values.
 }
 \description{
-computeCommunField
+Compute communication vector fields from cell-level probabilities
 }

@@ -32,10 +32,10 @@ computeCommunProb(
 
 \item{LR.use}{Optional custom ligand-receptor table (same columns as `LR$LRsig`).}
 
-\item{raw.use}{\code{TRUE} (default) reads \code{assay$signaling}; \code{FALSE} reads
-\code{assay$smooth}, the PPI projection written by \link{projectData}. The two
-must cover the same genes, and \code{assay$smooth} is cleared by \code{subsetData()},
-so \code{projectData()} has to be re-run after any re-subsetting.}
+\item{raw.use}{`TRUE` (default) reads `assay$signaling`; `FALSE` reads
+`assay$smooth`, the PPI projection written by \link{projectData}. The two
+must cover the same genes, and `assay$smooth` is cleared by `subsetData()`,
+so `projectData()` has to be re-run after any re-subsetting.}
 
 \item{Kh}{Hill-function EC50 parameter (input is globally max-scaled to [0, 1]).}
 

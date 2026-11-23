@@ -44,6 +44,9 @@ netAnalysis_contribution(
 
 \item{font.size.title}{font size of the title}
 }
+\value{
+A ggplot, or a list of the LR contribution table and plot when return.data is TRUE.
+}
 \description{
 Compute and visualize the contribution of each ligand-receptor pair in the overall signaling pathways
 }

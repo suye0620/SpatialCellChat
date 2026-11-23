@@ -23,6 +23,9 @@ searchPair(
 
 \item{pair.only}{whether only return ligand-receptor pairs without cofactors}
 }
+\value{
+A data frame of matching ligand-receptor records.
+}
 \description{
 Subset the ligand-receptor interactions for given specific signals in CellChatDB
 }

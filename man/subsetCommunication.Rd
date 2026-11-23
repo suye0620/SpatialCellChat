@@ -25,11 +25,11 @@ subsetCommunication(
 )
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{SpatialCellChat object}
 
-\item{net}{Alternative input is a data frame with at least with three columns defining the cell-cell communication network ("source","target","interaction_name")}
+\item{net}{Alternative input is a data frame with at least three columns defining the cell-cell communication network ("source", "target", "interaction_name")}
 
-\item{slot.name}{the slot name of object: slot.name = "net" when extracting the inferred communications at the level of ligands/receptors; slot.name = "netP" when extracting the inferred communications at the level of signaling pathways}
+\item{slot.name}{the slot name of object: `slot.name = "net"` extracts ligand/receptor-level communication; `slot.name = "netP"` extracts pathway-level communication from `netP$group$prob`. In the `"netP"` path, pathway layers join `LR$pathway_name` (the first matching LR row supplies annotation metadata), and the p-value column is explicitly `NA` because pathway layers have no p-value slot.}
 
 \item{sources.use}{a vector giving the index or the name of source cell groups}
 
@@ -56,7 +56,7 @@ ligand.pct.2: threshold for the percent of expressed genes in the cells except f
 \item{receptor.pvalues, receptor.logFC, receptor.pct.1, receptor.pct.2}{set threshold for receptor genes}
 }
 \value{
-If input object is created from a single dataset, a data frame of the inferred cell-cell communications of interest, consisting of source, target, interaction_name, pathway_name, prob and other information
+If input object is created from a single dataset, a data frame of the inferred cell-cell communications of interest, consisting of source, target, interaction_name, pathway_name, prob and other information. For `slot.name = "netP"`, the output is pathway-level and includes an explicit `pval` column of `NA` values.
 
 If input object is a merged object from multiple datasets, it will return a list and each element is a data frame for one dataset
 }

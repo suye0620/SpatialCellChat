@@ -5,7 +5,7 @@
 \alias{PPI.mouse}
 \title{Mouse Protein-Protein interactions}
 \format{
-A square matrix where A_{ij}=1 if protein i interacts with protein j
+A square matrix where \eqn{A_{ij}=1} if protein i interacts with protein j
 }
 \source{
 \url{http://www.string-db.org/}

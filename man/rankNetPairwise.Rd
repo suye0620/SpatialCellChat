@@ -11,6 +11,9 @@ rankNetPairwise(object, LR.use = NULL)
 
 \item{LR.use}{ligand-receptor interactions used in inferring communication network}
 }
+\value{
+The merged object with pairwise LR rankings saved in its network results.
+}
 \description{
 Rank ligand-receptor interactions for any pair of two cell groups
 }

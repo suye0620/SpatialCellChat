@@ -8,6 +8,8 @@
 #'   override for fine control). Only shown when
 #'   getOption("SpatialCellChat.verbose", 1L) >= .verbose.
 #' @param ... passed to cli::cli_alert_*
+#' @param .env The environment used by cli for interpolating expressions.
+#' @return The result of the selected cli message function, invisibly.
 #' @noRd
 .cli <- function(text, .type = "info", ..., .verbose = NULL, .env = parent.frame()) {
   lvl <- .verbose %||% switch(.type,
@@ -37,12 +39,22 @@
 }
 
 #' Internal progress permission shared by inference functions
+#' @param verbose Logical. FALSE disables ordinary CLI messages and progress.
+#' TRUE follows `options(SpatialCellChat.verbose = 0L)`, `1L`, or `2L` for
+#' quiet, normal, or detailed output and never overrides global quiet.
+#' Progress also respects progressr's enable policy; noninteractive scripts
+#' must opt in, for example with `options(progressr.enable = TRUE)`.
+#' @return A logical scalar indicating whether progress messages are enabled.
 #' @noRd
 .sc_progress_enabled <- function(verbose = TRUE) {
   isTRUE(verbose) && getOption("SpatialCellChat.verbose", 1L) > 0
 }
 
 #' Internal helper to log operations on a SpatialCellChat object
+#' @param object A SpatialCellChat object.
+#' @param funcname Name of the function to record in the operation log.
+#' @param params parameters
+#' @return The SpatialCellChat object with the operation appended to its log.
 #' @noRd
 .log_operation <- function(object, funcname, params = list()) {
   entry <- list(
@@ -179,6 +191,9 @@ asSeurat <- function(object,
 }
 
 #' Cell-level centrality of one direction as a features x cells matrix
+#' @param centr.cell The stored cell-level centrality array.
+#' @param direction The direction of signaling to process, or the scale direction for a plot.
+#' @return A measures-by-node centrality matrix with canonical names.
 #' @noRd
 .sc_centrality_matrix <- function(centr.cell, direction) {
   measure <- if (identical(direction, "outgoing")) "outdeg" else "indeg"
@@ -190,6 +205,9 @@ asSeurat <- function(object,
 }
 
 #' Keep a layer only when it can live next to `target` in the same Seurat assay
+#' @param layer An assay layer name or the layer value used by the caller.
+#' @param target The spatial reference to compare against the input.
+#' @return A logical scalar indicating whether the supplied spatial reference entries agree.
 #' @noRd
 .sc_same_space <- function(layer, target) {
   if (is.null(layer) || sum(dim(layer)) == 0) return(NULL)
@@ -199,6 +217,16 @@ asSeurat <- function(object,
 }
 
 #' Shared Seurat construction: metadata, image, idents, features.info
+#' @param object A SpatialCellChat object.
+#' @param counts Optional matrix used as the \code{counts} layer instead of
+#' \code{assay$raw} / \code{assay$norm}. Ignored when \code{slot.name} is \code{"net"}/\code{"netP"}.
+#' @param data The data object processed by the current helper.
+#' @param scale A vector of length 2 indicating the range of the size of the words.
+#' @param assay.name The assay name to set in the target object.
+#' @param group.by Metadata column used for \code{Idents()}. Defaults to
+#' \code{group.cellchat}, which is built from \code{idents(object)}.
+#' @param features.info Optional data frame of feature metadata.
+#' @return A Seurat object containing the aligned expression layers and cell metadata.
 #' @noRd
 .sc_seurat_assemble <- function(object, counts, data = NULL, scale = NULL,
                                 assay.name = "Spatial", group.by = NULL,
@@ -233,6 +261,9 @@ asSeurat <- function(object,
 }
 
 #' Optional visual check of a converted object
+#' @param seu The converted Seurat object.
+#' @param assay.name Name of the assay to validate in the Seurat object.
+#' @return The validated Seurat object, invisibly.
 #' @noRd
 .sc_seurat_check <- function(seu, assay.name) {
   cat("Check the converted Seurat object by visualizing spatial clustering...")
@@ -249,6 +280,21 @@ asSeurat <- function(object,
 }
 
 #' Convert one SpatialCellChat object
+#' @param object A SpatialCellChat object.
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param what Centrality direction to write. Ignored when
+#' \code{slot.name = "assay"}.
+#' @param counts Optional matrix used as the \code{counts} layer instead of
+#' \code{assay$raw} / \code{assay$norm}. Ignored when \code{slot.name} is \code{"net"}/\code{"netP"}.
+#' @param normalize.chat Whether to run \code{\link[Seurat]{NormalizeData}} on the
+#' centrality matrix. Only used when \code{slot.name} is \code{"net"}/\code{"netP"}.
+#' @param normalization.method Passed to \code{\link[Seurat]{NormalizeData}}.
+#' @param assay.name The assay name to set in the target object.
+#' @param group.by Metadata column used for \code{Idents()}. Defaults to
+#' \code{group.cellchat}, which is built from \code{idents(object)}.
+#' @param check.object Whether to plot the converted object. Only used when
+#' \code{slot.name = "assay"}.
+#' @return A Seurat object representing the selected SpatialCellChat dataset.
 #' @noRd
 .sc_as_seurat_one <- function(object, slot.name, what, counts, normalize.chat,
                               normalization.method, assay.name, group.by,
@@ -342,6 +388,21 @@ asSeurat <- function(object,
 }
 
 #' Convert and merge a list of SpatialCellChat objects
+#' @param object.list The input list of SpatialCellChat objects.
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param what Centrality direction to write. Ignored when
+#' \code{slot.name = "assay"}.
+#' @param counts Optional matrix used as the \code{counts} layer instead of
+#' \code{assay$raw} / \code{assay$norm}. Ignored when \code{slot.name} is \code{"net"}/\code{"netP"}.
+#' @param normalize.chat Whether to run \code{\link[Seurat]{NormalizeData}} on the
+#' centrality matrix. Only used when \code{slot.name} is \code{"net"}/\code{"netP"}.
+#' @param normalization.method Passed to \code{\link[Seurat]{NormalizeData}}.
+#' @param assay.name The assay name to set in the target object.
+#' @param group.by Metadata column used for \code{Idents()}. Defaults to
+#' \code{group.cellchat}, which is built from \code{idents(object)}.
+#' @param check.object Whether to plot the converted object. Only used when
+#' \code{slot.name = "assay"}.
+#' @return A list of Seurat objects, one per dataset.
 #' @noRd
 .sc_as_seurat_list <- function(object.list, slot.name, what, counts,
                                normalize.chat, normalization.method,
@@ -446,9 +507,8 @@ my_obj_size <- function(...){
 #' @description
 #' Set working directory to the path of currently opened file (usually an R script). You can use this function in both .R/.Rmd files and R Console. RStudio (version >= 1.2) is required for running this function.
 #'
-#' @return
+#' @return The result of setting the working directory, invisibly.
 #' @export
-#'
 setpwd <- function(){
   base::setwd(base::dirname(rstudioapi::getActiveDocumentContext()$path))
 }
@@ -458,9 +518,9 @@ setpwd <- function(){
 #' Generate 4 kinds of cli symbols: 'success','fail','info','output'
 #'
 #' @param symbol A string in `c('success','fail','info','output')` or a integer from `1:4` respectively
+#' @return The glyph for the requested message type.
 #' @importFrom cli col_green col_red col_grey col_br_red symbol
 #'
-#' @return
 #' @export
 #'
 #' @examples
@@ -492,6 +552,7 @@ cli.symbol <- function(symbol=NULL){
 #' @param future.globals.maxSize Passed to \code{options(future.globals.maxSize)}.
 #' @param gc Whether to run garbage collector on each future worker.
 #' @param conda_env Path to conda environment (passed to \code{reticulate::use_condaenv}).
+#' @return Invisibly returns NULL after configuring the session or reporting invalid workers.
 #' @export
 setEnvironment <- function(workers,
                             verbose = getOption("SpatialCellChat.verbose", 1L),
@@ -752,6 +813,12 @@ preProcessing <- function(object, slot.name = c("signaling", "norm"),
 
 
 # Internal sparse-safe normalization helper.
+#' Normalize expression at the matrix level
+#' @param data.raw input raw data
+#' @param scale.factor the scaling factor used for each cell
+#' @param do.log whether do log transformation with pseudocount 1
+#' @return A normalized expression matrix with the original axis names.
+#' @noRd
 .sc_normalize_matrix <- function(data.raw, scale.factor = 10000, do.log = TRUE) {
   if (!is.matrix(data.raw) && !inherits(data.raw, "Matrix"))
     stop("data.raw must be a numeric matrix or Matrix object", call. = FALSE)
@@ -847,10 +914,10 @@ normalizeData <- function(data.raw, scale.factor = 10000, do.log = TRUE,
 
 #' Scale the data
 #'
-#' @param data.use input data
+#' @param data.use A numeric expression matrix with genes as rows and cells as columns.
 #' @param do.center whether center the values
+#' @return The scaled expression matrix with the original orientation.
 #' @export
-#'
 scaleData <- function(data.use, do.center = T) {
   data.use <- Matrix::t(scale(Matrix::t(data.use), center = do.center, scale = TRUE))
   return(data.use)
@@ -862,11 +929,9 @@ scaleData <- function(data.use, do.center = T) {
 #' @param x data matrix
 #' @param scale the method to scale the data
 #' @param na.rm whether remove na
+#' @return A scaled matrix with the original axis names.
 #' @importFrom Matrix rowMeans colMeans rowSums colSums
-#' @return
 #' @export
-#'
-#' @examples
 scaleMat <- function(x, scale, na.rm=TRUE){
 
   av <- c("none", "row", "column", 'r1', 'c1')
@@ -960,10 +1025,8 @@ sketchData <-
 #' @param meta cell information to be added
 #' @param meta.name the name of column to be assigned
 #'
-#' @return
+#' @return The SpatialCellChat object with the supplied metadata.
 #' @export
-#'
-#' @examples
 addMeta <- function(object, meta, meta.name = NULL) {
   if (is.null(x = meta.name) && is.atomic(x = meta)) {
     stop("'meta.name' must be provided for atomic meta types (eg. vectors)")
@@ -1070,6 +1133,9 @@ setIdent <- function(object, ident.use = NULL, levels = NULL) {
 #' TRUE when every old label maps to exactly one new label and every new label
 #' comes from exactly one old label, i.e. the pairing is a bijection on the
 #' observed labels. Merges, splits and genuine regrouping return FALSE.
+#' @param old The legacy slot or object being converted.
+#' @param new The new identity vector, aligned to the same observations.
+#' @return A logical scalar indicating whether both identity vectors encode the same partition.
 #' @noRd
 .sc_same_partition <- function(old, new) {
   old <- as.character(old)
@@ -1084,6 +1150,11 @@ setIdent <- function(object, ident.use = NULL, levels = NULL) {
 #'
 #' Observed levels are matched by content; levels with no cells are paired with
 #' the leftover new levels in ascending level order.
+#' @param old.idents The original factor of assigned group identities.
+#' @param new.idents The replacement factor of assigned group identities.
+#' @param old.levels The original named group axis in level order.
+#' @param new.levels The replacement named group axis in level order.
+#' @return The mapping from old group levels to their corresponding new levels.
 #' @noRd
 .sc_group_level_map <- function(old.idents, new.idents, old.levels, new.levels) {
   tab <- table(as.character(old.idents), as.character(new.idents)) > 0
@@ -1104,6 +1175,11 @@ setIdent <- function(object, ident.use = NULL, levels = NULL) {
 }
 
 #' Reorder and relabel every group-indexed layer
+#' @param object A SpatialCellChat object.
+#' @param old.idents The original factor of assigned group identities.
+#' @param old.levels The original named group axis in level order.
+#' @param new.levels The replacement named group axis in level order.
+#' @return The network list with the group axes relabeled and reordered.
 #' @noRd
 .sc_reindex_group_layers <- function(object, old.idents, old.levels, new.levels) {
   map <- .sc_group_level_map(old.idents, idents(object), old.levels, new.levels)
@@ -1150,6 +1226,8 @@ setIdent <- function(object, ident.use = NULL, levels = NULL) {
 }
 
 #' Does the object still carry group-level results?
+#' @param object A SpatialCellChat object.
+#' @return A logical scalar indicating whether group-level results are present.
 #' @noRd
 .sc_has_group_layers <- function(object) {
   !is.null(object@net[["group"]][["prob"]]) ||
@@ -1159,6 +1237,8 @@ setIdent <- function(object, ident.use = NULL, levels = NULL) {
 }
 
 #' Drop every group-level result, keep the cell-level probabilities
+#' @param object A SpatialCellChat object.
+#' @return The network list with invalidated group-level results removed.
 #' @noRd
 .sc_drop_group_layers <- function(object) {
   object@net$group <- list()
@@ -1218,11 +1298,19 @@ updateClusterLabels <- function(object, old.cluster.name = NULL, new.cluster.nam
 
 
 
+#' Clean a vector of gene identifiers
+#' @param value The input or replacement value.
+#' @return Unique, nonempty gene names.
+#' @noRd
 .sc_clean_gene_names <- function(value) {
   value <- as.character(value)
   value[!is.na(value) & nzchar(value)]
 }
 
+#' Read the subunits of database complexes
+#' @param complex_input the complex_input from CellChatDB
+#' @return A named list of complex subunit names.
+#' @noRd
 .sc_complex_subunits <- function(complex_input) {
   if (!is.data.frame(complex_input) || !nrow(complex_input)) return(list())
   subunit_cols <- grep("subunit", colnames(complex_input), value = TRUE,
@@ -1239,6 +1327,11 @@ updateClusterLabels <- function(object, old.cluster.name = NULL, new.cluster.nam
   result[!duplicated(names(result))]
 }
 
+#' Find genes used by selected interactions
+#' @param interaction_input Selected rows of the interaction annotation table.
+#' @param DB object@net object@LR object@DB
+#' @return A character vector of genes used by the selected interaction database records.
+#' @noRd
 .sc_db_signaling_genes <- function(interaction_input, DB) {
   genes <- .sc_clean_gene_names(unlist(
     interaction_input[, c("ligand", "receptor"), drop = FALSE],
@@ -1274,6 +1367,13 @@ updateClusterLabels <- function(object, old.cluster.name = NULL, new.cluster.nam
   unique(.sc_clean_gene_names(genes))
 }
 
+#' Classify selected genes and complexes
+#' @param symbol A string in `c('success','fail','info','output')` or a integer from `1:4` respectively
+#' @param selected The set of features selected for analysis.
+#' @param gene.use Names of genes available in the current assay.
+#' @param complex_subunits Named list of gene constituents for each annotated complex.
+#' @return The feature-selection state of the gene or of its constituent complex subunits.
+#' @noRd
 .sc_lr_feature_state <- function(symbol, selected, gene.use, complex_subunits) {
   symbol <- as.character(symbol)[[1L]]
   if (is.na(symbol) || !nzchar(symbol))
@@ -1384,11 +1484,19 @@ subsetData <- function(object, features = NULL) {
 #' @param thresh.pc Minimum expressing-cell fraction.
 #' @param thresh.fc Minimum log fold change.
 #' @param thresh.p Maximum p-value.
-#' @inheritParams makeGridSpatialCellChat
 #'
+#' @param cellsize Numeric vector of length 1 or 2. We use [sf::st_make_grid()] to make grid data. It is a numeric vector
+#' of length 1 or 2 with target cellsize, please see details in [sf::st_make_grid()]:
+#' for square or rectangular cells the width and height, for hexagonal cells the distance between
+#' opposite edges (edge length is cellsize/sqrt(3)). A length units object can be passed,
+#' or an area unit object with area size of the square or hexagonal cell.
+#'
+#' Tips: Please run `computeGridSize` to get a proper `cellsize`.the unit of the `cellsize` you input is "pixel" or a unit used in old CellChat object's coordinates
+#' @param what Character. One of: "polygons", "corners", or "centers". See details in [sf::st_make_grid()]
+#' @param square Boolean. If FALSE, create hexagonal grid. See details in [sf::st_make_grid()]
+#' @param invert whether invert the idents.use
 #' @return A SpatialCellChat object or a data frame of feature statistics.
 #' @export
-#'
 identifyOverExpressedGenes <- function(
     object,
     do.grid = FALSE,
@@ -1754,7 +1862,7 @@ identifyOverExpressedLigandReceptor <- function(object, features.name = "feature
 #'
 #' @param object A SpatialCellChat object.
 #' @param features.name Name of the selected feature vector in
-#'   \\code{misc$.var.features}.
+#'   \code{misc$.var.features}.
 #' @param features Optional explicit selected feature vector.
 #' @param variable.both If TRUE, both ligand and receptor must be selected;
 #'   otherwise either side may be selected. Both sides must be available in the
@@ -1840,6 +1948,7 @@ identifyOverExpressedInteractions <- function(object, features.name = "features"
 #' mix two different gene spaces.
 #'
 #' @param adjMatrix adjacency matrix supplied by the user
+#' @noRd
 #' @return `TRUE`, invisibly; errors otherwise
 #' @keywords internal
 .sc_validate_adjacency <- function(adjMatrix) {
@@ -2073,6 +2182,7 @@ randomWalkBySolve <- function(E, A, alpha, normalizeAdjMatrix=c('rows','columns'
 #' @param normalizeAdjMatrix  which dimension to normalize the adjacency by
 #' @param tol    absolute tolerance on the largest entry-wise change
 #' @param max.iter maximum number of iterations
+#' @noRd
 #' @return network-smoothed gene expression
 #' @keywords internal
 randomWalkByIterations <- function(E, A, alpha,
@@ -2136,12 +2246,10 @@ projectFromNetworkRecombine <- function(original_expression, projected_expressio
 #' @param dimPC the number of components to keep
 #' @param seed.use set a seed
 #' @param weight.by.var whether use weighted pc.scores
+#' @return The PCA result for the supplied data.
 #' @importFrom stats prcomp
 #' @importFrom irlba irlba
-#' @return
 #' @export
-#'
-#' @examples
 runPCA <- function(data.use, do.fast = T, dimPC = 50, seed.use = 42, weight.by.var = T) {
   set.seed(seed = seed.use)
   if (do.fast) {
@@ -2194,9 +2302,9 @@ runPCA <- function(data.use, do.fast = T, dimPC = 50, seed.use = 42, weight.by.v
 #' @param b More specific parameters controlling the embedding. If NULL, these values are set automatically as determined by min. dist and spread.
 #' @param seed.use Set a random seed. By default, sets the seed to 42.
 #' @param metric_kwds,angular_rp_forest,verbose other parameters used in UMAP
+#' @return The result of the selected backend, containing the embedding coordinates.
 #' @import reticulate
 #' @export
-#'
 runUMAP <- function(
   data.use,
   n_neighbors = 30L,
@@ -2247,6 +2355,9 @@ runUMAP <- function(
   return(umap_output)
 }
 
+#' Check availability of the Seurat dependencies
+#' @return An invisible result when all required packages are available. Missing dependencies raise an error.
+#' @noRd
 .error_if_no_Seurat <- function() {
   if (!requireNamespace("Seurat", quietly = TRUE)) {
     stop("Seurat installation required for working with Seurat objects")
@@ -2352,6 +2463,12 @@ colorRamp3 = function(breaks, colors, transparency = 0, space = "RGB") {
   return(fun)
 }
 
+#' Clamp numeric values to an interval
+#' @param x The value to inspect or transform.
+#' @param lower The lower allowed value.
+#' @param upper The upper allowed value.
+#' @return Numeric values bounded by lower and upper.
+#' @noRd
 .restrict_in = function(x, lower, upper) {
   x[x > upper] = upper
   x[x < lower] = lower
@@ -2363,6 +2480,15 @@ colorRamp3 = function(breaks, colors, transparency = 0, space = "RGB") {
 # break2 single value
 # rgb1 vector with 3 elements
 # rgb2 vector with 3 elements
+#' Interpolate colors over a numeric interval
+#' @param x The value to inspect or transform.
+#' @param break1 The lower color interpolation endpoint.
+#' @param break2 The upper color interpolation endpoint.
+#' @param col1 The color at the lower endpoint.
+#' @param col2 The color at the upper endpoint.
+#' @param space The color space used for interpolation.
+#' @return Color strings for the requested values.
+#' @noRd
 .get_color = function(x, break1, break2, col1, col2, space) {
 
   col1 = colorspace::coords(as(colorspace::sRGB(col1[1], col1[2], col1[3]), space))

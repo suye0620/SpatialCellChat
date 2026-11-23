@@ -26,6 +26,9 @@ computeNetSimilarityPairwise(
 
 \item{thresh}{the fraction (0 to 0.25) of interactions to be trimmed before computing network similarity}
 }
+\value{
+The merged object with pairwise signaling similarities stored under the chosen network and similarity type.
+}
 \description{
 Compute signaling network similarity for any pair of datasets
 }

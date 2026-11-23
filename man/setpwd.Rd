@@ -6,6 +6,9 @@
 \usage{
 setpwd()
 }
+\value{
+The result of setting the working directory, invisibly.
+}
 \description{
 Set working directory to the path of currently opened file (usually an R script). You can use this function in both .R/.Rmd files and R Console. RStudio (version >= 1.2) is required for running this function.
 }

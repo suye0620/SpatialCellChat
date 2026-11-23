@@ -89,7 +89,9 @@ For spatial transcriptomics in a single-cell resolution, `contact.range` is appr
 
 \item{x.lab.rot}{rotation angle of x-axis tick labels}
 
-\item{row.show, col.show}{a vector giving the index or the name of row or columns to show in the heatmap}
+\item{row.show}{a vector giving the index or the name of row or columns to show in the heatmap}
+
+\item{col.show}{a vector giving the index or the name of row or columns to show in the heatmap}
 }
 \value{
 a ggplot2 object

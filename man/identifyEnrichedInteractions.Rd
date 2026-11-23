@@ -28,11 +28,11 @@ identifyEnrichedInteractions(
 \item{pairLR.use0}{ligand-receptor pairs to use; default is all the significant interactions}
 
 \item{thresh}{p-value threshold used to select candidate interactions when
-\code{pairLR.use0} is NULL. The historical final filtering also uses 0.05.}
+`pairLR.use0` is NULL. The historical final filtering also uses 0.05.}
 }
 \value{
 A data frame for a single object, or a named list of data frames for
-a merged object, one per dataset. Run \code{rankNetPairwise()} first.
+  a merged object, one per dataset. Run `rankNetPairwise()` first.
 }
 \description{
 Identify all the significant interactions (L-R pairs) from some cell groups to other cell groups

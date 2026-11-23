@@ -39,6 +39,9 @@ algorithm to optimise more accurately with regard to local structure. Sensible v
 
 \item{...}{Parameters passing to umap}
 }
+\value{
+The object with the embedding stored in the selected network's similarity results.
+}
 \description{
 Manifold learning of the signaling networks based on their similarity
 }

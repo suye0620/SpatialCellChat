@@ -13,6 +13,9 @@ extractGeneSubset(geneSet, complex_input, geneIfo)
 
 \item{geneIfo}{official gene symbol}
 }
+\value{
+A character vector of genes associated with the selected signaling pathways.
+}
 \description{
 Extract the gene name
 }

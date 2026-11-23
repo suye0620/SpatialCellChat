@@ -6,6 +6,10 @@ custom_legend <- list(
   font = list(size = 12)
 )
 
+#' Define equal-height Plotly subplot domains
+#' @param nrow Number of subplot rows.
+#' @return A list of normalized vertical intervals.
+#' @noRd
 generate_grid_nrows <- function(nrow = 1L) {
   if (length(nrow) != 1L || !is.numeric(nrow) || is.na(nrow) ||
       nrow < 1 || nrow != as.integer(nrow))
@@ -13,6 +17,13 @@ generate_grid_nrows <- function(nrow = 1L) {
   list(rows = as.integer(nrow), columns = 1L, pattern = "independent")
 }
 
+#' Create the Plotly scene settings for a subplot
+#' @param row The vertical domain of the subplot.
+#' @param z.space The spacing along the vertical axis of the 3D scene.
+#' @param projection The Plotly camera projection setting.
+#' @param zoom The Plotly camera scaling factor.
+#' @return A list of 3D scene settings including axis and camera configuration.
+#' @noRd
 generate_custom_scenes3d <- function(row = 0, z.space = 0,
                                      projection = "orthographic", zoom = 2.5) {
   if (length(row) != 1L || !is.numeric(row) || is.na(row) || row < 0)
@@ -42,8 +53,6 @@ generate_custom_scenes3d <- function(row = 0, z.space = 0,
 #' @param object cellchat object
 #' @param color.use defining the color for each cell group
 #' @param group.by Name of one metadata columns to group (color) cells. Default is the defined cell groups in CellChat object
-# #' @param label whether labeling cell groups
-# #' @param label.size Sets the size of the labels
 #' @param sources.use a vector giving the index or the name of source cell groups
 #' @param targets.use a vector giving the index or the name of target cell groups
 #' @param idents.use a vector giving the index or the name of cell groups of interest
@@ -59,7 +68,14 @@ generate_custom_scenes3d <- function(row = 0, z.space = 0,
 #' @param legend.text.size the text size on the legend
 #' @param legend.position,ncol,byrow parameters for configurating the plot
 #' @param legend.spacing a two-elements vector respectively specifying legend.key.spacing.x and legend.key.spacing.y for spacing apart legend key-label pairs
-#' @return
+#' @param plot_coordinates Optional precomputed plotting coordinates and image geometry.
+#' @param raster If true, plot with geom_raster, else use geom_tile. geom_raster may look blurry on
+#' some viewing applications such as Preview due to how the raster is interpolated. Set this to FALSE
+#' if you are encountering that issue (note that plots may take longer to produce/render).
+#' @param image.alpha Transparency of individual spots.
+#' @param coord_limits Optional plot limits in the displayed coordinate system.
+#' @return A ggplot or a patchwork composition of the requested spatial panels.
+#' @noRd
 #' @export
 spatialDimPlotPoints <- function(object, color.use = NULL, group.by = NULL,
                                  sources.use = NULL, targets.use = NULL, idents.use = NULL,
@@ -236,6 +252,7 @@ spatialDimPlotPoints <- function(object, color.use = NULL, group.by = NULL,
 #' @param legend.spacing Legend spacing.
 #' @param ncol Number of legend columns.
 #' @param byrow Whether legends fill by row.
+#' @return A ggplot or patchwork composition showing the spatial distribution of the requested groups.
 #' @export
 spatialDimPlot <- function(object, color.use = NULL, group.by = NULL,
                            sources.use = NULL, targets.use = NULL, idents.use = NULL,
@@ -322,6 +339,13 @@ spatialDimPlot <- function(object, color.use = NULL, group.by = NULL,
 }
 
 
+#' Resolve communication layers that remain active after filtering
+#' @param object A SpatialCellChat object.
+#' @param pair.names Requested ligand-receptor layer names.
+#' @param do.group whether to compute the group-level signaling based on the cell group information in `object@idents`
+#' @param thresh threshold of the p-value for determining significant interaction
+#' @return The retained LR names.
+#' @noRd
 .sc_spatial_feature_active_lr <- function(object, pair.names, do.group, thresh) {
   resolution <- if (isTRUE(do.group)) "group" else "cell"
   branch <- object@net[[resolution]]
@@ -381,9 +405,8 @@ spatialDimPlot <- function(object, color.use = NULL, group.by = NULL,
 #' @param ncol number of columns if plotting multiple plots
 #' @param show.legend whether show each figure legend
 #' @param show.legend.combined whether show the figure legend for the last plot
-#' @return
+#' @return The spatial plot or a composition of the requested feature or signaling panels.
 #' @export
-#'
 spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR.use = NULL,slot.name=c("signaling", "norm", "data.signaling", "data"),
                                enriched.only = TRUE,thresh = 0.05, do.group = TRUE,
                                color.heatmap = NULL, n.colors = 8, direction = -1,
@@ -650,7 +673,7 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
 #' @param combined whether outputting an combined plot using patchwork
 #' @param show.legend whether show each figure legend
 #' @param show.legend.combined whether show the figure legend for the last plot
-#' @return
+#' @return Spatial score plots for the selected measures, optionally combined into a single figure.
 #' @export
 
 spatialVisual_scoring <- function(object, signaling, method = "centrality", measure = c("outdeg","indeg"), measure.name = c("outgoing", "incoming"), merge = FALSE,
@@ -869,10 +892,9 @@ spatialVisual_scoring <- function(object, signaling, method = "centrality", meas
 
 #' ggplot theme in CellChat
 #'
-#' @return
+#' @return A ggplot2 theme for communication network plots.
 #' @export
 #'
-#' @examples
 #' @importFrom ggplot2 theme_classic element_rect theme element_blank element_line element_text
 CellChat_theme_opts <- function() {
   theme(strip.background = element_rect(colour = "white", fill = "white")) +
@@ -890,9 +912,9 @@ CellChat_theme_opts <- function() {
 #' Generate ggplot2 colors
 #'
 #' @param n number of colors to generate
+#' @return A character vector of colors in hexadecimal format.
 #' @importFrom grDevices hcl
 #' @export
-#'
 ggPalette <- function(n) {
   hues = seq(15, 375, length = n + 1)
   grDevices::hcl(h = hues, l = 65, c = 100)[1:n]
@@ -933,7 +955,6 @@ scPalette <- function(n) {
 #' @param remove.isolate whether remove the isolate nodes in the communication network
 #' @param weight.scale whether scale the edge weight
 #' @param vertex.weight The weight of vertex: either a scale value or a vector
-
 #'
 #' Default is a scale value being 1, indicating all vertex is plotted in the same size;
 #'
@@ -973,14 +994,11 @@ scPalette <- function(n) {
 #'
 #' @param ... other parameters (e.g.,vertex.label.cex, vertex.label.color, alpha.edge, label.edge, edge.label.color, edge.label.cex, edge.curved)
 #'  passing to `netVisual_hierarchy1`,`netVisual_hierarchy2`,`netVisual_circle`. NB: some parameters might be not supported
+#' @return A recorded network plot for base graphics layouts, a ggplot for the spatial layout, or the combined plots from the selected layout.
 #' @importFrom svglite svglite
 #' @importFrom grDevices dev.off pdf
 #'
-#' @return
 #' @export
-#'
-#' @examples
-#'
 netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL, vertex.receiver = NULL, sources.use = NULL, targets.use = NULL, top = 1, remove.isolate = FALSE,
                       vertex.weight = 1, vertex.weight.max = NULL, vertex.size.max = NULL,
                       weight.scale = TRUE, edge.weight.max.individual = NULL, edge.weight.max.aggregate = NULL, edge.width.max=8,
@@ -1263,6 +1281,10 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
 }
 
 
+#' Resolve snapshot names for visualization
+#' @param object A SpatialCellChat object.
+#' @return A character vector of validated dataset names.
+#' @noRd
 .sc_viz_merged_dataset_names <- function(object) {
   if (!identical(object@misc$.mode, "merged"))
     stop("comparison plotting requires a merged SpatialCellChat object.", call. = FALSE)
@@ -1273,6 +1295,11 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
   names(datasets)
 }
 
+#' Resolve the pair of datasets to compare
+#' @param comparison a numerical vector giving the datasets for comparison
+#' @param dataset.names The validated names of the source datasets.
+#' @return Two validated integer dataset indices.
+#' @noRd
 .sc_viz_merged_index <- function(comparison, dataset.names) {
   if (is.null(comparison)) comparison <- seq_along(dataset.names)
   if (!is.numeric(comparison) || anyNA(comparison) ||
@@ -1283,6 +1310,14 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
   as.integer(comparison)
 }
 
+#' Recover a group network matrix from one merged snapshot
+#' @param object A SpatialCellChat object.
+#' @param dataset The name of a dataset snapshot, or NULL for the top-level object.
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param measure "count" or "weight". "count": comparing the number of interactions; "weight": comparing the total interaction weights (strength)
+#' @param thresh threshold of the p-value for determining significant interaction
+#' @return A named group-by-group matrix of the requested measure.
+#' @noRd
 .sc_viz_merged_group_matrix <- function(object, dataset, slot.name = "net",
                                         measure = c("count", "weight", "count.merged",
                                                     "weight.merged"),
@@ -1333,6 +1368,11 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
   value
 }
 
+#' Check that a merged object can be plotted in one spatial frame
+#' @param object A SpatialCellChat object.
+#' @param caller Name of the plotting function used in any error message.
+#' @return The input object, invisibly. Incompatible geometry raises an error.
+#' @noRd
 .sc_assert_shared_spatial_coordinates <- function(object, caller) {
   if (methods::is(object, "SpatialCellChat") &&
       identical(object@images$coordinate.scope, "dataset-local"))
@@ -1342,6 +1382,13 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
   invisible(object)
 }
 
+#' Subtract the first group matrix from the second
+#' @param object A SpatialCellChat object.
+#' @param comparison a numerical vector giving the datasets for comparison
+#' @param measure "count" or "weight". "count": comparing the number of interactions; "weight": comparing the total interaction weights (strength)
+#' @param thresh threshold of the p-value for determining significant interaction
+#' @return A list with the signed difference, dataset names, and indices.
+#' @noRd
 .sc_viz_merged_difference <- function(object, comparison, measure, thresh = 0.05) {
   datasets <- .sc_viz_merged_dataset_names(object)
   comparison <- .sc_viz_merged_index(comparison, datasets)
@@ -1355,6 +1402,13 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
     stop("compared group matrices must have identical named axes.", call. = FALSE)
   list(value = second - first, datasets = datasets[comparison], comparison = comparison)
 }
+#' Gather the group-level layers for selected LR pairs
+#' @param object A SpatialCellChat object.
+#' @param signaling Please check the description in function \code{\link{subsetCommunication}}
+#' @param thresh threshold of the p-value for determining significant interaction
+#' @param pairLR.use Please check the description in function \code{\link{subsetCommunication}}
+#' @return A list containing a dense group probability array, the aligned LR table, and layer names.
+#' @noRd
 .sc_viz_group_lr <- function(object, signaling, thresh, pairLR.use = NULL) {
   prob <- object@net$group$prob
   pval <- object@net$group$pval
@@ -1386,6 +1440,14 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
   list(prob = values, pairs = pairs[selected, , drop = FALSE], names = selected)
 }
 
+#' Resolve a group-level matrix for plotting
+#' @param object A SpatialCellChat object.
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param signaling Please check the description in function \code{\link{subsetCommunication}}
+#' @param measure "count" or "weight". "count": comparing the number of interactions; "weight": comparing the total interaction weights (strength)
+#' @param thresh threshold of the p-value for determining significant interaction
+#' @return A matrix with the requested signaling weights and threshold applied where supported.
+#' @noRd
 .sc_viz_group_matrix <- function(object, slot.name, signaling = NULL, measure = NULL, thresh = NULL) {
   branch <- slot(object, slot.name)$group
   if (is.null(signaling)) {
@@ -1403,6 +1465,11 @@ netVisual <- function(object, signaling, signaling.name = NULL, color.use = NULL
   mat
 }
 
+#' Convert group LR results into a plotting table
+#' @param object A SpatialCellChat object.
+#' @param thresh threshold of the p-value for determining significant interaction
+#' @return A data frame of positive edges annotated with LR metadata, or NULL when no edges are available.
+#' @noRd
 .sc_viz_group_edges <- function(object, thresh) {
   branch <- object@net$group
   prob <- branch$prob
@@ -2336,8 +2403,8 @@ netVisual_circle <-function(net, color.use = NULL,title.name = NULL, sources.use
 #' @param coords coordinates of points
 #' @param v vetex
 #' @param params parameters
+#' @return An igraph vertex drawing function.
 #' @importFrom graphics symbols
-#' @return
 mycircle <- function(coords, v=NULL, params) {
   vertex.color <- params("vertex", "color")
   if (length(vertex.color) != 1 && !is.null(v)) {
@@ -3113,11 +3180,11 @@ netVisual_barplot <- function(object, comparison = c(1,2), measure = c("count", 
 #' @param angle.x,vjust.x,hjust.x parameters for adjusting the rotation of xtick labels
 #' @param return.data whether return the data.frame for replotting
 #'
-#' @return
+#' @return A ggplot, or a list containing the communication table and plot when return.data is TRUE.
 #' @export
 #'
 #' @examples
-#'\dontrun{
+#' \dontrun{
 #' # show all the significant interactions (L-R pairs) from some cell groups (defined by 'sources.use') to other cell groups (defined by 'targets.use')
 #' netVisual_bubble(cellchat, sources.use = 4, targets.use = c(5:11), remove.isolate = FALSE)
 #'
@@ -3139,12 +3206,12 @@ netVisual_barplot <- function(object, comparison = c(1,2), measure = c("count", 
 #' # (5) sort cell pairs based on the targets.use and then sources.use defined by users
 #' netVisual_bubble(cellchat, sources.use = c("FBN1+ FIB","APOE+ FIB","Inflam. FIB"), targets.use = c("LC","Inflam. DC","cDC2","CD40LG+ TC"), pairLR.use = pairLR.use, remove.isolate = TRUE, sort.by.source = T, sort.by.target = T, sort.by.source.priority = FALSE)
 #'
-#'# show all the increased interactions in the second dataset compared to the first dataset
+#' # show all the increased interactions in the second dataset compared to the first dataset
 #' netVisual_bubble(cellchat, sources.use = 4, targets.use = c(5:8), remove.isolate = TRUE, max.dataset = 2)
 #'
-#'# show all the decreased interactions in the second dataset compared to the first dataset
+#' # show all the decreased interactions in the second dataset compared to the first dataset
 #' netVisual_bubble(cellchat, sources.use = 4, targets.use = c(5:8), remove.isolate = TRUE, max.dataset = 1)
-#'}
+#' }
 netVisual_bubble <- function(object, sources.use = NULL, targets.use = NULL, signaling = NULL, pairLR.use = NULL, sort.by.source = FALSE, sort.by.target = FALSE, sort.by.source.priority = TRUE, color.heatmap = c("Spectral","viridis"), n.colors = 10, direction = -1, thresh = 0.05,
                              comparison = NULL, group = NULL, remove.isolate = FALSE, max.dataset = NULL, min.dataset = NULL,
                              min.quantile = 0, max.quantile = 1, line.on = TRUE, line.size = 0.2, color.text.use = TRUE, color.text = NULL,
@@ -3755,6 +3822,14 @@ netVisual_chord_cell_internal <- function(net, color.use = NULL, group = NULL, c
 
 
 # Draw one exterior label per displayed sector. The chord inputs are untouched.
+#' Draw outside labels for gene chord sectors
+#' @param grid.col The named colors of the chord sectors.
+#' @param lab.cex font size for the text
+#' @param legend The legend objects or labels accompanying the chord plot.
+#' @param legend.pos.x adjust the legend position
+#' @param legend.pos.y adjust the legend position
+#' @return NULL invisibly after drawing the labels on the active device.
+#' @noRd
 .sc_chord_gene_outside_labels <- function(grid.col, lab.cex, legend = NULL,
                                            legend.pos.x = 20, legend.pos.y = 20) {
   sectors <- circlize::get.all.sector.index()
@@ -4090,18 +4165,15 @@ netVisual_chord_gene <- function(object, slot.name = "net", color.use = NULL,
 #' @param main.title the title of plot
 #' @param font.size font size of the text
 #' @param font.size.title font size of the title
+#' @return A ggplot or combined plot showing communication pattern flows.
 #' @importFrom methods slot
 #' @importFrom stats cutree dist hclust
 #' @importFrom grDevices colorRampPalette
 #' @importFrom RColorBrewer brewer.pal
 #' @import ggalluvial
-# #' @importFrom ggalluvial geom_stratum geom_flow to_lodes_form
 #' @importFrom ggplot2 geom_text scale_x_discrete scale_fill_manual theme ggtitle
 #' @importFrom cowplot plot_grid ggdraw draw_label
-#' @return
 #' @export
-#'
-#' @examples
 netAnalysis_river <- function(object, slot.name = "netP", pattern = c("outgoing","incoming"), cutoff = 0.5,
                               sources.use = NULL, targets.use = NULL, signaling = NULL,
                               color.use = NULL, color.use.pattern = NULL, color.use.signaling = "grey50",
@@ -4346,13 +4418,11 @@ netAnalysis_river <- function(object, slot.name = "netP", pattern = c("outgoing"
 #' @param main.title the title of plot
 #' @param font.size font size of the text
 #' @param font.size.title font size of the title
+#' @return A ggplot showing cell or signaling memberships in communication patterns.
 #' @importFrom methods slot
 #' @import ggplot2
 #' @importFrom dplyr group_by top_n
-#' @return
 #' @export
-#'
-#' @examples
 netAnalysis_dot <- function(object, slot.name = "netP", pattern = c("outgoing","incoming"), cutoff = NULL, color.use = NULL,
                             pathway.show = NULL, group.show = NULL,
                             shape = 21, dot.size = c(1, 3), dot.alpha = 1, main.title = NULL,
@@ -4436,30 +4506,13 @@ netAnalysis_dot <- function(object, slot.name = "netP", pattern = c("outgoing","
 #'
 #' @param object CellChat object
 #' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks
-#' @param type "functional","structural"
-#' @param pathway.labeled a char vector giving the signaling names to show when labeling each point
-#' @param top.label the fraction of signaling pathways to label
-#' @param pathway.remove a character vector defining the signaling to remove
-#' @param pathway.remove.show whether show the removed signaling names
-#' @param color.use defining the color for each cell group
-#' @param dot.size a range defining the size of the symbol
-#' @param dot.alpha transparency
-#' @param xlabel label of x-axis
-#' @param ylabel label of y-axis
-#' @param title main title of the plot
-#' @param font.size font size of the text
-#' @param font.size.title font size of the title
-#' @param label.size font size of the text
-#' @param do.label label the each point
-#' @param show.legend whether show the legend
-#' @param show.axes whether show the axes
+#' @param dataset The name of a dataset snapshot, or NULL for the top-level object.
+#' @return A dense array of group communication layers for the selected dataset.
+#' @noRd
 #' @import ggplot2
 #' @importFrom ggrepel geom_text_repel
 #' @importFrom methods slot
-#' @return
 #' @export
-#'
-#' @examples
 .sc_viz_snapshot_group_prob_array <- function(object, slot.name, dataset) {
   record <- object@misc$.datasets[[dataset]]
   branch <- if (is.list(record)) record[[slot.name]]$group else NULL
@@ -4471,6 +4524,17 @@ netAnalysis_dot <- function(object, slot.name = "netP", pattern = c("outgoing","
   for (layer.name in dn[[3L]]) value[, , layer.name] <- as.matrix(prob[[layer.name]])
   value
 }
+#' Align pathway embedding, cluster, and weight data for plotting
+#' @param object A SpatialCellChat object.
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param type methods for computing the average gene expression per cell group.
+#'
+#' By default = "triMean", defined as a weighted average of the distribution's median and its two quartiles (https://en.wikipedia.org/wiki/Trimean);
+#'
+#' When setting \code{type = "truncatedMean"}, a value should be assigned to 'trim'. See the function \code{\link[base]{mean}}.
+#' @param pathway.remove a range of the number of patterns
+#' @return A list with a plotting data frame and the removed pathway names.
+#' @noRd
 .sc_viz_embedding_data <- function(object, slot.name, type, pathway.remove = NULL) {
   result <- methods::slot(object, slot.name)
   similarity <- result$similarity[[type]]
@@ -4502,6 +4566,28 @@ netAnalysis_dot <- function(object, slot.name = "netP", pattern = c("outgoing","
        removed = pathway.remove)
 }
 
+#' 2D visualization of the learned manifold of signaling networks
+#' @param object CellChat object
+#' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks
+#' @param type "functional","structural"
+#' @param color.use defining the color for each cell group
+#' @param pathway.labeled a char vector giving the signaling names to show when labeling each point
+#' @param top.label the fraction of signaling pathways to label
+#' @param pathway.remove a character vector defining the signaling to remove
+#' @param pathway.remove.show whether show the removed signaling names
+#' @param dot.size a range defining the size of the symbol
+#' @param label.size font size of the text
+#' @param dot.alpha transparency
+#' @param xlabel label of x-axis
+#' @param ylabel label of y-axis
+#' @param title main title of the plot
+#' @param font.size font size of the text
+#' @param font.size.title font size of the title
+#' @param do.label label the each point
+#' @param show.legend whether show the legend
+#' @param show.axes whether show the axes
+#' @export
+#' @return A ggplot of the selected pathway similarity embedding.
 netVisual_embedding <- function(object, slot.name = "netP", type = c("functional","structural"), color.use = NULL, pathway.labeled = NULL, top.label = 1, pathway.remove = NULL, pathway.remove.show = TRUE, dot.size = c(2, 6), label.size = 2, dot.alpha = 0.5,
                                 xlabel = "Dim 1", ylabel = "Dim 2", title = NULL,
                                 font.size = 10, font.size.title = 12, do.label = T, show.legend = T, show.axes = T) {
@@ -4577,14 +4663,12 @@ netVisual_embedding <- function(object, slot.name = "netP", type = c("functional
 #' @param do.label label the each point
 #' @param show.legend whether show the legend
 #' @param show.axes whether show the axes
+#' @return A combined ggplot showing selected groups of pathway embeddings.
 #' @import ggplot2
 #' @importFrom ggrepel geom_text_repel
 #' @importFrom cowplot plot_grid
 #' @importFrom methods slot
-#' @return
 #' @export
-#'
-#' @examples
 netVisual_embeddingZoomIn <- function(object, slot.name = "netP", type = c("functional","structural"), color.use = NULL, pathway.remove = NULL,  nCol = 1, dot.size = c(2, 6), label.size = 2.8, dot.alpha = 0.5,
                                       xlabel = NULL, ylabel = NULL, do.label = T, show.legend = F, show.axes = T) {
   type <- match.arg(type)
@@ -4655,13 +4739,11 @@ netVisual_embeddingZoomIn <- function(object, slot.name = "netP", type = c("func
 #' @param do.label label the each point
 #' @param show.legend whether show the legend
 #' @param show.axes whether show the axes
+#' @return A ggplot of pathway similarity embeddings across datasets.
 #' @import ggplot2
 #' @importFrom ggrepel geom_text_repel
 #' @importFrom methods slot
-#' @return
 #' @export
-#'
-#' @examples
 netVisual_embeddingPairwise <- function(object, slot.name = "netP", type = c("functional","structural"), comparison = NULL, color.use = NULL, point.shape = NULL, pathway.labeled = NULL, top.label = 1, pathway.remove = NULL, pathway.remove.show = TRUE, dot.size = c(2, 6), label.size = 2.5, dot.alpha = 0.5,
                                         xlabel = "Dim 1", ylabel = "Dim 2", title = NULL,do.label = T, show.legend = T, show.axes = T) {
   type <- match.arg(type)
@@ -4788,13 +4870,11 @@ netVisual_embeddingPairwise <- function(object, slot.name = "netP", type = c("fu
 #' @param do.label label the each point
 #' @param show.legend whether show the legend
 #' @param show.axes whether show the axes
+#' @return A combined ggplot showing the selected clusters from the pairwise embedding.
 #' @import ggplot2
 #' @importFrom ggrepel geom_text_repel
 #' @importFrom methods slot
-#' @return
 #' @export
-#'
-#' @examples
 netVisual_embeddingPairwiseZoomIn <- function(object, slot.name = "netP", type = c("functional","structural"), comparison = NULL, color.use = NULL, nCol = 1, point.shape = NULL, pathway.remove = NULL, dot.size = c(2, 6), label.size = 2.8, dot.alpha = 0.5,
                                               xlabel = NULL, ylabel = NULL, do.label = T, show.legend = F, show.axes = T) {
 
@@ -4945,8 +5025,6 @@ netVisual_embeddingPairwiseZoomIn <- function(object, slot.name = "netP", type =
 #'
 #' @return ggplot2 object
 #' @export
-#' @examples
-#'
 #' @import ggplot2
 netVisual_TopicComposition <- function(
     object,
@@ -5931,6 +6009,11 @@ netVisual_CommunField <- function(
 }
 
 
+#' Validate scalar or endpoint-specific arrow widths
+#' @param value The input or replacement value.
+#' @param name The input name to include in diagnostics.
+#' @return A two-element numeric vector of starting and ending line widths.
+#' @noRd
 .sc_resolve_arrow_width <- function(value, name = "arrow.line.width") {
   if (!is.numeric(value) || !length(value) %in% c(1L, 2L) ||
       any(!is.finite(value)) || any(value <= 0) ||
@@ -5944,6 +6027,12 @@ netVisual_CommunField <- function(
 
 # Keep grid membership and empty-grid statistics unchanged while avoiding
 # repeated sf row subsetting for each grid cell and vector component.
+#' Aggregate directional field components into grid cells
+#' @param field The spatial coordinate and directional-component data.
+#' @param contained Per-grid lists of the observation indices contained in each cell.
+#' @param field.mean The function used to summarize coordinates or vector components.
+#' @return A list of aggregated horizontal and vertical components.
+#' @noRd
 .sc_grid_field_components <- function(field, contained, field.mean) {
   dx <- field$dx
   dy <- field$dy
@@ -6313,6 +6402,11 @@ netVisual_CommunFieldGrid <- function(
 
 
 # Verify metR's zero-vector handling without changing the caller's random state.
+#' Build a small plot to inspect streamline integration
+#' @param stat The streamline statistics object to probe.
+#' @param dy The vertical component used in the streamline probe.
+#' @return The layer data returned by building the probe plot.
+#' @noRd
 .sc_streamline_probe <- function(stat, dy) {
   had.seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
   if (had.seed) saved.seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
@@ -6344,6 +6438,13 @@ netVisual_CommunFieldGrid <- function(
 }
 
 # Clone only the vetted affected integrator; do not modify metR's namespace.
+#' Choose the compatible metR streamline statistic
+#' @param base.stat The statistic provided by the installed metR package.
+#' @param version The installed metR version.
+#' @param namespace The metR namespace containing the original implementation.
+#' @param probe The function used to check a candidate statistic on a probe field.
+#' @return A ggproto statistic verified by the integration probe.
+#' @noRd
 .sc_resolve_streamline_stat <- function(base.stat, version, namespace, probe = .sc_streamline_probe) {
   exact <- probe(base.stat, -1)
   near <- probe(base.stat, -0.999)
@@ -6396,6 +6497,10 @@ netVisual_CommunFieldGrid <- function(
 })
 
 # A finite zero field has no streamlines; metR cannot integrate it reliably.
+#' Check whether a finite vector field is entirely zero
+#' @param data The data object processed by the current helper.
+#' @return A logical scalar.
+#' @noRd
 .sc_is_zero_streamline_data <- function(data) {
   is.data.frame(data) && nrow(data) > 0L &&
     all(c("u", "v") %in% names(data)) &&
@@ -6404,6 +6509,10 @@ netVisual_CommunFieldGrid <- function(
     all(data$u == 0) && all(data$v == 0)
 }
 
+#' Guard a streamline layer against a zero field
+#' @param layer An assay layer name or the layer value used by the caller.
+#' @return The layer with guarded computation.
+#' @noRd
 .sc_guard_streamline_layer <- function(layer) {
   if (identical(layer$stat, metR::StatStreamline)) {
     if (.sc_is_zero_streamline_data(layer$data)) {
@@ -6788,7 +6897,27 @@ netVisual_CommunFlow <- function(
 #' @title netVisual_CommunFieldZoomIn
 #' @param object SpatialCellChat object
 #' @param zoom.pt.size a numeric value specifying the point size used in the zoomed-in view
-#' @inheritParams netVisual_CommunField
+#' @param signaling a signaling pathway or ligand-receptor pair to visualize
+#' @param slot.name the slot name of object. Set is to be "netP" if input signaling is a pathway name; Set is to be "net" if input signaling is a ligand-receptor pair
+#' @param pattern "outgoing" or "incoming"
+#' @param color.use defining the color for each cell group
+#' @param point.size the size of spots
+#' @param zoom.to an integer specifying the zoom level for spatial visualization.
+#' If \code{0}, no zooming is applied and the full field is shown.
+#' If greater than 0, the spatial area is divided into \code{zoom.to + 1}
+#' equal intervals along each axis
+#' @param anchor.x a numeric value between 0 and 1 specifying the relative horizontal position of the zoom anchor, used to select the zoomed region along the x-axis
+#' @param anchor.y a numeric value between 0 and 1 specifying the relative vertical position of the zoom anchor, used to select the zoomed region along the y-axis
+#' @param alpha.image the transparency of individual spots
+#' @param arrow.angle the angle of arrows
+#' @param arrow.length the length of arrows
+#' @param arrow.size the size of arrows
+#' @param arrow.color the color of arrows
+#' @param ... other parameters passing to metR::geom_arrow
+#' @param legend.size the size of legend
+#' @param legend.text.size the text size on the legend
+#' @param plot.title.name title name of the plot
+#' @param plot.title.text.size the text size of the title
 #' @import ggplot2
 #'
 #' @return ggplot2 object
@@ -6878,11 +7007,10 @@ netVisual_CommunFieldZoomIn <- function(
 #'
 #' @param CellChatDB CellChatDB databse
 #' @param nrow the number of rows in the plot
+#' @return A combined ggplot summarizing database interaction categories.
 #' @importFrom dplyr group_by summarise n %>%
 #'
-#' @return
 #' @export
-#'
 showDatabaseCategory <- function(CellChatDB, nrow = 1) {
   interaction_input <- CellChatDB$interaction
   geneIfo <- CellChatDB$geneInfo
@@ -6914,13 +7042,12 @@ showDatabaseCategory <- function(CellChatDB, nrow = 1) {
 #' @param label.size a character
 #' @param color.use the name of the variable in CellChatDB interaction_input
 #' @param title the title of plot
+#' @return A ggplot pie chart of category proportions.
 #' @import ggplot2
 #' @importFrom scales percent
 #' @importFrom dplyr arrange desc mutate
 #' @importFrom ggrepel geom_text_repel
-#' @return
 #' @export
-#'
 pieChart <- function(df, label.size = 2.5, color.use = NULL, title = "") {
   df %>% arrange(dplyr::desc(value)) %>%
     mutate(prop = scales::percent(value/sum(value))) -> df
@@ -6961,10 +7088,8 @@ pieChart <- function(df, label.size = 2.5, color.use = NULL, title = "") {
 #' @param color.use defining the color for each cell group
 #' @param group.by Name of one metadata columns to group (color) cells. Default is the defined cell groups in CellChat object
 #' @param ... other arguments passing to either VlnPlot or DotPlot from Seurat package
-#' @return
+#' @return The requested expression visualization as a ggplot or combined plot.
 #' @export
-#'
-#' @examples
 
 plotGeneExpression <- function(object, features = NULL, signaling = NULL, enriched.only = TRUE, type = c("violin", "dot","bar"), color.use = NULL, group.by = NULL, ...) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -7015,7 +7140,7 @@ plotGeneExpression <- function(object, features = NULL, signaling = NULL, enrich
 
 #' Dot plot
 #'
-#'The size of the dot encodes the percentage of cells within a class, while the color encodes the AverageExpression level across all cells within a class
+#' The size of the dot encodes the percentage of cells within a class, while the color encodes the AverageExpression level across all cells within a class
 #'
 #' @param object seurat object
 #' @param features Features to plot (gene expression, metrics)
@@ -7042,7 +7167,6 @@ plotGeneExpression <- function(object, features = NULL, signaling = NULL, enrich
 #' @return ggplot2 object
 #' @export
 #'
-#' @examples
 #' @import ggplot2
 dotPlot <- function(object, features, rotation = TRUE, colormap = "OrRd", color.direction = 1,  color.use = c("#F8766D","#00BFC4"), scale = TRUE, col.min = -2.5, col.max = 2.5, dot.scale = 6, assay = "RNA",
                     idents = NULL, group.by = NULL, split.by = NULL, legend.width = 0.5,
@@ -7098,7 +7222,6 @@ dotPlot <- function(object, features, rotation = TRUE, colormap = "OrRd", color.
 #' @return ggplot2 object
 #' @export
 #'
-#' @examples
 #' @import ggplot2
 #' @importFrom  patchwork wrap_plots
 StackedVlnPlot<- function(object, features, idents = NULL, split.by = NULL,
@@ -7156,8 +7279,8 @@ StackedVlnPlot<- function(object, features, idents = NULL, split.by = NULL,
 #' @param pt.size size of the dots
 #' @param plot.margin adjust the white space between each plot
 #' @param ... pass any arguments to VlnPlot in Seurat
+#' @return A Seurat violin plot with the requested formatting.
 #' @import ggplot2
-#'
 modify_vlnplot<- function(object,
                           features,
                           idents = NULL,
@@ -7196,6 +7319,7 @@ modify_vlnplot<- function(object,
 
 #' extract the max value of the y axis
 #' @param p ggplot object
+#' @return The ceiling of the maximum value on the plot's vertical scale.
 #' @importFrom  ggplot2 ggplot_build
 extract_max<- function(p){
   ymax<- max(ggplot_build(p)$layout$panel_scales_y[[1]]$range$range)
@@ -7222,7 +7346,6 @@ extract_max<- function(p){
 #' @return ggplot2 object
 #' @export
 #'
-#' @examples
 #' @import ggplot2
 barPlot <- function(object, features, group.by = NULL, split.by = NULL, color.use = NULL, method = c("truncatedMean", "triMean","median"),trim = 0.1, assay = "RNA",
                     x.lab.rot = FALSE, ncol = 1, ...) {
@@ -7612,8 +7735,6 @@ spatialTopicPlot <- function(
 #'
 #' @return a list of ggplot2/plotly objects (`do.plot = TRUE`) or the number of features (`do.plot = FALSE`)
 #' @export
-#'
-#' @examples
 plotly_spatialLRpairPlot <- function (
     object,
     features = NULL,
@@ -7766,8 +7887,6 @@ plotly_spatialLRpairPlot <- function (
 #'
 #' @return ggplot2 object or plotly object
 #' @export
-#'
-#' @examples
 plotFeatures <- function(
     df_score,
     group.by=NULL,
@@ -8229,8 +8348,6 @@ plotFeatures <- function(
 #'
 #' @return A Shiny application object
 #' @export
-#'
-#' @examples
 plotly_spatialLRpairPlot_shiny <- function(
     object,
     features = NULL,
@@ -8601,7 +8718,6 @@ plotly_spatialStackPlot <- function(
 #' @param scene.name name of the Plotly 3D scene
 #' @param point.size the size of spots
 #' @param show.legend whether show each figure legend
-#' @param legend.group the parameter `legendgroup` in `plotly::plot_ly` and `plotly::add_trace`. Name of the legend group for traces, used to combine multiple traces under the same legend.
 #' @param legend.group.title the parameter `legendgrouptitle` in `plotly::plot_ly` and `plotly::add_trace`. The title text displayed for the legend group.
 #' @param three.dim.z the fixed z-axis coordinate in 3D mode
 #' @param method plotting mode, one of `"2d`, or `"3d"` (Plotly)
@@ -8839,8 +8955,27 @@ themeFeaturePlot <- function(legend.text.size = 8) {
 #' This hard threshold is used to filter out the connections between spatially distant individual cells
 #' @param contact.range numeric. By default 10um. The interaction range (Unit: microns) to restrict the contact-dependent signaling.
 #' For spatial transcriptomics in a single-cell resolution, `contact.range` is approximately equal to the estimated cell diameter (i.e., the cell center-to-center distance), which means that contact-dependent and juxtacrine signaling can only happens when the two cells are contact to each other
-#' @inheritParams plotStatistics_Lee
 #'
+#' @param x.levels a character vector specifying the order of x categories
+#' @param y.levels a character vector specifying the order of y categories
+#' @param cutoff whether to apply a threshold to Lee's statistics
+#' @param cutoff.Lee numeric threshold for Lee's statistic. Values less than or equal to this cutoff are removed when `cutoff = TRUE`
+#' @param type the type of the output, one of "data", "dot" or "heatmap"
+#' @param color.use defining the color for each group
+#' @param color.heatmap A character string or vector indicating the colormap option to use. It can be the avaibale color palette in brewer.pal() or viridis_pal() (e.g., "Spectral","viridis")
+#' @param reverse.colorscale whether to reverse the colorbar
+#' @param n.colors number of basic colors to generate from color palette
+#' @param dot.size a range defining the size of the symbol
+#' @param angle.x angle for x-axis text rotation
+#' @param xlabel label of x-axis
+#' @param ylabel label of y-axis
+#' @param title.name title name
+#' @param legend.title name of legend
+#' @param font.size font size in the plot
+#' @param font.size.title font size of the title
+#' @param x.lab.rot rotation angle of x-axis tick labels
+#' @param row.show a vector giving the index or the name of row or columns to show in the heatmap
+#' @param col.show a vector giving the index or the name of row or columns to show in the heatmap
 #' @import ComplexHeatmap
 #' @import grid
 #'

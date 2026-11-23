@@ -7,9 +7,12 @@
 scaleData(data.use, do.center = T)
 }
 \arguments{
-\item{data.use}{input data}
+\item{data.use}{A numeric expression matrix with genes as rows and cells as columns.}
 
 \item{do.center}{whether center the values}
+}
+\value{
+The scaled expression matrix with the original orientation.
 }
 \description{
 Scale the data

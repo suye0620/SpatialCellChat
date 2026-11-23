@@ -9,6 +9,9 @@ cli.symbol(symbol = NULL)
 \arguments{
 \item{symbol}{A string in `c('success','fail','info','output')` or a integer from `1:4` respectively}
 }
+\value{
+The glyph for the requested message type.
+}
 \description{
 Generate 4 kinds of cli symbols: 'success','fail','info','output'
 }

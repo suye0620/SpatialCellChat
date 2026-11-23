@@ -22,11 +22,11 @@ computeAvgCommunProb(
 \arguments{
 \item{object}{SpatialCellChat object with `net$cell$prob`.}
 
-\item{group.by}{cell group information used for computing average communication probabilities}
+\item{group.by}{cell group information used for computing average communication probabilities.}
 
-\item{avg.type}{methods for integrating communication probabilities per cell group}
+\item{avg.type}{methods for integrating communication probabilities per cell group.}
 
-\item{min.percent}{Numeric from 0 to 1. Minimum percentage of expressed ligands or receptors per cell group to require for computing the group-level signaling
+\item{min.percent}{Numeric from 0 to 1. The expressed-ligand/receptor proportion is rounded to one significant digit numerically and must meet this threshold for group-level signaling.
 Default is 0.1.}
 
 \item{min.cells.sr}{Integer greater than 0. Minimum number of cells required as senders or receivers per cell group for computing the group-level signaling
@@ -65,12 +65,12 @@ Aggregate cell-level communication probabilities (`net$cell$prob`, from
 \link{computeCommunProb}, optionally \link{filterProbability}) into
 group-level communication with a permutation test, on the final 11-slot
 object schema.
-}
-\details{
-Plan A (2026-09-28): numerically faithful acceleration of the baseline
-permutation test. The per-boot gated group aggregation runs in the
-`cpp_group_avg_obs` / `cpp_group_avg_perm` kernels; group2group CCC values
-and p-values match the pre-migration baseline (see agent note 2026-09-28 for
-the equivalence contract and `docs/PERMUTATION_TEST_AUDIT.md` for the
-statistical audit of the test itself, which is intentionally out of scope).
+
+Plan A (2026-09-28): accelerated group aggregation under the declared numeric
+`min.percent` gate. The per-boot gated aggregation runs in the
+`cpp_group_avg_obs` / `cpp_group_avg_perm` kernels. The pinned upstream
+`format()` character-comparison behavior is a historical comparator, not the
+current numeric contract. See `docs/COMPUTE_AVG_NUMERIC_DIVERGENCE_REVIEW.md`
+for the compatibility boundary and `docs/PERMUTATION_TEST_AUDIT.md` for the
+statistical audit of the test itself, which is intentionally out of scope.
 }

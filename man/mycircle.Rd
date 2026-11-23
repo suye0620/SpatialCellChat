@@ -13,6 +13,9 @@ mycircle(coords, v = NULL, params)
 
 \item{params}{parameters}
 }
+\value{
+An igraph vertex drawing function.
+}
 \description{
 generate circle symbol
 }

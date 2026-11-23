@@ -6,21 +6,32 @@
 \alias{SpatialCellChat}
 \title{The 11-slot SpatialCellChat object}
 \description{
-A SpatialCellChat object stores expression assays, spatial geometry, metadata,
-LR annotations, sparse communication layers, pathway results, and analysis
-artifacts. The mode and datatype are stored in \code{misc}, not as top-level S4 slots.
+Stores expression, spatial geometry, observation metadata, ligand-receptor
+results, pathway results, and derived analyses. Mode and datatype are
+recorded in the misc slot.
 }
 \section{Slots}{
+
 \describe{
 \item{\code{assay}}{Named assay matrices: raw, norm, scale, smooth, and signaling.}
+
 \item{\code{images}}{Spatial coordinates, coordinate calibration, rasters, FOV data, and distance/grid caches.}
+
 \item{\code{meta}}{A data frame of cell/spot metadata.}
+
 \item{\code{idents}}{A factor defining the cell/spot group for each observation.}
+
 \item{\code{features}}{A data frame of gene-level metadata.}
+
 \item{\code{LR}}{LR interaction annotations and selected LR tables.}
+
 \item{\code{dr}}{Dimensional reductions and other embeddings.}
+
 \item{\code{net}}{LR-level communication results. Group probabilities and p-values are stored under \code{net$group}; cell probabilities are under \code{net$cell}; temporary computation data are under \code{net$tmp}.}
+
 \item{\code{netP}}{Pathway-level communication results with the same group/cell organization as \code{net}.}
+
 \item{\code{DB}}{The communication database and gene/complex annotations used in analysis.}
+
 \item{\code{misc}}{Mode, datatype, parameters, operation log, variable-feature results, and merged dataset snapshots.}
 }}

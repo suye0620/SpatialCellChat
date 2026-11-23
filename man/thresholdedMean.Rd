@@ -13,6 +13,9 @@ thresholdedMean(x, trim = 0.1, na.rm = TRUE)
 
 \item{na.rm}{whether remove na}
 }
+\value{
+The mean when the positive fraction passes the minimum; otherwise zero.
+}
 \description{
 Compute the average expression per cell group when the percent of expressing cells per cell group larger than a threshold
 }

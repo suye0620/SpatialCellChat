@@ -2,7 +2,7 @@
 % Please edit documentation in R/visualization.R
 \name{spatialDimPlot}
 \alias{spatialDimPlot}
-\title{Visualize spatial cell groups such as signaling sources and targets}
+\title{Visualize SpatialCellChat groups on coordinates or a Visium image.}
 \usage{
 spatialDimPlot(
   object,
@@ -30,46 +30,53 @@ spatialDimPlot(
 )
 }
 \arguments{
-\item{object}{cellchat object}
+\item{object}{A SpatialCellChat object.}
 
-\item{color.use}{defining the color for each cell group}
+\item{color.use}{defining the colors for groups.}
 
-\item{group.by}{Name of one metadata columns to group (color) cells. Default is the defined cell groups in CellChat object}
+\item{group.by}{Metadata column used for grouping.}
 
-\item{sources.use}{a vector giving the index or the name of source cell groups}
+\item{sources.use}{Source groups to highlight.}
 
-\item{targets.use}{a vector giving the index or the name of target cell groups}
+\item{targets.use}{Target groups to highlight.}
 
-\item{idents.use}{a vector giving the index or the name of cell groups of interest}
+\item{idents.use}{Groups to highlight.}
 
-\item{proportion}{data frame of cell type proportion (rows are cells and columns are cell types)}
+\item{proportion}{Optional cell-type proportion data frame.}
 
-\item{radius}{dumeric value about the radius of each pie chart, if NULL, we will calculate it inside the function}
+\item{radius}{Optional pie radius.}
 
-\item{radius.size}{numeric scaling factor for the pie chart radius}
+\item{radius.size}{Relative pie radius.}
 
-\item{alpha}{the transparency of individual spot}
+\item{alpha}{Point alpha.}
 
-\item{shape.by}{the shape of individual spot}
+\item{shape.by}{Point shape.}
 
-\item{title.name}{title name}
+\item{title.name}{Optional plot title.}
 
-\item{point.size}{the size of spots}
+\item{point.size}{Point size.}
 
-\item{image}{whether to draw the optional histology image; a raster name may also be supplied}
+\item{image}{Whether to draw the optional histology image.}
 
-\item{image.alpha}{alpha applied to the histology image}
+\item{image.alpha}{Alpha for the histology image.}
 
-\item{crop}{whether to crop the plot to the observed spot coordinates}
+\item{crop}{Whether to crop the plot to the observed spot coordinates.}
 
-\item{legend.size}{the size of legend}
+\item{legend.size}{Legend point size.}
 
-\item{legend.text.size}{the text size on the legend}
+\item{legend.text.size}{Legend text size.}
 
-\item{legend.position, ncol, byrow}{parameters for configurating the plot}
+\item{legend.position}{Legend position.}
 
-\item{legend.spacing}{a two-elements vector respectively specifying legend.key.spacing.x and legend.key.spacing.y for spacing apart legend key-label pairs}
+\item{legend.spacing}{Legend spacing.}
+
+\item{ncol}{Number of legend columns.}
+
+\item{byrow}{Whether legends fill by row.}
+}
+\value{
+A ggplot or patchwork composition showing the spatial distribution of the requested groups.
 }
 \description{
-This function takes a CellChat object as input, and then plot cell groups of interest.
+Visualize SpatialCellChat groups on coordinates or a Visium image.
 }

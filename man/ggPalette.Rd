@@ -9,6 +9,9 @@ ggPalette(n)
 \arguments{
 \item{n}{number of colors to generate}
 }
+\value{
+A character vector of colors in hexadecimal format.
+}
 \description{
 Generate ggplot2 colors
 }

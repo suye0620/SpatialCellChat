@@ -19,7 +19,7 @@
 #' An adjacency matrix of the high confidence known experimental interactions
 #' between mouse proteins on STRINGdb.
 #'
-#' @format A square matrix where A_{ij}=1 if protein i interacts with protein j
+#' @format A square matrix where \eqn{A_{ij}=1} if protein i interacts with protein j
 #' @source \url{http://www.string-db.org/}
 "PPI.mouse"
 
@@ -36,6 +36,6 @@
 #' An adjacency matrix of the high confidence known experimental interactions
 #' between human proteins on STRINGdb.
 #'
-#' @format A square matrix where A_{ij}=1 if protein i interacts with protein j
+#' @format A square matrix where \eqn{A_{ij}=1} if protein i interacts with protein j
 #' @source \url{http://www.string-db.org/}
 "PPI.human"

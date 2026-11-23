@@ -9,6 +9,9 @@ entropia(a)
 \arguments{
 \item{a}{a numeric vector}
 }
+\value{
+The entropy of the positive entries, computed with natural logarithms.
+}
 \description{
 compute the Shannon entropy
 }

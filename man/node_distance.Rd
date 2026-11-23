@@ -9,6 +9,9 @@ node_distance(g)
 \arguments{
 \item{g}{a graph objecct}
 }
+\value{
+A matrix of per-node shortest-path length frequencies.
+}
 \description{
 compute the node distance matrix
 }

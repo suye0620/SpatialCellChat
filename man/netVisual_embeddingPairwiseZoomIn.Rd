@@ -56,6 +56,9 @@ netVisual_embeddingPairwiseZoomIn(
 
 \item{show.axes}{whether show the axes}
 }
+\value{
+A combined ggplot showing the selected clusters from the pairwise embedding.
+}
 \description{
 Zoom into the 2D visualization of the joint manifold learning of signaling networks from two datasets
 }

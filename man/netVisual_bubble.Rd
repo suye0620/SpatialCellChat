@@ -93,6 +93,9 @@ netVisual_bubble(
 
 \item{return.data}{whether return the data.frame for replotting}
 }
+\value{
+A ggplot, or a list containing the communication table and plot when return.data is TRUE.
+}
 \description{
 The dot color and size represent the calculated communication probability and p-values.
 }

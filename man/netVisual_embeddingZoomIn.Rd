@@ -50,6 +50,9 @@ netVisual_embeddingZoomIn(
 
 \item{show.axes}{whether show the axes}
 }
+\value{
+A combined ggplot showing selected groups of pathway embeddings.
+}
 \description{
 Zoom into the 2D visualization of the learned manifold learning of the signaling networks
 }

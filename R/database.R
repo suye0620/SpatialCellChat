@@ -2,11 +2,10 @@
 #'
 #' @param CellChatDB CellChatDB databse
 #' @param nrow the number of rows in the plot
+#' @return A ggplot showing the signal categories and their frequencies.
 #' @importFrom dplyr group_by summarise n %>%
 #'
-#' @return
 #' @export
-#'
 showDatabaseCategory <- function(CellChatDB, nrow = 1) {
   interaction_input <- CellChatDB$interaction
   geneIfo <- CellChatDB$geneInfo
@@ -39,13 +38,12 @@ showDatabaseCategory <- function(CellChatDB, nrow = 1) {
 #' @param label.size a character
 #' @param color.use the name of the variable in CellChatDB interaction_input
 #' @param title the title of plot
+#' @return A ggplot pie chart of category proportions.
 #' @import ggplot2
 #' @importFrom scales percent
 #' @importFrom dplyr arrange desc mutate
 #' @importFrom ggrepel geom_text_repel
-#' @return
 #' @export
-#'
 pieChart <- function(df, label.size = 2.5, color.use = NULL, title = "") {
   df %>% arrange(dplyr::desc(value)) %>%
     mutate(prop = scales::percent(value/sum(value))) -> df
@@ -76,9 +74,9 @@ pieChart <- function(df, label.size = 2.5, color.use = NULL, title = "") {
 #' @param key the keyword to match
 #' @param matching.exact whether perform exact matching
 #' @param pair.only whether only return ligand-receptor pairs without cofactors
+#' @return A data frame of matching ligand-receptor records.
 #' @importFrom future.apply future_sapply
 #' @importFrom dplyr select
-#' @return
 #' @export
 searchPair <- function(signaling = c(), pairLR.use, key = c("pathway_name","ligand"), matching.exact = FALSE, pair.only = TRUE) {
   key <- match.arg(key)
@@ -131,9 +129,8 @@ searchPair <- function(signaling = c(), pairLR.use, key = c("pathway_name","liga
 #' @param key a character vector and each element should be one of the column names of the interaction_input from CellChatDB.
 #' @param non_protein whether to use the non-protein signaling for CellChat analysis. By default, non_protein = FALSE because most of non-protein signaling are the special synaptic signaling interactions that can only be used when inferring neuron-neuron communication.
 #'
-#' @return
+#' @return A database list with its interaction table restricted to the requested records.
 #' @export
-#'
 subsetDB <- function(CellChatDB, search = c(), key = "annotation", non_protein = FALSE) {
   interaction_input <- CellChatDB$interaction
   if (is.null(search) & non_protein == FALSE & any(key == "annotation")) {
@@ -175,10 +172,9 @@ subsetDB <- function(CellChatDB, search = c(), key = "annotation", non_protein =
 #'
 #' @param CellChatDB CellChatDB databse used in the analysis
 #'
-#' @return
+#' @return A character vector of unique genes appearing in the database.
 #' @export
 #' @importFrom dplyr select
-#'
 extractGene <- function(CellChatDB) {
   interaction_input <- CellChatDB$interaction
   complex_input <- CellChatDB$complex
@@ -215,7 +211,7 @@ extractGene <- function(CellChatDB) {
 #' @param complex_input complex in CellChatDB databse
 #' @param geneIfo official gene symbol
 #'
-#' @return
+#' @return A character vector of genes associated with the selected signaling pathways.
 #' @importFrom dplyr select starts_with
 #' @export
 extractGeneSubset <- function(geneSet, complex_input, geneIfo) {
@@ -238,7 +234,7 @@ extractGeneSubset <- function(geneSet, complex_input, geneIfo) {
 #' @param geneInfo official gene symbol
 #' @param combined whether combining the ligand genes and receptor genes
 #'
-#' @return
+#' @return A vector of ligand and receptor genes, or a list with separate geneL and geneR vectors.
 #' @export
 extractGeneSubsetFromPair <- function(pairLR, object = NULL, complex_input = NULL, geneInfo = NULL, combined = TRUE) {
   if (!all(c("ligand", "receptor") %in% colnames(pairLR))) {
@@ -272,9 +268,8 @@ extractGeneSubsetFromPair <- function(pairLR, object = NULL, complex_input = NUL
 #'
 #' @param geneSet gene set to check
 #' @param geneIfo official Gene Symbol
-#' @return
+#' @return A logical scalar indicating whether the gene symbol matches the annotation table.
 #' @export
-#'
 checkGeneSymbol <- function(geneSet, geneIfo) {
   geneSet <- unique(geneSet[geneSet != ""])
   genes_notOfficial <- geneSet[geneSet %in% geneIfo$Symbol == "FALSE"]

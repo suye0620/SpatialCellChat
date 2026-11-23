@@ -23,6 +23,9 @@ extractGeneSubsetFromPair(
 
 \item{combined}{whether combining the ligand genes and receptor genes}
 }
+\value{
+A vector of ligand and receptor genes, or a list with separate geneL and geneR vectors.
+}
 \description{
 Extract the signaling gene names from ligand-receptor pairs
 }

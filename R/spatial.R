@@ -50,7 +50,9 @@
 #' view works on an object that has never been through the inference. The x axis
 #' always ends at the cached `interaction.range` plus 10.
 #'
-#' Self-pairs (distance 0) are dropped from every panel.
+#' Each panel counts an unordered cell pair once. Self-pairs and distinct cells
+#' with zero distance are excluded. With the annotation split, a pair can be
+#' counted once in each annotation class in which it occurs.
 #'
 #' @param object A SpatialCellChat object.
 #' @param mode `"geometry"` (default) uses cell pairs from the distance cache;
@@ -91,6 +93,8 @@ spatialC2CDistPlot <- function(
 }
 
 #' Distance cache for the communication view: it must match the inference
+#' @param object A SpatialCellChat object.
+#' @return The stored distance/contact cache after checking its alignment.
 #' @noRd
 .sc_c2c_inference_cache <- function(object) {
   cache <- images(object, ".distance")
@@ -121,6 +125,17 @@ spatialC2CDistPlot <- function(
 }
 
 #' Distance cache for the geometric view: reuse when valid, compute otherwise
+#' @param object A SpatialCellChat object.
+#' @param interaction.range Numeric(must positive). The maximum interaction/diffusion range of ligands. This hard threshold is used to filter out the connections between spatially distant cells
+#' @param contact.range Numeric. The interaction range (Unit: microns) to restrict the contact-dependent signaling.
+#' For spatial transcriptomics in a single-cell resolution, `contact.range` is approximately equal to the estimated cell diameter (i.e., the cell center-to-center distance), which means that contact-dependent and juxtacrine signaling can only happens when the two cells are contact to each other.
+#' Typically, `contact.range = 10`, which is a typical human cell size. However, for low-resolution spatial data such as 10X visium, it should be the cell center-to-center distance (i.e., `contact.range = 100` for visium data).
+#' Users can run the function `computeCellDistance` to get the center-to-center distance in the result's "d.spatial" key, which will help decide the value of `contact.range`.
+#' @param tol Numeric. Add a non-negative tolerance when applying the interaction and contact thresholds, in the same physical unit as `interaction.range`. `NULL` is treated as zero.
+#' Typically, `tol` should equal half the cell/spot diameter; for example, `65/2` for 10X Visium or `10/2` for Slide-seq.
+#'
+#' If the cell/spot size is not known, `tol` can be set to zero while `contact.range` is chosen from the returned center-to-center distances.
+#' @return The distance/contact cache for the requested geometric ranges.
 #' @noRd
 .sc_c2c_geometry_cache <- function(object, interaction.range = NULL,
                                    contact.range = NULL, tol = NULL) {
@@ -147,6 +162,8 @@ spatialC2CDistPlot <- function(
 }
 
 #' X axis limit: the interaction range the distances were built with
+#' @param cache A geometry cache containing aligned distance and contact matrices.
+#' @return The upper limit for the distance axes of the panels.
 #' @noRd
 .sc_c2c_xmax <- function(cache) {
   params <- cache[[".parameters"]]
@@ -156,6 +173,10 @@ spatialC2CDistPlot <- function(
 }
 
 #' Build an upper-triangular distance frame from a pair mask
+#' @param pair.mask A sparse matrix marking the cell pairs to include.
+#' @param cache A geometry cache containing aligned distance and contact matrices.
+#' @param class The category label assigned to the returned distances.
+#' @return A data frame of selected, positive unordered pair distances and distance classes.
 #' @noRd
 .sc_pair_distance_frame <- function(pair.mask, cache, class = NULL) {
   d.spatial <- cache$d.spatial
@@ -182,6 +203,9 @@ spatialC2CDistPlot <- function(
 }
 
 #' Symmetric positive-probability mask for selected LR layers
+#' @param prob A communication probability array with sender, receiver, and signaling axes.
+#' @param layer.index Indices or names of the selected LR layers.
+#' @return A sparse logical sender by receiver matrix marking occurrence in any selected LR layer.
 #' @noRd
 .sc_comm_pair_mask <- function(prob, layer.index = NULL) {
   if (is.null(layer.index)) {
@@ -198,6 +222,11 @@ spatialC2CDistPlot <- function(
 #'
 #' Geometry uses one strict-upper-triangle distance per spatial pair.
 #' Communication uses one row per undirected cell pair and annotation class.
+#' @param object A SpatialCellChat object.
+#' @param mode The pair-selection mode, either "geometry" or "communication".
+#' @param cache A geometry cache containing aligned distance and contact matrices.
+#' @param split.by Grouping to use for the distance panels.
+#' @return A data frame of observed pair distances with the requested classes.
 #' @noRd
 .sc_comm_distance_frame <- function(object, mode, cache, split.by = "distance") {
   if (identical(mode, "geometry")) {
@@ -244,6 +273,8 @@ spatialC2CDistPlot <- function(
 }
 
 #' Ligand-receptor annotation class used by the annotation split
+#' @param annotation LR annotation category names.
+#' @return The normalized annotation labels used for the distance plot.
 #' @noRd
 .sc_comm_annotation_class <- function(annotation) {
   diffusible <- c("Secreted Signaling", "ECM-Receptor", "Non-protein Signaling")
@@ -254,6 +285,12 @@ spatialC2CDistPlot <- function(
 }
 
 #' One distance-density panel
+#' @param distance The distance cache record, or distances to plot in a density panel.
+#' @param title the title of the plot
+#' @param fill Fill color used for the plot area or bars.
+#' @param xmax The upper limit of the distance axis.
+#' @param density.alpha Opacity of the density fill.
+#' @return A ggplot distance density panel.
 #' @noRd
 .sc_comm_dist_panel <- function(distance, title, fill, xmax, density.alpha) {
   distance <- distance[!is.na(distance) & distance > 0]
@@ -275,6 +312,12 @@ spatialC2CDistPlot <- function(
 }
 
 #' Build the panels shared by every distance plot
+#' @param object A SpatialCellChat object.
+#' @param split.by Grouping to use for the distance panels.
+#' @param mode The pair-selection mode, either "geometry" or "communication".
+#' @param density.alpha Opacity of the density fill.
+#' @param cache A geometry cache containing aligned distance and contact matrices.
+#' @return A named list of ggplot panels for the communication distance observations.
 #' @noRd
 .sc_comm_dist_panels <- function(object, split.by, mode, density.alpha, cache) {
   df <- .sc_comm_distance_frame(object, mode, cache, split.by = split.by)
@@ -328,6 +371,20 @@ spatialC2CDistPlot <- function(
 }
 
 #' Panels for a given mode
+#' @param object A SpatialCellChat object.
+#' @param split.by Grouping to use for the distance panels.
+#' @param mode The pair-selection mode, either "geometry" or "communication".
+#' @param density.alpha Opacity of the density fill.
+#' @param interaction.range Numeric(must positive). The maximum interaction/diffusion range of ligands. This hard threshold is used to filter out the connections between spatially distant cells
+#' @param contact.range Numeric. The interaction range (Unit: microns) to restrict the contact-dependent signaling.
+#' For spatial transcriptomics in a single-cell resolution, `contact.range` is approximately equal to the estimated cell diameter (i.e., the cell center-to-center distance), which means that contact-dependent and juxtacrine signaling can only happens when the two cells are contact to each other.
+#' Typically, `contact.range = 10`, which is a typical human cell size. However, for low-resolution spatial data such as 10X visium, it should be the cell center-to-center distance (i.e., `contact.range = 100` for visium data).
+#' Users can run the function `computeCellDistance` to get the center-to-center distance in the result's "d.spatial" key, which will help decide the value of `contact.range`.
+#' @param tol Numeric. Add a non-negative tolerance when applying the interaction and contact thresholds, in the same physical unit as `interaction.range`. `NULL` is treated as zero.
+#' Typically, `tol` should equal half the cell/spot diameter; for example, `65/2` for 10X Visium or `10/2` for Slide-seq.
+#'
+#' If the cell/spot size is not known, `tol` can be set to zero while `contact.range` is chosen from the returned center-to-center distances.
+#' @return The collection of distance plot panels for the requested geometry and communication modes.
 #' @noRd
 .sc_c2c_panels <- function(object, split.by, mode, density.alpha,
                            interaction.range = NULL, contact.range = NULL,
@@ -342,11 +399,22 @@ spatialC2CDistPlot <- function(
   .sc_comm_dist_panels(object, split.by, mode, density.alpha, cache)
 }
 
-#' @title Internal grid-size and membership helpers
+#' Internal grid-size and membership helpers
 #'
 #' These helpers deliberately operate on the caller's coordinate frame and
 #' already-created `sf` objects. They do not change coordinate orientation or
 #' CRS metadata.
+#' @param coordinates Numeric matrix or data.frame; each row gives the spatial location of one cell/spot. Two- and three-dimensional coordinates are supported.
+#' @param cellsize NULL or Numeric. If NULL, the function will tell you the default `cellsize` in the SpatialCellChat object.
+#' If not NULL and be Numeric, the new cellsize will be equal to cellsize*grid.resolution.
+#' Note: We use [sf::st_make_grid()] to make grid data, so the param is a numeric vector
+#' of length 1 or 2 with target cellsize, please see details in [sf::st_make_grid()]:
+#' for square or rectangular cells the width and height, for hexagonal cells the distance between
+#' opposite edges (edge length is cellsize/sqrt(3)). A length units object can be passed,
+#' or an area unit object with area size of the square or hexagonal cell.
+#' @param grid.resolution Numeric. By default, it is set to be 2.
+#' @param ratio Conversion factor from coordinate units to micrometers.
+#' @return The grid cell size in coordinate units.
 #' @noRd
 .sc_resolve_grid_size <- function(
     coordinates,
@@ -432,6 +500,11 @@ spatialC2CDistPlot <- function(
     nearest.distance.method = nearest.distance.method
   )
 }
+#' Find point membership in spatial grid cells
+#' @param points The spatial coordinates or geometries to assign to grid cells.
+#' @param grid The spatial grid geometry.
+#' @return A list of point indices for each grid cell.
+#' @noRd
 .sc_grid_membership <- function(points, grid) {
   hits <- sf::st_intersects(points, grid, sparse = TRUE)
   grid.index <- unlist(hits, use.names = FALSE)
@@ -735,6 +808,21 @@ makeGridSpatialCellChat <- function(
 }
 
 
+#' Check the spatial distance cache key
+#' @param distance The distance cache record, or distances to plot in a density panel.
+#' @param coordinates Numeric matrix or data.frame; each row gives the spatial location of one cell/spot. Two- and three-dimensional coordinates are supported.
+#' @param interaction.range Numeric(must positive). The maximum interaction/diffusion range of ligands. This hard threshold is used to filter out the connections between spatially distant cells
+#' @param contact.range Numeric. The interaction range (Unit: microns) to restrict the contact-dependent signaling.
+#' For spatial transcriptomics in a single-cell resolution, `contact.range` is approximately equal to the estimated cell diameter (i.e., the cell center-to-center distance), which means that contact-dependent and juxtacrine signaling can only happens when the two cells are contact to each other.
+#' Typically, `contact.range = 10`, which is a typical human cell size. However, for low-resolution spatial data such as 10X visium, it should be the cell center-to-center distance (i.e., `contact.range = 100` for visium data).
+#' Users can run the function `computeCellDistance` to get the center-to-center distance in the result's "d.spatial" key, which will help decide the value of `contact.range`.
+#' @param ratio Conversion factor from coordinate units to micrometers.
+#' @param tol Numeric. Add a non-negative tolerance when applying the interaction and contact thresholds, in the same physical unit as `interaction.range`. `NULL` is treated as zero.
+#' Typically, `tol` should equal half the cell/spot diameter; for example, `65/2` for 10X Visium or `10/2` for Slide-seq.
+#'
+#' If the cell/spot size is not known, `tol` can be set to zero while `contact.range` is chosen from the returned center-to-center distances.
+#' @return A logical scalar indicating whether the coordinates and distance settings match.
+#' @noRd
 .spatial_distance_cache_matches <- function(distance, coordinates,
                                             interaction.range, contact.range,
                                             ratio = NULL, tol = NULL) {
@@ -810,8 +898,6 @@ makeGridSpatialCellChat <- function(
 #' coordinate matrix used to build them, while `.parameters` records the
 #' thresholds and scale used so downstream consumers do not silently reuse a
 #' cache made from different coordinates or distance settings.
-#'
-#' @examples
 computeCellDistance <- function (
     coordinates,
     interaction.range = 250,
@@ -927,8 +1013,6 @@ computeCellDistance <- function (
 #'
 #' @return A `CsparseMatrix` object in `Matrix` Package
 #' @export
-#'
-#' @examples
 createCellCellContactMatrixFrom_dspatial <- function(d.spatial,contact.threshold,tol){
 
   adj.contact <- as(d.spatial,Class = "TsparseMatrix")

@@ -17,6 +17,9 @@ computeNetD_structure(g, h, w1 = 0.45, w2 = 0.45, w3 = 0.1)
 
 \item{w3}{parameter}
 }
+\value{
+A scalar structural dissimilarity between the graphs.
+}
 \description{
 Compute the structural distance between two signaling networks
 }

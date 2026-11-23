@@ -47,6 +47,9 @@ netAnalysis_signalingRole_network(
 
 \item{cluster.cols}{whether cluster columns}
 }
+\value{
+The result of drawing a ComplexHeatmap heatmap for the selected signaling network.
+}
 \description{
 Heatmap showing the centrality scores/importance of cell groups as senders, receivers, mediators and influencers in a single intercellular communication network
 }

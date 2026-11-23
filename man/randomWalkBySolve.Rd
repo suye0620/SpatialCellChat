@@ -13,7 +13,7 @@ randomWalkBySolve(E, A, alpha, normalizeAdjMatrix = c("rows", "columns"))
 
 \item{alpha}{projecting coefficient (1 - restart probability of random walk)}
 
-\item{normalizeAdjMatrix}{which dimension (rows or columns) should the adjacency matrix be normalized by}
+\item{normalizeAdjMatrix}{which dimension to normalize the adjacency by}
 }
 \value{
 network-projected gene expression

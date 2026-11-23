@@ -17,6 +17,9 @@ runPCA(data.use, do.fast = T, dimPC = 50, seed.use = 42, weight.by.var = T)
 
 \item{weight.by.var}{whether use weighted pc.scores}
 }
+\value{
+The PCA result for the supplied data.
+}
 \description{
 Dimension reduction using PCA
 }

@@ -13,6 +13,9 @@ computeExpr_complex(complex_input, data.use, complex)
 
 \item{complex}{the names of complex}
 }
+\value{
+A matrix of complex expression across the cells.
+}
 \description{
 Compute the expression of complex in individual cells using geometric mean
 }

@@ -4,8 +4,12 @@
 \alias{preProcessing}
 \title{preProcessing}
 \usage{
-preProcessing(object, slot.name = c("signaling", "norm"), quantile.prob = 1e-05,
-  seed.use = 1L)
+preProcessing(
+  object,
+  slot.name = c("signaling", "norm"),
+  quantile.prob = 1e-05,
+  seed.use = 1L
+)
 }
 \arguments{
 \item{object}{A log-normalized expression matrix (genes x cells) or a

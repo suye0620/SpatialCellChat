@@ -4,6 +4,14 @@
 #' unchanged. The preparation code intentionally follows their coordinate frame
 #' and grid semantics so the browser renderer is a view, not a second field
 #' definition.
+#' @param value The input or replacement value.
+#' @param name The input name to include in diagnostics.
+#' @param lower The lower allowed value.
+#' @param upper The upper allowed value.
+#' @param integer Whether a whole-number scalar is required.
+#' @param inclusive.lower Whether the lower endpoint is allowed.
+#' @return The validated scalar.
+#' @noRd
 
 .sc_widget_check_scalar <- function(value, name, lower = -Inf, upper = Inf,
                                     integer = FALSE, inclusive.lower = TRUE) {
@@ -25,6 +33,11 @@
   as.numeric(value)
 }
 
+#' Map widget observation labels to colors
+#' @param labels Names associated with the values or index positions.
+#' @param color.use defining the color for each condition/dataset
+#' @return A named vector of colors for the labels.
+#' @noRd
 .sc_widget_color_map <- function(labels, color.use) {
   groups <- levels(labels)
   if (is.null(color.use)) {
@@ -54,6 +67,9 @@
   stats::setNames(color.use, groups)
 }
 
+#' Locate the installed communication flow widget assets
+#' @return A list describing the asset paths and metadata.
+#' @noRd
 .sc_widget_assets <- function() {
   files <- c(
     "spatialcellchat-commun-flow.js",
@@ -81,6 +97,10 @@
   )
 }
 
+#' Create the HTML dependency for the widget renderer
+#' @param assets The widget asset metadata and source path.
+#' @return An htmltools HTML dependency object.
+#' @noRd
 .sc_widget_dependency <- function(assets) {
   htmltools::htmlDependency(
     name = "spatialcellchat-commun-flow",
@@ -91,6 +111,15 @@
   )
 }
 
+#' Convert interpolated flow vectors to a regular grid
+#' @param x Horizontal coordinates of grid samples.
+#' @param y Vertical coordinates of grid samples.
+#' @param u Horizontal component of the flow vector.
+#' @param v Vertical component of the flow vector.
+#' @param valid Logical mask of usable grid positions.
+#' @param field.grid.max Upper bound on the size of the interpolated widget grid.
+#' @return A list of regular coordinate axes, vector components, and a validity mask.
+#' @noRd
 .sc_widget_regular_grid <- function(x, y, u, v, valid, field.grid.max) {
   nx <- length(x)
   ny <- length(y)
@@ -111,6 +140,12 @@
   )
 }
 
+#' Represent a zero flow field on the widget grid
+#' @param df.field The input data frame of observation coordinates and directional components.
+#' @param occupied.grid The occupied grid locations used as interpolation input.
+#' @param field.grid.max Upper bound on the size of the interpolated widget grid.
+#' @return The zero-valued grid data for the widget.
+#' @noRd
 .sc_widget_zero_grid <- function(df.field, occupied.grid, field.grid.max) {
   x.range <- range(df.field$x_cent, finite = TRUE)
   y.range <- range(df.field$y_cent, finite = TRUE)
@@ -126,6 +161,13 @@
        u = numeric(length(points$x)), v = numeric(length(points$x)), valid = valid)
 }
 
+#' Interpolate the communication field to the renderer grid
+#' @param current.gridded The sampled horizontal and vertical vector components and their grid centers.
+#' @param occupied.grid The occupied grid locations used as interpolation input.
+#' @param field.grid.max Upper bound on the size of the interpolated widget grid.
+#' @param df.field The input data frame of observation coordinates and directional components.
+#' @return A list of interpolated coordinate axes, vector components, and a validity mask.
+#' @noRd
 .sc_widget_interpolate <- function(current.gridded, occupied.grid, field.grid.max,
                                    df.field) {
   finite.u <- is.finite(current.gridded$u)
@@ -182,6 +224,27 @@
   )
 }
 
+#' Prepare the points and grid layers for the flow widget
+#' @param object A SpatialCellChat object.
+#' @param signaling Please check the description in function \code{\link{subsetCommunication}}
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param pattern "outgoing" or "incoming"
+#' @param cellsize NULL or Numeric. If NULL, the function will tell you the default `cellsize` in the SpatialCellChat object.
+#' If not NULL and be Numeric, the new cellsize will be equal to cellsize*grid.resolution.
+#' Note: We use [sf::st_make_grid()] to make grid data, so the param is a numeric vector
+#' of length 1 or 2 with target cellsize, please see details in [sf::st_make_grid()]:
+#' for square or rectangular cells the width and height, for hexagonal cells the distance between
+#' opposite edges (edge length is cellsize/sqrt(3)). A length units object can be passed,
+#' or an area unit object with area size of the square or hexagonal cell.
+#' @param square Boolean. If FALSE, create hexagonal grid. See details in [sf::st_make_grid()]
+#' @param grid.resolution Numeric. By default, it is set to be 2.
+#' @param grid.field.mean How vector fields within each grid cell are aggregated: \code{"median"} or \code{"sum"}.
+#' @param color.use defining the color for each condition/dataset
+#' @param point.size the size of spots
+#' @param image.alpha Transparency of individual spots.
+#' @param field.grid.max Upper bound on the size of the interpolated widget grid.
+#' @return A list of renderer data and options for the communication flow widget.
+#' @noRd
 .sc_prepare_commun_flow_widget <- function(
     object, signaling, slot.name, pattern, cellsize, square,
     grid.resolution, grid.field.mean, color.use, point.size, image.alpha,

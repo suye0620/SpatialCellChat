@@ -6,6 +6,9 @@
 \usage{
 CellChat_theme_opts()
 }
+\value{
+A ggplot2 theme for communication network plots.
+}
 \description{
 ggplot theme in CellChat
 }

@@ -17,31 +17,31 @@ setIdent(object, ident.use = NULL, levels = NULL)
 An updated SpatialCellChat object, validated.
 }
 \description{
-Changes \code{idents(object)} and keeps the object consistent with respect to the
-\strong{cell-group axis}. Every group-indexed structure is either carried over or
+Changes `idents(object)` and keeps the object consistent with respect to the
+**cell-group axis**. Every group-indexed structure is either carried over or
 dropped, depending on whether the new labels describe the same partition of
 the cells as the old ones.
 }
 \details{
 Two outcomes are possible.
 
-\strong{Same partition} -- the new labels are a relabelling of the old ones (a
+**Same partition** — the new labels are a relabelling of the old ones (a
 permutation, a rename, or both at once): every old label maps to exactly one
 new label and every new label comes from exactly one old label, and the number
-of levels is unchanged. Then \code{net$group$prob}/\code{pval} (group x group x layer),
-\code{net$group$count}/\code{weight} (group x group matrices), \code{net$centr}
-(measure x group x layer) and the matching \code{netP} entries are reordered and
+of levels is unchanged. Then `net$group$prob`/`pval` (group x group x layer),
+`net$group$count`/`weight` (group x group matrices), `net$centr`
+(measure x group x layer) and the matching `netP` entries are reordered and
 relabelled in place. The values do not change, so downstream results stay
 valid.
 
-\strong{Different partition} -- groups were merged, split or reassigned. Group-level
-results cannot be carried over, so \code{net$group}, \code{netP$group}, \code{net$centr} and
-\code{netP$centr} are dropped and a message tells you what to re-run
-(\code{computeAvgCommunProb()} and everything downstream of it). The cell-level
-\code{net$cell$prob} is \strong{kept}: it is indexed by cell pair, not by group, and is
-exactly what \code{computeAvgCommunProb()} consumes.
+**Different partition** — groups were merged, split or reassigned. Group-level
+results cannot be carried over, so `net$group`, `netP$group`, `net$centr` and
+`netP$centr` are dropped and a message tells you what to re-run
+(`computeAvgCommunProb()` and everything downstream of it). The cell-level
+`net$cell$prob` is **kept**: it is indexed by cell pair, not by group, and is
+exactly what `computeAvgCommunProb()` consumes.
 
-\code{net$cell$prob}, \code{netP$cell$prob}, \code{net$tmp}, \code{misc}, \code{dr}, \code{LR} and \code{DB} are
+`net$cell$prob`, `netP$cell$prob`, `net$tmp`, `misc`, `dr`, `LR` and `DB` are
 never touched.
 
 Levels with no cells in them cannot be matched by content; when the partition

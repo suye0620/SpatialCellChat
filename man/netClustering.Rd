@@ -35,6 +35,9 @@ netClustering(
 
 \item{k.eigen}{the number of eigenvalues used when doing spectral clustering}
 }
+\value{
+The object with cluster labels stored in the similarity results. The adjacency-matrix branch returns adjacency and cluster count.
+}
 \description{
 Classification learning of the signaling networks
 }

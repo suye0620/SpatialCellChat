@@ -50,6 +50,9 @@ netAnalysis_river(
 
 \item{font.size.title}{font size of the title}
 }
+\value{
+A ggplot or combined plot showing communication pattern flows.
+}
 \description{
 River (alluvial) plot shows the correspondence between the inferred latent patterns and cell groups as well as ligand-receptor pairs or signaling pathways.
 }

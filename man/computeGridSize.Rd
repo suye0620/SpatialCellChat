@@ -8,33 +8,42 @@ computeGridSize(
   object,
   cellsize = NULL,
   grid.resolution = NULL,
-  do.plot = T,
+  do.plot = TRUE,
   what = "polygons",
-  square = T
+  square = TRUE
 )
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{SpatialCellChat object with canonical spatial coordinates.}
 
-\item{cellsize}{NULL or Numeric. If NULL, the function will tell you the default `cellsize` in the SpatialCellChat object.
-If not NULL and be Numeric, the new cellsize will be equal to cellsize*grid.resolution.
-Note: We use [sf::st_make_grid()] to make grid data, so the param is a numeric vector
-of length 1 or 2 with target cellsize, please see details in [sf::st_make_grid()]:
-for square or rectangular cells the width and height, for hexagonal cells the distance between
-opposite edges (edge length is cellsize/sqrt(3)). A length units object can be passed,
-or an area unit object with area size of the square or hexagonal cell.}
+\item{cellsize}{NULL or a positive finite numeric vector of length 1 or 2.
+NULL estimates the minimum non-self nearest-neighbor distance.}
 
-\item{grid.resolution}{Numeric. By default, it is set to be 2.}
+\item{grid.resolution}{Positive finite numeric multiplier, defaulting to 2.}
 
-\item{do.plot}{Boolean. If FALSE, only print hints in terminal.}
+\item{do.plot}{Boolean. If TRUE, return a `ggplot` preview; if FALSE,
+print diagnostics and return `NULL` invisibly.}
 
-\item{what}{Character. One of: "polygons", "corners", or "centers". See details in [sf::st_make_grid()]}
+\item{what}{Character. One of `"polygons"`, `"corners"`, or `"centers"`.}
 
-\item{square}{Boolean. If FALSE, create hexagonal grid. See details in [sf::st_make_grid()]}
+\item{square}{Boolean. If FALSE, create a hexagonal grid.}
 }
 \value{
-ggplot
+A `ggplot` when `do.plot = TRUE`; otherwise invisible `NULL`.
 }
 \description{
-Use this function to view SpatialCellChat object after the "grid" operation and visualize it.
+Estimate a grid cell size and optionally preview the resulting grid. This
+function does not aggregate expression data or mutate the object.
+}
+\details{
+Coordinates are read from the canonical `images$coordinates` matrix. Grid
+geometry uses its first two analysis axes (`x`, `y`) without swapping or
+transforming them. With `cellsize = NULL`, the minimum non-self
+nearest-neighbor distance is estimated exactly without a dense pairwise
+distance matrix. `grid.resolution` multiplies the resolved size
+component-wise. When `images$spatial.factors$ratio` is unavailable, output
+reports raw coordinate units and does not claim a physical scale.
+Diagnostics use `getOption("SpatialCellChat.verbose", 1L)`: level 0 keeps
+warnings and errors visible, level 1 emits the concise summary, level 2 adds
+grid diagnostics, and level 3 reports sparse allocation details.
 }

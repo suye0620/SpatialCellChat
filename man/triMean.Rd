@@ -11,6 +11,9 @@ triMean(x, na.rm = TRUE)
 
 \item{na.rm}{whether remove na}
 }
+\value{
+The Tukey trimean of the input values.
+}
 \description{
 Compute the Tukey's trimean
 }

@@ -2,72 +2,81 @@
 % Please edit documentation in R/SpatialCellChat_class.R
 \name{createSpatialCellChat}
 \alias{createSpatialCellChat}
-\title{Create a new SpatialCellChat object from a data matrix, Seurat or SingleCellExperiment object}
+\title{Create a new SpatialCellChat object}
 \usage{
 createSpatialCellChat(
   object,
   meta = NULL,
   group.by = NULL,
+  input.assay = c("norm", "raw"),
+  normalize = NULL,
+  scale.factor = 10000,
+  do.log = TRUE,
   datatype = c("RNA", "spatial"),
   coordinates = NULL,
+  coordinate.system = NULL,
   spatial.factors = NULL,
-  assay = NULL,
-  do.sparse = T
+  image = NULL,
+  image_name = NULL,
+  assay_name = NULL,
+  do.sparse = TRUE,
+  sample = "sample1"
 )
 }
 \arguments{
-\item{object}{a normalized (NOT count) data matrix (genes by cells), Seurat or SingleCellExperiment object}
+\item{object}{A raw count matrix or normalized expression matrix, Seurat
+object, or SingleCellExperiment object. The supplied assay is declared
+by \code{input.assay}.}
 
-\item{meta}{a data frame (rows are cells with rownames) consisting of cell information, which will be used for defining cell groups.
-If input is a Seurat or SingleCellExperiment object, the meta data in the object will be used}
+\item{meta}{A data frame of cell metadata. If input is a Seurat or SCE
+object, taken from the object by default.}
 
-\item{group.by}{a char name of the variable in meta data, defining cell groups.
-If input is a data matrix and group.by is NULL, the input `meta` should contain a column named 'labels',
-If input is a Seurat or SingleCellExperiment object, USER must provide `group.by` to define the cell groups. e.g, group.by = "ident" for Seurat object}
+\item{group.by}{Column name in meta defining cell groups. If omitted for a
+Seurat object, its active identities are copied into metadata.}
 
-\item{datatype}{By default datatype = "RNA"; when running SpatialCellChat on spatial imaging/transcriptomics data, set type = "spatial" and input `spatial.factors`}
+\item{input.assay}{Either \code{"norm"} for already normalized expression
+values or \code{"raw"} for non-negative count values.}
 
-\item{coordinates}{a data matrix in which each row gives the spatial locations/coordinates of each cell/spot}
+\item{normalize}{Whether raw input should be normalized into \code{assay$norm}.
+Defaults to TRUE for \code{input.assay = "raw"} and FALSE otherwise.
+Contradictory assay/normalize combinations are rejected.}
 
-\item{spatial.factors}{a list containing two distance factors `ratio` and `tol`, which is dependent on spatial transcriptomics technologies (and specific datasets).
+\item{scale.factor}{Per-cell scaling factor used for raw input normalization.}
 
-USER must input this list when datatype = "spatial". spatial.factors must contain an element named `ratio`, which is the conversion factor when converting spatial coordinates from Pixels or other units to Micrometers (i.e.,Microns). For example, setting `ratio = 0.18` indicates that 1 pixel equals 0.18um in the coordinates,
+\item{do.log}{Whether raw input normalization applies log1p after scaling.}
 
-and another element named `tol`, which is the tolerance factor to increase the robustness when comparing the center-to-center distance against the `interaction.range`. This can be the half value of cell/spot size in the unit of um. If the cell/spot size is not known, we provide a function `computeCellDistance` to compute the cell center-to-center distance.
-`tol` can be the the half value of the minimum center-to-center distance. Of note, CellChat does not need an accurate tolerance factor, which is used for determining whether considering the cell-pair as spatially proximal if their distance is greater than `interaction.range` but smaller than "`interaction.range` + `tol`".}
+\item{datatype}{One of \code{"RNA"} or \code{"spatial"}.}
 
-\item{assay}{Assay to use when the input is a Seurat object. NB: The data in the `integrated` assay is not suitable for SpatialCellChat analysis because it contains negative values.}
+\item{coordinates}{A two- or three-column matrix of analysis coordinates.}
 
-\item{do.sparse}{whether use sparse format}
+\item{coordinate.system}{A list with \code{unit}, \code{calibrated}, and
+optional orientation metadata. Use \code{unit = "arbitrary"} and
+\code{calibrated = FALSE} when no physical scale is known.}
+
+\item{spatial.factors}{A list with \code{ratio} and \code{tol}. Calibrated
+spatial data require both values; uncalibrated data store NULL values.}
+
+\item{image}{Optional Seurat SpatialImage object or raster record. It is
+stored under \code{images$rasters}, never as a duplicate histology object.}
+
+\item{image_name}{Optional name of a Seurat image to import.}
+
+\item{assay_name}{Assay to use from a Seurat object.}
+
+\item{do.sparse}{Whether to convert the expression layers to dgCMatrix.}
+
+\item{sample}{Sample label or labels used to populate spatial sample metadata.}
+}
+\value{
+A SpatialCellChat object.
 }
 \description{
-Create a new SpatialCellChat object from a data matrix, Seurat or SingleCellExperiment object
+Create a new SpatialCellChat object
 }
 \examples{
 \dontrun{
-Create a SpatialCellChat object from single-cell transcriptomics data
-# Input is a data matrix
-## create a dataframe consisting of the cell labels
-meta = data.frame(labels = cell.labels, row.names = names(cell.labels))
-SpatialCellChat <- createSpatialCellChat(object = data.input, meta = meta, group.by = "labels")
-
-# input is a Seurat object
-## use the default cell identities of Seurat object
-SpatialCellChat <- createSpatialCellChat(object = seurat.obj, group.by = "ident", assay = "RNA")
-## use other meta information as cell groups
-SpatialCellChat <- createSpatialCellChat(object = seurat.obj, group.by = "seurat.clusters")
-
-# input is a SingleCellExperiment object
-SpatialCellChat <- createSpatialCellChat(object = sce.obj, group.by = "sce.clusters")
-
-Create a SpatialCellChat object from spatial imaging data
-# Input is a data matrix
-SpatialCellChat <- createSpatialCellChat(object = data.input, meta = meta, group.by = "labels",
-                           datatype = "spatial", coordinates = coordinates, spatial.factors = spatial.factors)
-
-# input is a Seurat object
-SpatialCellChat <- createSpatialCellChat(object = seurat.obj, group.by = "ident", assay = "SCT",
-                           datatype = "spatial", spatial.factors = spatial.factors)
-
+chat <- createSpatialCellChat(data, meta = meta, group.by = "labels")
+chat <- createSpatialCellChat(seu, group.by = "clusters",
+  datatype = "spatial", coordinates = coords, spatial.factors = sf)
 }
 }

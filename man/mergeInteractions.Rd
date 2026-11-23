@@ -2,24 +2,27 @@
 % Please edit documentation in R/analysis.R
 \name{mergeInteractions}
 \alias{mergeInteractions}
-\title{Aggregate group-level interaction matrices across cell subpopulations}
+\title{Compute the number of interactions/interaction strength between cell types based on their associated cell subpopulations}
 \usage{
 mergeInteractions(object, group.merged)
 }
 \arguments{
-\item{object}{A single or merged SpatialCellChat object with group-level count and weight matrices.}
+\item{object}{A single or merged SpatialCellChat object with group-level
+count and weight matrices already computed.}
 
-\item{group.merged}{A factor or character vector mapping every current group to a merged group. Named vectors are aligned by current group names.}
+\item{group.merged}{A factor or character vector mapping every current group
+to a merged group. A named vector is aligned by current group names.}
 }
 \value{
-A SpatialCellChat object with the following elements added under `net$group` (or under each merged dataset snapshot's `net$group`):
+A SpatialCellChat object with the following elements added under
+  `net$group` (or each merged dataset snapshot's `net$group`):
 
 `count.merged`: the number of interactions between cell types (i.e., merged cell groups)
 
 `weight.merged`: interaction strength between cell types (i.e., merged cell groups)
 
-`group.merged`: the mapping from current groups to merged groups.
+`group.merged`: the defined group for merging different clusters/subpopulations.
 }
 \description{
-Aggregates group-level count and weight matrices by the supplied group mapping. For merged objects, the aggregation is applied independently to each dataset snapshot.
+Compute the number of interactions/interaction strength between cell types based on their associated cell subpopulations
 }

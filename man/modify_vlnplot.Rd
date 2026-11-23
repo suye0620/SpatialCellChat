@@ -44,6 +44,9 @@ modify_vlnplot(
 
 \item{...}{pass any arguments to VlnPlot in Seurat}
 }
+\value{
+A Seurat violin plot with the requested formatting.
+}
 \description{
 modified vlnplot
 }

@@ -13,6 +13,9 @@ addMeta(object, meta, meta.name = NULL)
 
 \item{meta.name}{the name of column to be assigned}
 }
+\value{
+The SpatialCellChat object with the supplied metadata.
+}
 \description{
 Add the cell information into meta slot
 }

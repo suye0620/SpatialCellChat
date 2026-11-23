@@ -6,38 +6,47 @@
 \usage{
 makeGridSpatialCellChat(
   object,
-  data.slot = c("data", "data.raw", "data.signaling", "data.scale", "data.project"),
+  data.slot = c("norm", "raw", "scale", "signaling", "smooth"),
   cellsize = c(5, 5),
   what = "polygons",
-  square = T,
+  square = TRUE,
   idents.ties.method = "first"
 )
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{SpatialCellChat object.}
 
-\item{data.slot}{A CellChat object may have 5 slots to store data matrix:
-data.raw,data,data.signaling,data.scale,data.project, choose one data slot
-to make a new grid CellChat object. By default, use "data".}
+\item{data.slot}{Assay layer used to make the grid. One of `norm`, `raw`,
+`scale`, `signaling`, or `smooth`; defaults to `norm`. The layer is read
+from `object@assay`.}
 
-\item{cellsize}{Numeric vector of length 1 or 2. We use [sf::st_make_grid()] to make grid data. It is a numeric vector
-of length 1 or 2 with target cellsize, please see details in [sf::st_make_grid()]:
-for square or rectangular cells the width and height, for hexagonal cells the distance between
-opposite edges (edge length is cellsize/sqrt(3)). A length units object can be passed,
-or an area unit object with area size of the square or hexagonal cell.
+\item{cellsize}{Positive finite numeric vector of length 1 or 2. Grid
+geometry uses the first two canonical `images$coordinates` axes (`x`,
+`y`). Square cells use width and height; hexagonal cells use the distance
+between opposite edges. Use `computeGridSize()` for an estimate.}
 
-Tips: Please run `computeGridSize` to get a proper `cellsize`.the unit of the `cellsize` you input is "pixel" or a unit used in old CellChat object's coordinates}
+\item{what}{Character. One of `"polygons"`, `"corners"`, or `"centers"`.}
 
-\item{what}{Character. One of: "polygons", "corners", or "centers". See details in [sf::st_make_grid()]}
+\item{square}{Boolean. If FALSE, create a hexagonal grid.}
 
-\item{square}{Boolean. If FALSE, create hexagonal grid. See details in [sf::st_make_grid()]}
-
-\item{idents.ties.method}{To determine the ident/cell group of each grid, we use [base::max.col()]
-to choose a ident containing the most cells per grid. See `ties.method` in [base::max.col()].}
+\item{idents.ties.method}{To determine the ident/cell group of each grid,
+use [base::max.col()] to choose the ident containing the most cells.
+See `ties.method` in [base::max.col()].}
 }
 \value{
-CellChat object
+SpatialCellChat object.
 }
 \description{
-makeGridSpatialCellChat
+Aggregate a SpatialCellChat object into spatial grid cells while retaining
+cell identities, centroids, counts, and the selected assay layer.
+}
+\details{
+Coordinates are read from canonical `images$coordinates`; grid geometry uses
+the first two analysis axes (`x`, `y`) without swapping or transforming them.
+Point-on-edge and point-on-corner membership follows
+[sf::st_intersects()], so a point may contribute to multiple grids. The
+`images$spatial.factors$ratio` value is retained for calibrated data;
+uncalibrated data use raw coordinate units and do not imply physical units.
+Invalid `cellsize` values (zero, negative, non-finite, or unsupported
+lengths) are rejected.
 }

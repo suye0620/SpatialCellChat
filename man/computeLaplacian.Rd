@@ -11,6 +11,9 @@ computeLaplacian(CM, tol = 0.01)
 
 \item{tol}{tolerance}
 }
+\value{
+A list containing sorted Laplacian eigenvalues and the number at or below the tolerance.
+}
 \description{
 Compute eigenvalues of associated Laplacian matrix of a given matrix
 }

@@ -65,6 +65,9 @@ netVisual_embedding(
 
 \item{show.axes}{whether show the axes}
 }
+\value{
+A ggplot of the selected pathway similarity embedding.
+}
 \description{
 2D visualization of the learned manifold of signaling networks
 }

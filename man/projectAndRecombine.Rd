@@ -34,7 +34,8 @@ adjacency matrix be normalized by. rows
 corresponds to in-degree, columns to
 out-degree.}
 
-\item{...}{additional arguments passed to \code{projecting.function}.}
+\item{...}{passed on to `projecting.function` (for example `tol` and
+`max.iter` when using [randomWalkByIterations()]).}
 }
 \value{
 matrix with network-projected gene expression data. Genes that are

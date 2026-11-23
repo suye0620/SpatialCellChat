@@ -13,6 +13,9 @@ computeExpr_LR(geneLR, data.use, complex_input)
 
 \item{complex_input}{the complex_input from CellChatDB}
 }
+\value{
+A matrix of per-cell expression for the requested ligands, receptors, or complexes.
+}
 \description{
 Compute the expression of ligands or receptors using geometric mean
 }

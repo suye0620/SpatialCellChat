@@ -10,14 +10,15 @@ netMappingDEG(object, features.name, thresh = 0.05)
 \item{object}{A single or merged SpatialCellChat object.}
 
 \item{features.name}{Name of the marker result. Single objects read
-\code{misc$.var.features[[paste0(features.name, ".info")]]}; merged objects
-use a table with a \code{datasets} column or the matching dataset snapshot.}
+`misc$.var.features[[paste0(features.name, ".info")]]`. Merged objects use
+a table with a `datasets` column from the merged object, or the matching
+dataset snapshot's marker table.}
 
-\item{thresh}{P-value threshold passed to \code{subsetCommunication()}.}
+\item{thresh}{P-value threshold passed to `subsetCommunication()`.}
 }
 \value{
-A data frame of inferred communications annotated with ligand and receptor DEG
-columns. Merged results include a \code{datasets} column.
+A data frame of inferred communications annotated with ligand and
+  receptor DEG columns. Merged results include a `datasets` column.
 }
 \description{
 Single objects use their own marker table. Merged objects use a dataset-tagged

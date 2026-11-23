@@ -10,6 +10,9 @@ Experimental method to examine the dispersion of results}
 \arguments{
 \item{H}{a list of numeric matrices or a single matrix}
 }
+\value{
+A sparse symmetric connectivity matrix based on common pattern membership.
+}
 \description{
 Make sure H is cell x factor
 Experimental method to examine the dispersion of results

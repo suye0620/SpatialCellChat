@@ -47,6 +47,9 @@ netAnalysis_dot(
 
 \item{font.size.title}{font size of the title}
 }
+\value{
+A ggplot showing cell or signaling memberships in communication patterns.
+}
 \description{
 Using a contribution score of each cell group to each signaling pathway computed by multiplying W by H obtained from `identifyCommunicationPatterns`, we constructed a dot plot in which the dot size is proportion to the contribution score to show association between cell group and their enriched signaling pathways.
 }

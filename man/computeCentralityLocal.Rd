@@ -11,6 +11,9 @@ computeCentralityLocal(net, degree.only = F)
 
 \item{degree.only}{only compute outdeg_unweighted,indeg_unweighted,outdeg,indeg and page_rank}
 }
+\value{
+A matrix of centrality measures by node.
+}
 \description{
 Compute Centrality measures for a signaling network
 }

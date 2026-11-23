@@ -13,6 +13,9 @@ computeEigengap(CM, tau = NULL, tol = 0.01)
 
 \item{tol}{tolerance}
 }
+\value{
+A list containing two suggested bounds, eigenvalues, and an eigengap plot.
+}
 \description{
 Compute the eigengap of a given matrix for inferring the number of clusters
 }

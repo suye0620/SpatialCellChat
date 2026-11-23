@@ -2,7 +2,7 @@
 % Please edit documentation in R/analysis.R
 \name{getMaxWeight}
 \alias{getMaxWeight}
-\title{Compute the maximum value of measures in communication networks}
+\title{Compute the maximum value of certain measures in the inferred cell-cell communication networks}
 \usage{
 getMaxWeight(
   object.list,
@@ -13,19 +13,27 @@ getMaxWeight(
 \arguments{
 \item{object.list}{A list of single or merged SpatialCellChat objects.}
 
-\item{slot.name}{The source of the values: \code{idents}, \code{net}, or \code{netP}.
+\item{slot.name}{The source of the values: `idents`, `net`, or `netP`.
 
-When \code{slot.name = "idents"}, \code{attribute} must be \code{idents}, which computes the maximum number of cells per group across objects and datasets.
+When slot.name = "idents", `attribute` must be `idents`, which computes the
+  maximum number of cells per group across objects and datasets.
 
-For \code{net} or \code{netP}, \code{attribute} may be \code{count} or \code{weight}. For \code{net}, it may also be \code{count.merged} or \code{weight.merged}.
+For `net` or `netP`, `attribute` may be `count` or `weight`. For `net`, it
+  may also be `count.merged` or `weight.merged`.
 
-For \code{net} or \code{netP}, \code{attribute} may be a single available signaling-layer name. Layer maxima are read from \code{group$prob} without densifying the full three-dimensional array.}
+For `net` or `netP`, `attribute` may be a single available signaling-layer
+  name. Layer maxima are read from `group$prob` without densifying the full
+  three-dimensional array.}
 
-\item{attribute}{The attribute to compute. It must have the same length as \code{slot.name}, with each entry corresponding to the slot at the same position.}
+\item{attribute}{the attribute to compute the maximum values. `attribute` should have the same length as `slot.name`.
+
+Each `attribute` entry must correspond to the `slot.name` entry at the same
+  position.}
 }
 \value{
 A numeric vector
 }
 \description{
-Computes maximum cell-group sizes, group-level interaction measures, or signaling-layer probabilities across objects and merged datasets.
+To better control the node size and edge weights of the inferred networks across different datasets,
+we compute the maximum number of cells per cell group and the maximum number of interactions (or interaction weights) across all datasets
 }

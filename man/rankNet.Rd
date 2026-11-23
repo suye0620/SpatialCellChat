@@ -109,6 +109,9 @@ https://tobiasbusch.xyz/an-r-package-for-everything-ep2-gaps}
 
 \item{legend.spacing}{a two-elements vector respectively specifying legend.key.spacing.x and legend.key.spacing.y for spacing apart legend key-label pairs}
 }
+\value{
+A ggplot, or a list of the signaling contribution table and plot when return.data is TRUE.
+}
 \description{
 This function can also be used to rank signaling from certain cell groups to other cell groups
 }

@@ -23,6 +23,9 @@ computeNetSimilarity(
 
 \item{thresh}{the fraction (0 to 0.25) of interactions to be trimmed before computing network similarity}
 }
+\value{
+The object with the similarity matrix stored under the chosen network and similarity type.
+}
 \description{
 Compute signaling network similarity for any pair of signaling networks
 }

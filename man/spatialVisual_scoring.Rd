@@ -75,6 +75,9 @@ spatialVisual_scoring(
 
 \item{show.legend.combined}{whether show the figure legend for the last plot}
 }
+\value{
+Spatial score plots for the selected measures, optionally combined into a single figure.
+}
 \description{
 Spatially visualizing any computed scores
 }

@@ -5,6 +5,11 @@ using namespace Rcpp;
 
 typedef Eigen::Triplet<double> T;
 // Adapted from swne (https://github.com/yanwu2014/swne)
+//' Compute the shared nearest-neighbor graph
+//' @param nn_ranked Matrix of one-based ranked neighbor indices, one row per observation.
+//' @param prune Remove edges with a shared-neighbor weight below this value.
+//' @return A sparse matrix of shared nearest-neighbor weights.
+//' @noRd
 //[[Rcpp::export]]
 Eigen::SparseMatrix<double> ComputeSNN(Eigen::MatrixXd nn_ranked, double prune) {
   std::vector<T> tripletList;
@@ -32,6 +37,10 @@ Eigen::SparseMatrix<double> ComputeSNN(Eigen::MatrixXd nn_ranked, double prune) 
 
 // Sum N identically-dimensioned dgCMatrix into a single dgCMatrix.
 // Column-by-column accumulator: val[n]+mark[n] per column avoids intermediate expansion.
+//' Sum sparse matrices entrywise
+//' @param matrices Nonempty list of dgCMatrix matrices with equal dimensions.
+//' @return A dgCMatrix with the sum of each entry across layers.
+//' @noRd
 // [[Rcpp::export]]
 S4 cpp_sum_layers(List matrices) {
   int n = matrices.size();
@@ -132,6 +141,17 @@ S4 cpp_sum_layers(List matrices) {
 // Returns list(i, p, x): compacted dgCMatrix slots (i 0-based; v != 0 kept; CSC order preserved).
 // [[Rcpp::plugins(openmp)]]
 #include <omp.h>
+//' Compute one LR layer in the sparse geometry pattern
+//' @param x0 Baseline spatial weights in compressed sparse column order.
+//' @param row0,col0 Zero-based cell indices for the coordinates of the stored weights.
+//' @param L,R Per-cell ligand and receptor expression.
+//' @param Kh,n Half-saturation constant and exponent of the Hill function.
+//' @param contact_mask Contact weights aligned to the stored geometry pattern.
+//' @param fAG,fAN Optional per-cell agonist and antagonist factors, respectively.
+//' @param nC Number of cells.
+//' @param nthreads Number of OpenMP threads.
+//' @return A list with the compact sparse layer slots i, p, and x.
+//' @noRd
 // [[Rcpp::export]]
 Rcpp::List cpp_prob_layer(Rcpp::NumericVector x0, Rcpp::IntegerVector row0,
                           Rcpp::IntegerVector col0,
@@ -300,6 +320,18 @@ void sc_boot_block_avg(const double* x, const int* idx, const int* p, int nC,
 
 // Observed-labels aggregation for one LR layer (baseline averages section).
 // group_int: 0-based group codes, length nC. avg_sum: 0 = "avg", 1 = "sum".
+//' Aggregate one layer under the observed group labels
+//' @param x,idx,p The values, zero-based row indices, and column pointers of the sparse probability layer.
+//' @param suppL,suppR Per-cell ligand and receptor support values.
+//' @param sr_out,sr_in Per-cell totals for outgoing and incoming signaling.
+//' @param group_int Zero-based group codes, one per cell.
+//' @param K Number of groups.
+//' @param thr Minimum ligand and receptor support counts for each group.
+//' @param min_cells_sr Minimum fraction of active senders and receivers.
+//' @param avg_sum Use 0 for an average or 1 for a sum.
+//' @param nC Number of cells.
+//' @return A numeric vector of group-pair values in column-major order.
+//' @noRd
 // [[Rcpp::export]]
 Rcpp::NumericVector cpp_group_avg_obs(Rcpp::NumericVector x, Rcpp::IntegerVector idx,
                                       Rcpp::IntegerVector p,
@@ -328,6 +360,19 @@ Rcpp::NumericVector cpp_group_avg_obs(Rcpp::NumericVector x, Rcpp::IntegerVector
 // bitwise identical for any nthreads.
 // [[Rcpp::plugins(openmp)]]
 #include <omp.h>
+//' Aggregate one layer under supplied label permutations
+//' @param x,idx,p The values, zero-based row indices, and column pointers of the sparse probability layer.
+//' @param suppL,suppR Per-cell ligand and receptor support values.
+//' @param sr_out,sr_in Per-cell totals for outgoing and incoming signaling.
+//' @param group_int Zero-based group codes, one per cell.
+//' @param K Number of groups.
+//' @param thr Minimum ligand and receptor support counts for each group.
+//' @param min_cells_sr Minimum fraction of active senders and receivers.
+//' @param avg_sum Use 0 for an average or 1 for a sum.
+//' @param perm A matrix of one-based cell indices, one column per permutation.
+//' @param nthreads Number of OpenMP threads.
+//' @return A matrix with one row per group pair and one column per permutation.
+//' @noRd
 // [[Rcpp::export]]
 Rcpp::NumericMatrix cpp_group_avg_perm(Rcpp::NumericVector x, Rcpp::IntegerVector idx,
                                        Rcpp::IntegerVector p,

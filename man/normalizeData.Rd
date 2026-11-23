@@ -2,17 +2,24 @@
 % Please edit documentation in R/utilities.R
 \name{normalizeData}
 \alias{normalizeData}
-\title{Normalize data using a scaling factor}
+\title{Normalize raw expression counts and optionally update a SpatialCellChat object.}
 \usage{
-normalizeData(data.raw, scale.factor = 10000, do.log = TRUE)
+normalizeData(data.raw, scale.factor = 10000, do.log = TRUE, verbose = TRUE)
 }
 \arguments{
-\item{data.raw}{input raw data}
+\item{data.raw}{A raw count matrix or a SpatialCellChat object with
+`assay$raw` populated.}
 
-\item{scale.factor}{the scaling factor used for each cell}
+\item{scale.factor}{The per-cell scaling factor.}
 
-\item{do.log}{whether do log transformation with pseudocount 1}
+\item{do.log}{Whether to apply a log1p transformation after scaling.}
+
+\item{verbose}{Whether to emit cli progress messages.}
+}
+\value{
+A normalized matrix for matrix input, or an updated
+  SpatialCellChat object for object input.
 }
 \description{
-Normalize data using a scaling factor
+Normalize raw expression counts and optionally update a SpatialCellChat object.
 }

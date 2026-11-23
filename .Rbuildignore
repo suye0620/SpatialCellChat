@@ -11,3 +11,4 @@
 ^man/legacy($|/)
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^dist($|/)

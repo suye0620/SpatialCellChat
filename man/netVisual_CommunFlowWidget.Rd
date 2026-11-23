@@ -76,8 +76,8 @@ An htmlwidget object.
 }
 \description{
 Render one precomputed incoming or outgoing communication field as a local
-Canvas 2D htmlwidget. The static layer shows identity-colored cell points and
-a Sources or Targets identity legend. Moving particles are the only
+Canvas 2D htmlwidget. The static layer shows identity-colored cell points
+and a Sources or Targets identity legend. Moving particles are the only
 flow-direction overlay and move over the same fixed field; this is not a
 biological time-series or a physical transport-speed estimate.
 }

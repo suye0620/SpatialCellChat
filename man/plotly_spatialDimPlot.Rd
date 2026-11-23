@@ -18,7 +18,7 @@ plotly_spatialDimPlot(
   title.name = NULL,
   scene.name = "scene",
   point.size = 2,
-  show.legend = T,
+  show.legend = TRUE,
   legend.group.title = "labels",
   three.dim.z = 0
 )
@@ -55,8 +55,6 @@ plotly_spatialDimPlot(
 \item{legend.group.title}{the parameter `legendgrouptitle` in `plotly::plot_ly` and `plotly::add_trace`. The title text displayed for the legend group.}
 
 \item{three.dim.z}{the fixed z-axis coordinate in 3D mode}
-
-\item{legend.group}{the parameter `legendgroup` in `plotly::plot_ly` and `plotly::add_trace`. Name of the legend group for traces, used to combine multiple traces under the same legend.}
 }
 \value{
 a plotly plot

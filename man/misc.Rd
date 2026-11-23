@@ -18,16 +18,14 @@ misc(object, ...) <- value
 \arguments{
 \item{object}{An object}
 
-\item{...}{Arguments passed to other methods}
+\item{...}{Arguments passed to the getter or replacement method, including key.}
 
 \item{value}{Data to add}
 
-\item{key}{Name of specific bit of meta data to pull}
+\item{key}{Optional name of the miscellaneous entry to retrieve or replace.}
 }
 \value{
-miscellaneous data
-
-An object with miscellaneous data added
+The getter returns the miscellaneous data list or one requested entry. The setter returns the updated object.
 }
 \description{
 Get and set miscellaneous data

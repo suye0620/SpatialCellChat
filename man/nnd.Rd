@@ -9,6 +9,9 @@ nnd(g)
 \arguments{
 \item{g}{a graph objecct}
 }
+\value{
+The mean distance distribution followed by the network node dispersion score.
+}
 \description{
 compute nnd
 }

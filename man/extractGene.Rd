@@ -9,6 +9,9 @@ extractGene(CellChatDB)
 \arguments{
 \item{CellChatDB}{CellChatDB databse used in the analysis}
 }
+\value{
+A character vector of unique genes appearing in the database.
+}
 \description{
 Extract the genes involved in CellChatDB
 }

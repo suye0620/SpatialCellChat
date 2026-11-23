@@ -47,6 +47,9 @@ netAnalysis_signalingRole_heatmap(
 
 \item{cluster.cols}{whether cluster columns}
 }
+\value{
+A ComplexHeatmap object showing outgoing, incoming, or total signaling centrality.
+}
 \description{
 In this heatmap, colobar represents the relative signaling strength of a signaling pathway across cell groups (NB: values are row-scaled).
 The top colored bar plot shows the total signaling strength of a cell group by summarizing all signaling pathways displayed in the heatmap.

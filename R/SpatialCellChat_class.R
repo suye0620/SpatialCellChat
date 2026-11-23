@@ -8,7 +8,7 @@
 #'
 #' @param x a non-empty named list of dgCMatrix with identical dimensions
 #' @param dimnames optional object-level dimnames: row, column, and layer names
-#' @return an object of class "SparseChatArray"
+#' @return An object of class SparseChatArray.
 #' @export
 SparseChatArray <- function(x, dimnames = NULL) {
   if (!is.list(x)) stop("x must be a list")
@@ -22,6 +22,14 @@ SparseChatArray <- function(x, dimnames = NULL) {
   .new_SparseChatArray(x, dn)
 }
 
+#' Subset a sparse communication array
+#'
+#' @param x A SparseChatArray.
+#' @param i Sender-axis selector.
+#' @param j Receiver-axis selector.
+#' @param k Signaling layer selector.
+#' @param drop Whether to simplify the result when an axis has length one.
+#' @return A SparseChatArray, or a dropped matrix or vector when requested.
 #' @export
 `[.SparseChatArray` <- function(x, i, j, k, drop = TRUE) {
   d <- dim(x)
@@ -54,6 +62,13 @@ SparseChatArray <- function(x, dimnames = NULL) {
   }
 }
 
+#' Extract a sparse communication layer
+#'
+#' @param x A SparseChatArray.
+#' @param i Integer or name identifying one signaling layer.
+#' @param ... Reserved for compatibility with the subsetting generic.
+#' @param exact Whether character layer names must match exactly.
+#' @return The selected sparse matrix.
 #' @export
 `[[.SparseChatArray` <- function(x, i, ..., exact = TRUE) {
   if (length(list(...)) > 0L)
@@ -81,29 +96,55 @@ SparseChatArray <- function(x, dimnames = NULL) {
   )
 }
 
+#' Get sparse communication array dimensions
+#'
+#' @param x A SparseChatArray.
+#' @return Integer vector of sender, receiver, and signaling layer counts.
 #' @export
 `dim.SparseChatArray` <- function(x) {
   c(nrow(unclass(x)[[1]]), ncol(unclass(x)[[1]]), length(x))
 }
 
+#' Get sparse communication axis labels
+#'
+#' @param x A SparseChatArray.
+#' @return A list of sender, receiver, and signaling layer names.
 #' @export
 `dimnames.SparseChatArray` <- function(x) {
   attr(x, "Dimnames", exact = TRUE) %||%
     .SparseChatArray_dimnames(unclass(x), dim(x), NULL)
 }
 
+#' Set sparse communication axis labels
+#'
+#' @param x A SparseChatArray.
+#' @param value A list of three axis name vectors, or NULL.
+#' @return The array with validated axis names.
 #' @export
 `dimnames<-.SparseChatArray` <- function(x, value) {
   dn <- .SparseChatArray_dimnames(unclass(x), dim(x), value)
   .new_SparseChatArray(unclass(x), dn)
 }
 
+#' Count sparse communication layers
+#'
+#' @param x A SparseChatArray.
+#' @return The number of layers, including empty layers.
 #' @export
 `length.SparseChatArray` <- function(x) length(unclass(x))
 
+#' Get signaling layer names
+#'
+#' @param x A SparseChatArray.
+#' @return A character vector of layer names, or NULL.
 #' @export
 `names.SparseChatArray` <- function(x) dimnames(x)[[3]]
 
+#' Set signaling layer names
+#'
+#' @param x A SparseChatArray.
+#' @param value A character vector of layer names, or NULL.
+#' @return The array with updated layer names.
 #' @export
 `names<-.SparseChatArray` <- function(x, value) {
   dn <- dimnames(x)
@@ -111,6 +152,12 @@ SparseChatArray <- function(x, dimnames = NULL) {
   .new_SparseChatArray(unclass(x), dn)
 }
 
+#' Print a sparse communication array summary
+#'
+#' @param x A SparseChatArray.
+#' @param ... Additional arguments accepted by the print method.
+#' @return The original array, invisibly.
+#' @usage \method{print}{SparseChatArray}(x, ...)
 #' @export
 print.SparseChatArray <- function(x, ...) {
   d <- dim(x)
@@ -127,6 +174,10 @@ print.SparseChatArray <- function(x, ...) {
   invisible(x)
 }
 
+#' Sum sparse communication probabilities by margin
+#'
+#' @return A vector of retained axis totals or a matrix of sender by receiver totals, depending on the margin.
+#' @noRd
 #' @export
 #' Sum margins of a SparseChatArray
 #' @param x a SparseChatArray
@@ -135,6 +186,11 @@ print.SparseChatArray <- function(x, ...) {
 marginSums <- function(x, margin = 3L) {
   UseMethod("marginSums")
 }
+#' Sum a sparse communication array by margin
+#' @param x A SparseChatArray.
+#' @param margin The axis to sum over, using 1 for senders, 2 for receivers, and 3 for signaling layers.
+#' @return A vector for margin 1 or 2, or a sparse matrix when summing over the signaling layers with margin 3.
+#' @noRd
 marginSums.SparseChatArray <- function(x, margin = 3L) {
   d <- dim(x)
   if (margin == 3L) {
@@ -163,6 +219,13 @@ marginSums.SparseChatArray <- function(x, margin = 3L) {
   }
 }
 
+#' List stored sparse communication entries
+#'
+#' @param x A SparseChatArray.
+#' @param row.names Row names for the returned data frame.
+#' @param ... Additional arguments accepted by the data frame method.
+#' @return A data frame of stored entries and their sender, receiver, and layer indices.
+#' @usage \method{as.data.frame}{SparseChatArray}(x, row.names = NULL, ...)
 #' @export
 as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   d <- dim(x)
@@ -194,6 +257,11 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   result
 }
 
+#' Transpose all sparse communication layers
+#'
+#' @param x A SparseChatArray.
+#' @return A SparseChatArray with the sender and receiver axes exchanged.
+#' @usage \method{t}{SparseChatArray}(x)
 #' @export
 `t.SparseChatArray` <- function(x) {
   out <- pbapply::pblapply(unclass(x), t)
@@ -201,6 +269,11 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   .new_SparseChatArray(out, list(dn[[2]], dn[[1]], dn[[3]]))
 }
 
+#' Construct an array from validated sparse layers
+#' @param x The value to inspect or transform.
+#' @param dimnames The sender, receiver, and signaling axis names.
+#' @return A SparseChatArray with the supplied axis labels.
+#' @noRd
 .new_SparseChatArray <- function(x, dimnames) {
   x <- lapply(x, .SparseChatArray_drop_matrix_dimnames)
   names(x) <- NULL
@@ -212,12 +285,22 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
 #' The outer object stores only the class marker and the object-level
 #' `Dimnames` attribute; individual matrix dimnames are normalized by
 #' `.new_SparseChatArray()`.
+#' @param x The value to inspect or transform.
+#' @param FUN A function applied to each sparse communication layer.
+#' @return A SparseChatArray with the original axis labels and transformed layers.
+#' @noRd
 .sc_map_sparse_layers <- function(x, FUN) {
   dn <- dimnames(x)
   layers <- lapply(unclass(x), FUN)
   .new_SparseChatArray(layers, dn)
 }
 
+#' Resolve sparse communication axis names
+#' @param x The value to inspect or transform.
+#' @param dims The expected sender, receiver, and signaling extents.
+#' @param dimnames The sender, receiver, and signaling axis names.
+#' @return A list of validated axis names, inferred from layers when absent.
+#' @noRd
 .SparseChatArray_dimnames <- function(x, dims, dimnames = NULL) {
   if (length(dims) == 2L) dims <- c(dims, length(x))
 
@@ -239,6 +322,12 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   )
 }
 
+#' Check agreement of axis names across layers
+#' @param x The value to inspect or transform.
+#' @param margin The axis to sum over, using 1 for senders, 2 for receivers, and 3 for signaling layers.
+#' @param label The field label used in validation diagnostics.
+#' @return The common labels or NULL when no layer supplies them.
+#' @noRd
 .SparseChatArray_common_matrix_dimname <- function(x, margin, label) {
   values <- lapply(x, function(m) dimnames(m)[[margin]])
   present <- !vapply(values, is.null, logical(1))
@@ -252,6 +341,12 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   ref
 }
 
+#' Validate one sparse communication axis
+#' @param value The input or replacement value.
+#' @param expected The expected number of axis labels.
+#' @param label The field label used in validation diagnostics.
+#' @return Completion is invisible. Invalid labels raise an error.
+#' @noRd
 .SparseChatArray_validate_dimname <- function(value, expected, label) {
   if (is.null(value)) return(NULL)
   if (!is.character(value)) value <- as.character(value)
@@ -260,11 +355,22 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   value
 }
 
+#' Clear labels on one sparse layer
+#' @param mat A matrix for the current layer.
+#' @return The matrix with its row and column names removed.
+#' @noRd
 .SparseChatArray_drop_matrix_dimnames <- function(mat) {
   dimnames(mat) <- list(NULL, NULL)
   mat
 }
 
+#' Resolve a sparse communication subscript
+#' @param index The index or names selecting positions along the axis.
+#' @param dimname The existing names for the axis.
+#' @param extent The length of the axis.
+#' @param label The field label used in validation diagnostics.
+#' @return Integer positions selected by the subscript.
+#' @noRd
 .SparseChatArray_resolve_index <- function(index, dimname, extent, label) {
   if (!is.character(index)) return(index)
   if (is.null(dimname))
@@ -279,6 +385,13 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   resolved
 }
 
+#' Resolve a single sparse communication layer
+#' @param index The index or names selecting positions along the axis.
+#' @param dimname The existing names for the axis.
+#' @param extent The length of the axis.
+#' @param label The field label used in validation diagnostics.
+#' @return A single integer layer position.
+#' @noRd
 .SparseChatArray_resolve_single_index <- function(index, dimname, extent, label) {
   resolved <- .SparseChatArray_resolve_index(index, dimname, extent, label)
   if (length(resolved) != 1L)
@@ -295,12 +408,27 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
   resolved
 }
 
+#' Select axis labels for a subset
+#' @param dimname The existing names for the axis.
+#' @param index The index or names selecting positions along the axis.
+#' @param missing_index Whether the subscript was omitted.
+#' @return The labels corresponding to the selected axis positions, or NULL.
+#' @noRd
 .SparseChatArray_subset_dimname <- function(dimname, index, missing_index) {
   if (is.null(dimname)) return(NULL)
   if (missing_index) return(dimname)
   dimname[index]
 }
 
+#' Subscript the sender and receiver axes of a layer
+#' @param mat A matrix for the current layer.
+#' @param i Sender-axis selector.
+#' @param j Receiver-axis selector.
+#' @param missing_i Whether the sender subscript was omitted.
+#' @param missing_j Whether the receiver subscript was omitted.
+#' @param drop Whether to simplify the result when an axis has length one.
+#' @return A subset matrix or a dropped vector or scalar.
+#' @noRd
 .SparseChatArray_subset_layer <- function(mat, i, j, missing_i, missing_j, drop) {
   if (missing_i && missing_j) {
     mat[, , drop = drop]
@@ -316,6 +444,25 @@ as.data.frame.SparseChatArray <- function(x, row.names = NULL, ...) {
 
 # ====== SpatialCellChat S4 class ======
 
+#' The 11-slot SpatialCellChat object
+#'
+#' Stores expression, spatial geometry, observation metadata, ligand-receptor
+#' results, pathway results, and derived analyses. Mode and datatype are
+#' recorded in the misc slot.
+#' @name SpatialCellChat-class
+#' @docType class
+#' @aliases SpatialCellChat
+#' @slot assay Named assay matrices: raw, norm, scale, smooth, and signaling.
+#' @slot images Spatial coordinates, coordinate calibration, rasters, FOV data, and distance/grid caches.
+#' @slot meta A data frame of cell/spot metadata.
+#' @slot idents A factor defining the cell/spot group for each observation.
+#' @slot features A data frame of gene-level metadata.
+#' @slot LR LR interaction annotations and selected LR tables.
+#' @slot dr Dimensional reductions and other embeddings.
+#' @slot net LR-level communication results. Group probabilities and p-values are stored under \code{net$group}; cell probabilities are under \code{net$cell}; temporary computation data are under \code{net$tmp}.
+#' @slot netP Pathway-level communication results with the same group/cell organization as \code{net}.
+#' @slot DB The communication database and gene/complex annotations used in analysis.
+#' @slot misc Mode, datatype, parameters, operation log, variable-feature results, and merged dataset snapshots.
 #' @exportClass SpatialCellChat
 #' @importClassesFrom Matrix dgCMatrix
 #' @importFrom Rcpp evalCpp
@@ -336,10 +483,21 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   )
 )
 
+#' Test for an ordinary or Matrix matrix
+#' @param x The value to inspect or transform.
+#' @return A logical scalar.
+#' @noRd
 .sc_matrix_like <- function(x) {
   inherits(x, "matrix") || inherits(x, "Matrix")
 }
 
+#' Validate a matrix against its axis contract
+#' @param x The value to inspect or transform.
+#' @param expected_dim The required vector of matrix dimensions.
+#' @param expected_dimnames The required list of row and column names.
+#' @param label The field label used in validation diagnostics.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_matrix <- function(x, expected_dim, expected_dimnames, label) {
   errors <- character()
   if (is.null(x)) return(errors)
@@ -361,6 +519,13 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
 
 # Gene-subset layers (signaling, smooth) share one contract: the object cells as
 # columns in order, rows drawn from assay$norm and keeping its gene order.
+#' Check a subset assay against object axes
+#' @param x The value to inspect or transform.
+#' @param gene_names Gene names in canonical assay order.
+#' @param cell_names Observation names in canonical object order.
+#' @param label The field label used in validation diagnostics.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_subset_layer <- function(x, gene_names, cell_names, label) {
   if (!.sc_matrix_like(x)) {
     return(paste0("assay$", label, " must be a matrix or Matrix object"))
@@ -381,6 +546,12 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   character()
 }
 
+#' Check the assay list and its aligned matrices
+#' @param assay The list of named expression layers.
+#' @param gene_names Gene names in canonical assay order.
+#' @param cell_names Observation names in canonical object order.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_assay <- function(assay, gene_names, cell_names) {
   if (!is.list(assay)) return("assay must be a list")
   required <- c("raw", "norm", "scale", "smooth", "signaling")
@@ -411,6 +582,12 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+#' Check the observation identities
+#' @param idents The factor or identity list to validate.
+#' @param cell_names Observation names in canonical object order.
+#' @param mode The object mode or analysis mode required by the caller.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_idents <- function(idents, cell_names, mode) {
   if (!inherits(idents, "factor"))
     return("idents must be a factor")
@@ -428,6 +605,11 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+#' Check the declared coordinate convention
+#' @param coordinate.system The declared system in which spatial coordinates are stored.
+#' @param label The field label used in validation diagnostics.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_coordinate_system <- function(coordinate.system,
                                             label = "images$coordinate.system") {
   if (is.null(coordinate.system)) return(character())
@@ -453,6 +635,12 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+#' Check distance calibration against the coordinate convention
+#' @param factors Spatial calibration factors for the declared coordinate system.
+#' @param coordinate.system The declared system in which spatial coordinates are stored.
+#' @param label The field label used in validation diagnostics.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_spatial_factors <- function(factors, coordinate.system,
                                          label = "images$spatial.factors") {
   # An uncalibrated coordinate system is allowed for plotting and relative
@@ -483,6 +671,11 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
     errors <- c(errors, paste0(label, "$ratio must be NULL when coordinates are uncalibrated"))
   errors
 }
+#' Check the raster coordinate transform
+#' @param transform The affine mapping connecting raster and spatial coordinates.
+#' @param label The field label used in validation diagnostics.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_transform <- function(transform,
                                    label = "images$rasters transform") {
   if (!is.list(transform)) return(paste0(label, " must be a list"))
@@ -499,6 +692,11 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+#' Check raster records and their observation references
+#' @param rasters The named list of raster records.
+#' @param cell_names Observation names in canonical object order.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_rasters <- function(rasters, cell_names) {
   if (is.null(rasters)) return(character())
   if (!is.list(rasters)) return("images$rasters must be a list")
@@ -545,6 +743,10 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+#' Check the field-of-view metadata records
+#' @param fov Per-field-of-view metadata.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_fov <- function(fov) {
   if (is.null(fov)) return(character())
   if (!is.list(fov)) return("images$fov must be a list")
@@ -576,6 +778,11 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+#' Check the sparse distance and contact cache
+#' @param distance The distance cache record, or distances to plot in a density panel.
+#' @param cell_names Observation names in canonical object order.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_distance_cache <- function(distance, cell_names) {
   if (!is.list(distance)) return("images$.distance must be a list")
   errors <- character()
@@ -590,6 +797,12 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+#' Check spatial data and cached geometry
+#' @param images The spatial images list.
+#' @param cell_names Observation names in canonical object order.
+#' @param datatype The data type recorded in the object.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_images <- function(images, cell_names, datatype) {
   if (!is.list(images)) return("images must be a list")
   errors <- character()
@@ -643,6 +856,13 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
 }
 
 
+#' Check alignment of communication layers and axes
+#' @param net compute the centrality measures on a specific signaling network given by a 2 or 3 dimemsional array net
+#' @param cell_names Observation names in canonical object order.
+#' @param group_names Expected group labels in identity level order.
+#' @param label The field label used in validation diagnostics.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_net <- function(net, cell_names, group_names, label) {
   if (!is.list(net)) return(paste0(label, " must be a list"))
   errors <- character()
@@ -698,6 +918,10 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   errors
 }
 
+#' Check the individual snapshots of a merged object
+#' @param object A SpatialCellChat object.
+#' @return A character vector of validation problems.
+#' @noRd
 .sc_validate_merged_datasets <- function(object) {
   datasets <- object@misc$.datasets
   if (!is.list(datasets) || length(datasets) < 2L || is.null(names(datasets)) ||
@@ -740,6 +964,10 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   unique(errors[nzchar(errors)])
 }
 
+#' Collect 11-slot schema validation problems
+#' @param object A SpatialCellChat object.
+#' @return A character vector of validation problems, empty for a valid object.
+#' @noRd
 .sc_validate_object <- function(object) {
   errors <- character()
   cell_names <- colnames(object@assay$norm)
@@ -797,6 +1025,9 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
 }
 # ====== spatial image helpers ======
 
+#' Create empty spatial storage
+#' @return The default list of image and spatial geometry entries.
+#' @noRd
 .sc_default_images <- function() {
   list(
     coordinates = NULL,
@@ -809,6 +1040,11 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   )
 }
 
+#' Normalize the input coordinate convention
+#' @param coordinate.system The declared system in which spatial coordinates are stored.
+#' @param spatial.factors Spatial calibration factors including distance conversion where applicable.
+#' @return The supported coordinate-system label.
+#' @noRd
 .sc_normalize_coordinate_system <- function(coordinate.system, spatial.factors = NULL) {
   if (is.null(coordinate.system)) {
     ratio <- if (is.list(spatial.factors)) spatial.factors$ratio else NULL
@@ -831,6 +1067,11 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   coordinate.system
 }
 
+#' Normalize distance calibration for the coordinate system
+#' @param spatial.factors Spatial calibration factors including distance conversion where applicable.
+#' @param coordinate.system The declared system in which spatial coordinates are stored.
+#' @return The normalized spatial factors list.
+#' @noRd
 .sc_normalize_spatial_factors <- function(spatial.factors, coordinate.system) {
   if (is.null(spatial.factors)) spatial.factors <- list()
   if (!is.list(spatial.factors))
@@ -842,6 +1083,10 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   spatial.factors
 }
 
+#' Normalize an affine raster transform
+#' @param transform The affine mapping connecting raster and spatial coordinates.
+#' @return A list with from and to coordinate-frame names and a finite 3 by 3 affine matrix.
+#' @noRd
 .sc_normalize_transform <- function(transform = NULL) {
   if (is.null(transform)) transform <- list()
   if (is.matrix(transform)) transform <- list(matrix = transform)
@@ -862,6 +1107,11 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   )
 }
 
+#' Normalize one spatial image record
+#' @param image A package raster record or supported Seurat spatial image.
+#' @param cell_names Observation names in canonical object order.
+#' @return A normalized raster record, or NULL when no image is supplied.
+#' @noRd
 .sc_normalize_raster <- function(image, cell_names = NULL) {
   if (is.null(image)) return(NULL)
   raster <- NULL
@@ -953,6 +1203,12 @@ SpatialCellChat <- methods::setClass("SpatialCellChat",
   raster
 }
 
+#' Read spatial image files for Seurat
+#' @param image_dir Directory containing the spatial image and scale-factor files.
+#' @param image_name Image file name or name of a stored image, as appropriate to the input.
+#' @param filter_matrix Whether to filter positions when reading the image.
+#' @return A Seurat spatial image object.
+#' @noRd
 readSpatialImage <- function(image_dir,
                              image_name = "tissue_lowres_image.png",
                              filter_matrix = TRUE) {
@@ -966,6 +1222,12 @@ readSpatialImage <- function(image_dir,
   .sc_normalize_raster(visium_image)
 }
 
+#' Extract raster and calibration from Seurat
+#' @param object A SpatialCellChat object.
+#' @param image_name Image file name or name of a stored image, as appropriate to the input.
+#' @param cell_names Observation names in canonical object order.
+#' @return A list containing raster data and geometry, or NULL if unavailable.
+#' @noRd
 extractSeuratRasterImage <- function(object, image_name = NULL, cell_names = NULL) {
   if (!methods::is(object, "Seurat") || !requireNamespace("SeuratObject", quietly = TRUE))
     return(NULL)
@@ -992,6 +1254,10 @@ extractSeuratRasterImage <- function(object, image_name = NULL, cell_names = NUL
   )
 }
 
+#' Extract coordinates from Seurat spatial data
+#' @param object A SpatialCellChat object.
+#' @return A coordinate matrix or NULL when positions are unavailable.
+#' @noRd
 .sc_extract_seurat_coordinates <- function(object) {
   if (!requireNamespace("Seurat", quietly = TRUE)) return(NULL)
   coordinates <- tryCatch(
@@ -1017,6 +1283,10 @@ extractSeuratRasterImage <- function(object, image_name = NULL, cell_names = NUL
   colnames(result) <- c("x", "y")
   result
 }
+#' Extract stored numeric matrix values
+#' @param x The value to inspect or transform.
+#' @return A vector of matrix values, using the explicit values of sparse matrices.
+#' @noRd
 .sc_matrix_values <- function(x) {
   if (isS4(x) && "x" %in% methods::slotNames(x)) methods::slot(x, "x") else as.vector(x)
 }
@@ -1024,6 +1294,7 @@ extractSeuratRasterImage <- function(object, image_name = NULL, cell_names = NUL
 #' Validate a SpatialCellChat object against the final 11-slot schema.
 #' @param object A SpatialCellChat object.
 #' @param strict If TRUE, stop on the first validation failure.
+#' @noRd
 #' @return TRUE when valid; otherwise a character vector when strict is FALSE.
 #' @export
 validateSpatialCellChat <- function(object, strict = TRUE) {
@@ -1043,7 +1314,9 @@ methods::setValidity("SpatialCellChat", function(object) {
 
 # ====== show method ======
 
+#' Print a SpatialCellChat summary
 #' @param object A SpatialCellChat object.
+#' @return The result of writing the summary to the console, invisibly.
 #' @docType methods
 setMethod(f = "show", signature = "SpatialCellChat", definition = function(object) {
   cell_names <- colnames(object@assay$norm)
@@ -1100,6 +1373,7 @@ setMethod(f = "show", signature = "SpatialCellChat", definition = function(objec
 #' @param assay_name Assay to use from a Seurat object.
 #' @param do.sparse Whether to convert the expression layers to dgCMatrix.
 #'
+#' @param sample Sample label or labels used to populate spatial sample metadata.
 #' @return A SpatialCellChat object.
 #' @export
 #' @importFrom methods new
@@ -1381,6 +1655,7 @@ createSpatialCellChat <- function(object,
 #' Get/set cell group labels
 #'
 #' @param chat A SpatialCellChat object
+#' @noRd
 #' @return A factor of cell group labels
 #' @export
 idents <- function(chat) {
@@ -1389,6 +1664,10 @@ idents <- function(chat) {
   chat@idents
 }
 
+#' @param chat A SpatialCellChat object.
+#' @param value The input or replacement value.
+#' @return The object with the supplied identity factor.
+#' @noRd
 #' @export
 "idents<-" <- function(chat, value) {
   if (!inherits(value, "factor") || length(value) != nrow(chat@meta))
@@ -1402,6 +1681,10 @@ idents <- function(chat) {
 }
 
 
+#' List cell identity levels
+#'
+#' @param chat A SpatialCellChat object.
+#' @return A character vector of group levels, or a list of vectors for list-valued identities.
 #' @export
 level.SpatialCellChat <- function(chat) {
   lev <- levels(idents(chat))
@@ -1412,12 +1695,20 @@ level.SpatialCellChat <- function(chat) {
 
 # ====== Phase 2 accessors ======
 
+#' Check the accessor input class
+#' @param object A SpatialCellChat object.
+#' @return The validated SpatialCellChat object.
+#' @noRd
 .sc_assert_spatial_cell_chat <- function(object) {
   if (!methods::is(object, "SpatialCellChat"))
     stop("object must be a SpatialCellChat", call. = FALSE)
   object
 }
 
+#' Validate a SpatialCellChat replacement
+#' @param object A SpatialCellChat object.
+#' @return The updated SpatialCellChat object, after schema validation.
+#' @noRd
 .sc_validate_after_update <- function(object) {
   methods::validObject(object)
   object
@@ -1426,6 +1717,8 @@ level.SpatialCellChat <- function(chat) {
 #' Access expression layers.
 #' @param object A SpatialCellChat object.
 #' @param layer NULL for all layers, or one of raw, norm, scale, smooth, signaling.
+#' @return The assay list or a single assay matrix.
+#' @noRd
 #' @export
 assay <- function(object, layer = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1437,6 +1730,11 @@ assay <- function(object, layer = NULL) {
 }
 
 #' Replace expression layers.
+#' @param object A SpatialCellChat object.
+#' @param layer An assay layer name or the layer value used by the caller.
+#' @param value An assay matrix when layer is set, or a named assay list.
+#' @return The object with updated assay data.
+#' @noRd
 #' @export
 `assay<-` <- function(object, layer = NULL, value) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1454,6 +1752,9 @@ assay <- function(object, layer = NULL) {
 
 #' Access cell metadata.
 #' @param columns NULL for all metadata, or character column names.
+#' @param object A SpatialCellChat object.
+#' @return The metadata data frame, optionally restricted to selected columns.
+#' @noRd
 #' @export
 meta <- function(object, columns = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1464,6 +1765,10 @@ meta <- function(object, columns = NULL) {
 }
 
 #' Replace cell metadata.
+#' @param object A SpatialCellChat object.
+#' @param value A data frame with one aligned row per observation.
+#' @return The object with updated metadata.
+#' @noRd
 #' @export
 `meta<-` <- function(object, value) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1474,6 +1779,9 @@ meta <- function(object, columns = NULL) {
 
 #' Access spatial data and caches.
 #' @param key NULL for all image data, or a name inside the images list.
+#' @param object A SpatialCellChat object.
+#' @return The spatial data list or the named entry.
+#' @noRd
 #' @export
 images <- function(object, key = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1484,6 +1792,11 @@ images <- function(object, key = NULL) {
 }
 
 #' Replace spatial data and caches.
+#' @param object A SpatialCellChat object.
+#' @param key Name of a stored entry, or NULL to use the entire list.
+#' @param value The input or replacement value.
+#' @return The object with updated spatial data.
+#' @noRd
 #' @export
 `images<-` <- function(object, key = NULL, value) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1506,6 +1819,9 @@ images <- function(object, key = NULL) {
 
 #' Access ligand-receptor metadata.
 #' @param key NULL for the complete LR list, or a name inside it.
+#' @param object A SpatialCellChat object.
+#' @return The LR annotation list or the named entry.
+#' @noRd
 #' @export
 LR <- function(object, key = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1516,6 +1832,11 @@ LR <- function(object, key = NULL) {
 }
 
 #' Replace ligand-receptor metadata.
+#' @param object A SpatialCellChat object.
+#' @param key Name of a stored entry, or NULL to use the entire list.
+#' @param value The input or replacement value.
+#' @return The object with updated LR annotations.
+#' @noRd
 #' @export
 `LR<-` <- function(object, key = NULL, value) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1532,6 +1853,9 @@ LR <- function(object, key = NULL) {
 
 #' Access the ligand-receptor database.
 #' @param key NULL for the complete DB list, or a name inside it.
+#' @param object A SpatialCellChat object.
+#' @return The communication database or the named entry.
+#' @noRd
 #' @export
 DB <- function(object, key = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1542,6 +1866,11 @@ DB <- function(object, key = NULL) {
 }
 
 #' Replace the ligand-receptor database.
+#' @param object A SpatialCellChat object.
+#' @param key Name of a stored entry, or NULL to use the entire list.
+#' @param value The input or replacement value.
+#' @return The object with the updated database.
+#' @noRd
 #' @export
 `DB<-` <- function(object, key = NULL, value) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1560,6 +1889,9 @@ DB <- function(object, key = NULL) {
 #' @param slot.name Either net (LR-level) or netP (pathway-level).
 #' @param resolution Either cell or group, or NULL for the whole slot.
 #' @param measure Optional result name such as prob, pval, count, weight, centr, or field.
+#' @param object A SpatialCellChat object.
+#' @return The selected network branch or entry.
+#' @noRd
 #' @export
 communication <- function(object, slot.name = c("net", "netP"),
                            resolution = NULL, measure = NULL) {
@@ -1580,6 +1912,13 @@ communication <- function(object, slot.name = c("net", "netP"),
 }
 
 #' Replace a communication result.
+#' @param object A SpatialCellChat object.
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param resolution the resolution in Leiden algorithm; if it is NULL, the optimal resoultion will be inferred based on eigen spectrum
+#' @param measure "count" or "weight". "count": comparing the number of interactions; "weight": comparing the total interaction weights (strength)
+#' @param value The input or replacement value.
+#' @return The object with the updated network branch.
+#' @noRd
 #' @export
 `communication<-` <- function(object, slot.name = c("net", "netP"),
                                resolution = NULL, measure = NULL, value) {
@@ -1609,6 +1948,9 @@ communication <- function(object, slot.name = c("net", "netP"),
 
 #' Access the misc list or analysis parameters.
 #' @param key NULL for misc, or a key inside misc$.param.
+#' @param object A SpatialCellChat object.
+#' @return The parameter list or the named entry.
+#' @noRd
 #' @export
 params <- function(object, key = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1620,6 +1962,11 @@ params <- function(object, key = NULL) {
 }
 
 #' Replace analysis parameters.
+#' @param object A SpatialCellChat object.
+#' @param key Name of a stored entry, or NULL to use the entire list.
+#' @param value The input or replacement value.
+#' @return The object with the updated parameter list.
+#' @noRd
 #' @export
 `params<-` <- function(object, key = NULL, value) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -1636,18 +1983,25 @@ params <- function(object, key = NULL) {
 
 # ====== misc accessor (Seurat-compatible) ======
 
-#' @rdname misc
+#' Get and set miscellaneous data
+#'
+#' @param object An object
+#' @param ... Arguments passed to the getter or replacement method, including key.
+#' @return The getter returns the miscellaneous data list or one requested entry. The setter returns the updated object.
 #' @export misc
+#' @concept data-access
 misc <- function(object, ...) {
   UseMethod(generic = "misc", object = object)
 }
 
+#' @param value Data to add
 #' @rdname misc
 #' @export misc<-
 "misc<-" <- function(object, ..., value) {
   UseMethod(generic = "misc<-", object = object)
 }
 
+#' @param key Optional name of the miscellaneous entry to retrieve or replace.
 #' @rdname misc
 #' @export
 #' @method misc SpatialCellChat
@@ -1671,4 +2025,9 @@ misc.SpatialCellChat <- function(object, key = NULL, ...) {
 }
 
 
+#' Use a fallback for NULL
+#' @param a The value to use if it is non-NULL.
+#' @param b The fallback value.
+#' @return The first argument when present, otherwise the fallback.
+#' @noRd
 `%||%` <- function(a, b) if (is.null(a)) b else a

@@ -44,6 +44,9 @@ identifyCommunicationPatterns(
 
 \item{font.size}{fontsize in heatmap}
 }
+\value{
+The object with the selected network's pattern data and loadings recorded under \code{pattern[[pattern]]}.
+}
 \description{
 Identification of major signals for specific cell groups and general communication patterns
 }

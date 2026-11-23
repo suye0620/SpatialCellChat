@@ -11,6 +11,9 @@ checkGeneSymbol(geneSet, geneIfo)
 
 \item{geneIfo}{official Gene Symbol}
 }
+\value{
+A logical scalar indicating whether the gene symbol matches the annotation table.
+}
 \description{
 check the official Gene Symbol
 }

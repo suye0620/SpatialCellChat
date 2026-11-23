@@ -71,10 +71,13 @@ legacy values "data.signaling" and "data" map to these layers respectively.}
 
 \item{show.legend.combined}{whether show the figure legend for the last plot}
 }
+\value{
+The spatial plot or a composition of the requested feature or signaling panels.
+}
 \description{
 This function takes a CellChat object as input, and then plot gene expression distribution.
-For explicit LR pairs with \code{enriched.only = TRUE}, a pair is kept when it
-has a positive communication value. Group values with p-values above \code{thresh}
+For explicit LR pairs with `enriched.only = TRUE`, a pair is kept when it
+has a positive communication value. Group values with p-values above `thresh`
 are excluded when p-values are available; without p-values no p-value filter
-is applied. Pathway selection uses the existing \code{extractEnrichedLR} cache.
+is applied. Pathway selection uses the existing `extractEnrichedLR` cache.
 }

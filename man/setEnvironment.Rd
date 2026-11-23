@@ -24,6 +24,9 @@ Default reads \code{getOption("SpatialCellChat.verbose", 1L)}.}
 
 \item{conda_env}{Path to conda environment (passed to \code{reticulate::use_condaenv}).}
 }
+\value{
+Invisibly returns NULL after configuring the session or reporting invalid workers.
+}
 \description{
 Set the computation environment
 }

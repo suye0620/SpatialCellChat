@@ -33,9 +33,10 @@ netAnalysis_signalingChanges_scatter(
 )
 }
 \arguments{
-\item{object}{A merged CellChat object of a list of CellChat objects}
+\item{object}{A merged CellChat object of a list of CellChat objects
+When no pathways pass the existing change filter, the plot displays an explanatory message rather than points.}
 
-\item{idents.use}{the cell group names of interest. Should be one of `levels(object@idents$joint)`}
+\item{idents.use}{the cell group names of interest. Should be one of `levels(object@idents)`}
 
 \item{color.use}{a vector with three elements: the first is for coloring shared pathways, the second is for specific pathways in the first dataset, and the third is for specific pathways in the second dataset}
 
@@ -90,6 +91,4 @@ ggplot object
 }
 \description{
 Positive values indicate the increase in the second dataset while negative values indicate the increase in the first dataset
-
-When no pathways pass the existing change filter, the plot displays an explanatory message rather than points.
 }

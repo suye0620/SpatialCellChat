@@ -15,39 +15,39 @@ projectData(
 )
 }
 \arguments{
-\item{object}{A SpatialCellChat object with a non-empty \code{assay$signaling}
-(see \code{\link[=subsetData]{subsetData()}}).}
+\item{object}{A SpatialCellChat object with a non-empty `assay$signaling`
+(see [subsetData()]).}
 
 \item{adjMatrix}{Adjacency matrix of the protein-protein interaction network.
-Must be square, carry identical \code{rownames} and \code{colnames}, and have no
+Must be square, carry identical `rownames` and `colnames`, and have no
 all-zero row or column.}
 
-\item{alpha}{Numeric in (0, 1): the diffusion coefficient, i.e. \code{1 - restart}
-probability of the random walk. Larger values smooth more. 0 (no
-smoothing) is rejected, and netSmooth's \code{alpha = "auto"} is deliberately
-not supported: it requires \code{clusterExperiment}/\code{scater}, multiplies the most
+\item{alpha}{Numeric in (0, 1): the diffusion coefficient, i.e. `1 - restart
+probability` of the random walk. Larger values smooth more. 0 (no
+smoothing) is rejected, and netSmooth's `alpha = "auto"` is deliberately
+not supported: it requires `clusterExperiment`/`scater`, multiplies the most
 expensive step by nine, and optimizes a clustering criterion rather than
 the communication estimates this package consumes.}
 
-\item{normalizeAdjMatrix}{Normalize the adjacency by \code{"rows"} (in-degree) or
-\code{"columns"} (out-degree).}
+\item{normalizeAdjMatrix}{Normalize the adjacency by `"rows"` (in-degree) or
+`"columns"` (out-degree).}
 
-\item{solver}{\code{"solve"} solves \verb{(I - alpha * A) E_sm = (1 - alpha) E}
+\item{solver}{`"solve"` solves `(I - alpha * A) E_sm = (1 - alpha) E`
 directly and reproduces the pre-migration results bit for bit.
-\code{"iterative"} uses the equivalent fixed-point iteration: it avoids the
+`"iterative"` uses the equivalent fixed-point iteration: it avoids the
 dense identity matrix and the O(n^3) factorization, so it is the only
-variant that scales to large networks, but it stops at \code{tol} and is
+variant that scales to large networks, but it stops at `tol` and is
 therefore not bit-identical.}
 
 \item{tol}{Convergence tolerance on the largest entry-wise change, used by
-\code{solver = "iterative"}.}
+`solver = "iterative"`.}
 
 \item{max.iter}{Maximum number of iterations, used by
-\code{solver = "iterative"}.}
+`solver = "iterative"`.}
 }
 \value{
-A SpatialCellChat object with \code{assay$smooth} written and the run
-parameters recorded in \code{misc$.param$projection}.
+A SpatialCellChat object with `assay$smooth` written and the run
+  parameters recorded in `misc$.param$projection`.
 }
 \description{
 A diffusion process is used to smooth genes' expression values based on their
@@ -60,8 +60,8 @@ sequencing depth because the projection reduces the dropout effects of
 signaling genes, in particular for possible zero expression of subunits of
 ligands/receptors.
 
-The projected matrix is written to \code{assay$smooth}, which keeps the gene space
-of \code{assay$signaling}, and is consumed by \code{computeCommunProb(raw.use = FALSE)}.
-Any later \code{subsetData()} clears it, because it would belong to a different
+The projected matrix is written to `assay$smooth`, which keeps the gene space
+of `assay$signaling`, and is consumed by `computeCommunProb(raw.use = FALSE)`.
+Any later `subsetData()` clears it, because it would belong to a different
 gene set.
 }

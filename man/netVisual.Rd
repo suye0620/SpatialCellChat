@@ -132,6 +132,9 @@ The order of group controls the sector orders and if group is set as a factor, t
 \item{...}{other parameters (e.g.,vertex.label.cex, vertex.label.color, alpha.edge, label.edge, edge.label.color, edge.label.cex, edge.curved)
 passing to `netVisual_hierarchy1`,`netVisual_hierarchy2`,`netVisual_circle`. NB: some parameters might be not supported}
 }
+\value{
+A recorded network plot for base graphics layouts, a ggplot for the spatial layout, or the combined plots from the selected layout.
+}
 \description{
 Automatically save plots in the current working directory.
 }

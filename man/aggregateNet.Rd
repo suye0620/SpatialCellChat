@@ -29,11 +29,13 @@ aggregateNet(
 \value{
 Return an updated CellChat object:
 
-`object@net$count` is a matrix: rows and columns are sources and targets respectively, and elements are the number of interactions between any two cell groups. USER can convert a matrix to a data frame using the function `reshape2::melt()`
+`object@net$group$count` is a matrix: rows and columns are sources and targets respectively, and elements are the number of significant ligand-receptor interactions between any two cell groups. USER can convert a matrix to a data frame using the function `reshape2::melt()`
 
-`object@net$weight` is also a matrix containing the interaction weights between any two cell groups
+`object@net$group$weight` is also a matrix containing the interaction weights between any two cell groups
 
-`object@net$sum` is deprecated. Use `object@net$weight`
+`object@net$group$LR.sig` lists the ligand-receptor pairs with significant communications
+
+`object@net$cell$count` / `object@net$cell$weight` are the individual-cell-level count and weight matrices; `object@net$cell$LR.sig` lists the significant ligand-receptor pairs
 }
 \description{
 Calculate the aggregated network by counting the number of links or summarizing the communication probability

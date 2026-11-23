@@ -9,6 +9,9 @@ alpha_centrality(g)
 \arguments{
 \item{g}{a graph objecct}
 }
+\value{
+A vector of normalized centrality values followed by the remaining probability mass.
+}
 \description{
 compute alpha centrality
 }

@@ -66,6 +66,9 @@ optimization process. Increasing this value will result in greater repulsive for
 
 \item{metric_kwds, angular_rp_forest, verbose}{other parameters used in UMAP}
 }
+\value{
+The result of the selected backend, containing the embedding coordinates.
+}
 \description{
 Run UMAP
 }

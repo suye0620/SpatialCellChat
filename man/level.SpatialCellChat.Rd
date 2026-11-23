@@ -2,16 +2,16 @@
 % Please edit documentation in R/SpatialCellChat_class.R
 \name{level.SpatialCellChat}
 \alias{level.SpatialCellChat}
-\title{getIdent}
+\title{List cell identity levels}
 \usage{
-level.SpatialCellChat(object)
+level.SpatialCellChat(chat)
 }
 \arguments{
-\item{object}{A SpatialCellChat object}
+\item{chat}{A SpatialCellChat object.}
 }
 \value{
-Character string. SpatialCellChat's idents saved in the `idents` slot.
+A character vector of group levels, or a list of vectors for list-valued identities.
 }
 \description{
-getIdent
+List cell identity levels
 }

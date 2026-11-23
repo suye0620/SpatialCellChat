@@ -15,20 +15,23 @@ netAnalysis_computeCentrality(
 )
 }
 \arguments{
-\item{object}{CellChat object; If object = NULL, USER must provide `net`}
+\item{object}{SpatialCellChat object; If object = NULL, USER must provide `net`}
 
-\item{net}{compute the centrality measures on a specific signaling network given by a 2 or 3 dimemsional array net}
+\item{net}{compute the centrality measures on a specific signaling network given by a 2 or 3 dimensional array `net`}
 
-\item{slot.name}{the slot name of object that is used to compute centrality measures of signaling networks}
+\item{slot.name}{the slot name of object used to compute centrality; `"net"` applies the group-level p-value gate, while `"netP"` uses the already-thresholded pathway layers without an additional gate}
 
-\item{signaling.name}{provide signalings name (LR pairs or pathways) to subset the communication net}
+\item{signaling.name}{provide signaling names (LR pairs or pathways) to subset the communication net}
 
-\item{do.group}{set `do.group = TRUE` when computing centrality of each cell group; set `do.group = FALSE` when computing centrality of each individual cell}
+\item{do.group}{set `do.group = TRUE` when computing centrality of each cell group; set `do.group = FALSE` when computing centrality of each individual cell; cell-level probabilities are read from `slot$cell$prob`}
 
-\item{thresh}{threshold of the p-value for determining significant interaction}
+\item{thresh}{threshold of the p-value for determining significant interaction in the `"net"` group-level path}
 
-\item{degree.only}{To speed up computation, run `netAnalysis_computeCentrality` with `degree.only = T` when user only needs
-"outdeg_unweighted", "indeg_unweighted","outdeg","indeg","page_rank" to do analysis}
+\item{degree.only}{To speed up computation, run `netAnalysis_computeCentrality` with `degree.only = TRUE` when user only needs
+"outdeg_unweighted", "indeg_unweighted", "outdeg", "indeg", "page_rank" to do analysis}
+}
+\value{
+If `object` is NULL, a centrality array with dimensions measure × node × signaling layer; otherwise the updated SpatialCellChat object with `centr` or `centr.cell` written to the selected slot.
 }
 \description{
 NB: This function was previously named as `netAnalysis_signalingRole`.  The previous function `netVisual_signalingRole` is now named as `netAnalysis_signalingRole_network`.

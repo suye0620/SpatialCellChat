@@ -14,9 +14,9 @@ computeCommunProbPathway(
 )
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{A SpatialCellChat object.}
 
-\item{net}{A list from object@net; If net = NULL, net = object@net}
+\item{net}{An LR-level network list. Defaults to the network stored in the object.}
 
 \item{pairLR.use}{A dataframe giving the ligand-receptor interactions; If pairLR.use = NULL, pairLR.use = object@LR$LRsig}
 
@@ -24,18 +24,10 @@ computeCommunProbPathway(
 
 \item{do.group}{whether to compute the group-level signaling based on the cell group information in `object@idents`}
 
-\item{do.cell}{whether to compute the individual-cell signaling at signaling pathway level. This works when "prob.cell" exists in `object@net`.}
+\item{do.cell}{Whether to compute a cell-level pathway network from net$cell$prob.}
 }
 \value{
-A CellChat object with updated slot 'netP':
-
-object@netP$prob is the communication probability array on signaling pathway level; USER can convert this array to a data frame using the function 'reshape2::melt()',
-
-e.g., `df.netP <- reshape2::melt(object@netP$prob, value.name = "prob"); colnames(df.netP)[1:3] <- c("source","target","pathway_name")` or access all significant interactions using the function \code{\link{subsetCommunication}}
-
-object@netP$pathways list all the signaling pathways with significant communications.
-
-From version >= 1.1.0, pathways are ordered based on the total communication probabilities. NB: pathways with small total communication probabilities might be also very important since they might be specifically activated between only few cell types.
+The object with pathway communication stored in netP$group and/or netP$cell. Each computed branch includes the pathway probabilities.
 }
 \description{
 Compute the communication probability on signaling pathway level by summarizing all related ligands/receptors

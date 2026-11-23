@@ -1,5 +1,10 @@
 # Merged SpatialCellChat construction for the final 11-slot schema.
 
+#' Resolve dataset names for a merge
+#' @param object.list The input list of SpatialCellChat objects.
+#' @param add.names Optional unique non-empty dataset names. When NULL, list names are used, then generated names.
+#' @return The validated, unique dataset names.
+#' @noRd
 .sc_merge_names <- function(object.list, add.names) {
   if (!is.list(object.list) || length(object.list) < 2L)
     stop("object.list must contain at least two SpatialCellChat objects.", call. = FALSE)
@@ -11,6 +16,11 @@
   as.character(add.names)
 }
 
+#' Validate the objects and shared schema for a merge
+#' @param object.list The input list of SpatialCellChat objects.
+#' @param dataset.names The validated names of the source datasets.
+#' @return Invisibly completes validation or raises an error.
+#' @noRd
 .sc_merge_assert_inputs <- function(object.list, dataset.names) {
   valid <- vapply(object.list, methods::is, logical(1), class2 = "SpatialCellChat")
   if (!all(valid))
@@ -57,6 +67,12 @@
   invisible(reference)
 }
 
+#' Resolve observation names for merged snapshots
+#' @param object.list The input list of SpatialCellChat objects.
+#' @param dataset.names The validated names of the source datasets.
+#' @param cell.prefix Whether to prefix cell names with their dataset name. Defaults to TRUE to avoid collisions.
+#' @return A list of per-dataset observation name vectors.
+#' @noRd
 .sc_merge_cell_names <- function(object.list, dataset.names, cell.prefix) {
   result <- lapply(seq_along(object.list), function(i) {
     cells <- colnames(object.list[[i]]@assay$norm)
@@ -70,6 +86,12 @@
   result
 }
 
+#' Relabel cell-indexed axes
+#' @param value The input or replacement value.
+#' @param old.cells Cell names before renaming or subsetting.
+#' @param new.cells Replacement cell names in source order.
+#' @return The input value with matching axes renamed.
+#' @noRd
 .sc_merge_rename_dimnames <- function(value, old.cells, new.cells) {
   if (is.null(value)) return(value)
   if (inherits(value, "SparseChatArray")) {
@@ -105,6 +127,12 @@
   value
 }
 
+#' Relabel cell references in a spatial snapshot
+#' @param images The spatial images list.
+#' @param old.cells Cell names before renaming or subsetting.
+#' @param new.cells Replacement cell names in source order.
+#' @return An images list with spatial cell names updated.
+#' @noRd
 .sc_merge_rename_images <- function(images, old.cells, new.cells) {
   images <- .sc_merge_rename_dimnames(images, old.cells, new.cells)
   if (is.list(images$rasters)) {
@@ -119,6 +147,12 @@
   images
 }
 
+#' Relabel cell-indexed data in one dataset snapshot
+#' @param object A SpatialCellChat object.
+#' @param old.cells Cell names before renaming or subsetting.
+#' @param new.cells Replacement cell names in source order.
+#' @return A renamed dataset snapshot list.
+#' @noRd
 .sc_merge_rename_snapshot <- function(object, old.cells, new.cells) {
   net <- .sc_merge_rename_dimnames(object@net, old.cells, new.cells)
   netP <- .sc_merge_rename_dimnames(object@netP, old.cells, new.cells)
@@ -143,6 +177,13 @@
   )
 }
 
+#' Combine one compatible assay layer across datasets
+#' @param object.list The input list of SpatialCellChat objects.
+#' @param layer Name of the expression layer to combine.
+#' @param cell.names A list of per-dataset output cell names in source column order.
+#' @param keep Whether this layer should be included in the merge.
+#' @return The combined expression matrix, or NULL when the layer is omitted or absent.
+#' @noRd
 .sc_merge_assay_layer <- function(object.list, layer, cell.names, keep) {
   if (!isTRUE(keep)) return(NULL)
   values <- lapply(object.list, function(object) object@assay[[layer]])
@@ -154,6 +195,12 @@
   }, values, cell.names))
 }
 
+#' Combine metadata from the input datasets
+#' @param object.list The input list of SpatialCellChat objects.
+#' @param dataset.names The validated names of the source datasets.
+#' @param cell.names Observation names in the output object order.
+#' @return A cell-indexed data frame with dataset provenance.
+#' @noRd
 .sc_merge_metadata <- function(object.list, dataset.names, cell.names) {
   columns <- unique(unlist(lapply(object.list, function(object) names(object@meta)),
                           use.names = FALSE))
@@ -171,6 +218,12 @@
   result
 }
 
+#' Construct the merged spatial storage
+#' @param object.list The input list of SpatialCellChat objects.
+#' @param cell.names Observation names in the output object order.
+#' @param datatype The data type recorded in the object.
+#' @return The merged images list with any supported shared spatial coordinates.
+#' @noRd
 .sc_merge_images <- function(object.list, cell.names, datatype) {
   images <- list(coordinates = NULL, coordinate.system = NULL,
                  spatial.factors = NULL, rasters = list(), fov = list(),
@@ -272,6 +325,14 @@ mergeSpatialCellChat <- function(object.list, add.names = NULL, merge.data = FAL
 
 # Historical analysis functions call this name when given a list. Keep it
 # internal and route all construction through the new producer.
+#' Merge SpatialCellChat objects via the compatibility entry point
+#' @param object.list The input list of SpatialCellChat objects.
+#' @param add.names Optional unique non-empty dataset names. When NULL, list names are used, then generated names.
+#' @param merge.data Whether to retain raw and scale assay layers in the merged top-level assay. Norm, signaling, and smooth layers are retained.
+#' @param cell.prefix Whether to prefix cell names with their dataset name. Defaults to TRUE to avoid collisions.
+#' @param show.plot Retained for compatibility; construction does not open a plot device.
+#' @return The merged SpatialCellChat object.
+#' @noRd
 mergeCellChat <- function(object.list, add.names = NULL, merge.data = FALSE,
                           cell.prefix = TRUE, show.plot = FALSE) {
   mergeSpatialCellChat(object.list = object.list, add.names = add.names,
@@ -279,6 +340,15 @@ mergeCellChat <- function(object.list, add.names = NULL, merge.data = FALSE,
                        show.plot = show.plot)
 }
 
+#' Resolve cells for object subsetting
+#' @param object A SpatialCellChat object.
+#' @param cells.use A character vector or integer indices giving cells to retain. If NULL, define \code{idents.use}.
+#' @param idents.use the identity to use
+#' @param group.by Metadata column used for \code{Idents()}. Defaults to
+#' \code{group.cellchat}, which is built from \code{idents(object)}.
+#' @param invert whether invert the idents.use
+#' @return A character vector of retained observation names.
+#' @noRd
 .sc_subset_indices <- function(object, cells.use, idents.use, group.by, invert) {
   cells <- colnames(object@assay$norm)
   if (!is.null(cells.use)) {
@@ -322,6 +392,12 @@ mergeCellChat <- function(object.list, add.names = NULL, merge.data = FALSE,
   which(keep)
 }
 
+#' Subset aligned cell axes in a stored value
+#' @param value The input or replacement value.
+#' @param old.cells Cell names before renaming or subsetting.
+#' @param keep The names of the observations or features to retain.
+#' @return The value restricted to retained cells on matching axes.
+#' @noRd
 .sc_subset_value_by_cells <- function(value, old.cells, keep) {
   if (is.null(value)) return(value)
   new.cells <- old.cells[keep]
@@ -357,6 +433,12 @@ mergeCellChat <- function(object.list, add.names = NULL, merge.data = FALSE,
   value
 }
 
+#' Restrict spatial records to retained cells
+#' @param images The spatial images list.
+#' @param old.cells Cell names before renaming or subsetting.
+#' @param keep The names of the observations or features to retain.
+#' @return The updated spatial data list.
+#' @noRd
 .sc_subset_images <- function(images, old.cells, keep) {
   if (!is.null(images$coordinates))
     images$coordinates <- images$coordinates[keep, , drop = FALSE]
@@ -375,6 +457,11 @@ mergeCellChat <- function(object.list, add.names = NULL, merge.data = FALSE,
   images
 }
 
+#' Restrict one dataset snapshot by cell
+#' @param snapshot A dataset snapshot with original expression, spatial, and network fields.
+#' @param keep The names of the observations or features to retain.
+#' @return The subset snapshot list.
+#' @noRd
 .sc_subset_snapshot <- function(snapshot, keep) {
   old.cells <- rownames(snapshot$meta)
   new.cells <- old.cells[keep]
@@ -442,6 +529,10 @@ subsetSpatialCellChat <- function(object, cells.use = NULL, idents.use = NULL,
   .sc_validate_after_update(object)
 }
 
+#' Identify the source layout of a SpatialCellChat object
+#' @param object A SpatialCellChat object.
+#' @return A label identifying the supported source schema.
+#' @noRd
 .sc_update_schema <- function(object) {
   if (!isS4(object))
     stop("object must be a SpatialCellChat S4 object.", call. = FALSE)
@@ -466,6 +557,13 @@ subsetSpatialCellChat <- function(object, cells.use = NULL, idents.use = NULL,
        call. = FALSE)
 }
 
+#' Align a legacy assay layer against normalized expression
+#' @param value The input or replacement value.
+#' @param norm The canonical normalized expression matrix for alignment.
+#' @param label The field label used in validation diagnostics.
+#' @param subset Whether the input layer is allowed to contain a subset of normalized features.
+#' @return The validated and aligned matrix, or NULL for a missing layer.
+#' @noRd
 .sc_update_layer <- function(value, norm, label, subset = FALSE) {
   if (!.sc_matrix_like(value)) stop(label, " must be a matrix.", call. = FALSE)
   if (!length(value) && (all(dim(value) == 0L) || (subset && nrow(value) == 0L))) return(NULL)
@@ -486,6 +584,13 @@ subsetSpatialCellChat <- function(object, cells.use = NULL, idents.use = NULL,
   value[gene.order, cells, drop = FALSE]
 }
 
+#' Convert a legacy communication array
+#' @param value The input or replacement value.
+#' @param nodes Canonical node names for the sender axis or both axes of a square matrix.
+#' @param label The field label used in validation diagnostics.
+#' @param second.nodes Canonical receiver names when distinct from the sender names.
+#' @return A SparseChatArray with aligned sender and receiver axes, or NULL for absent or empty input.
+#' @noRd
 .sc_update_sparse_array <- function(value, nodes, label, second.nodes = nodes) {
   if (is.null(value)) return(NULL)
   if (inherits(value, "SparseChatArray")) {
@@ -547,6 +652,12 @@ subsetSpatialCellChat <- function(object, cells.use = NULL, idents.use = NULL,
   SparseChatArray(layers, dimnames = list(nodes, second.nodes, dn[[3L]]))
 }
 
+#' Align a legacy square network matrix
+#' @param value The input or replacement value.
+#' @param nodes Canonical node names for the sender axis or both axes of a square matrix.
+#' @param label The field label used in validation diagnostics.
+#' @return The square matrix in the requested node order, or NULL if absent.
+#' @noRd
 .sc_update_square_matrix <- function(value, nodes, label) {
   if (!.sc_matrix_like(value) || !identical(as.integer(dim(value)), rep.int(length(nodes), 2L)))
     stop(label, " must be a square matrix aligned with its node axes.", call. = FALSE)
@@ -562,6 +673,13 @@ subsetSpatialCellChat <- function(object, cells.use = NULL, idents.use = NULL,
   value
 }
 
+#' Translate one legacy network to the 11-slot schema
+#' @param old The legacy slot or object being converted.
+#' @param cells Cell names or selectors aligned with the input network.
+#' @param groups Canonical cell group labels.
+#' @param label The field label used in validation diagnostics.
+#' @return The group/cell network list with compatible analysis results retained.
+#' @noRd
 .sc_update_network <- function(old, cells, groups, label) {
   if (!is.list(old)) stop(label, " must be a list.", call. = FALSE)
   out <- list(cell = list(), group = list())
@@ -634,6 +752,12 @@ subsetSpatialCellChat <- function(object, cells.use = NULL, idents.use = NULL,
   out
 }
 
+#' Translate legacy spatial image and coordinate storage
+#' @param old The legacy slot or object being converted.
+#' @param datatype The data type recorded in the object.
+#' @param cells Cell names or selectors aligned with the input network.
+#' @return An 11-slot schema images list.
+#' @noRd
 .sc_update_images <- function(old, datatype, cells) {
   images <- .sc_default_images()
   if (!identical(datatype, "spatial")) return(images)
@@ -665,6 +789,11 @@ subsetSpatialCellChat <- function(object, cells.use = NULL, idents.use = NULL,
   images
 }
 
+#' Translate the datasets of a legacy merged object
+#' @param old The legacy slot or object being converted.
+#' @param datatype The data type recorded in the object.
+#' @return The converted merged SpatialCellChat object.
+#' @noRd
 .sc_update_merged <- function(old, datatype) {
   norm <- old$data
   if (!.sc_matrix_like(norm) || !length(norm) || is.null(rownames(norm)) ||

@@ -7,12 +7,14 @@
 subsetData(object, features = NULL)
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{A SpatialCellChat object.}
 
-\item{features}{default = NULL: subset the expression data of signaling genes in CellChatDB.use}
+\item{features}{Optional explicit gene vector. If NULL, genes referenced by
+the object's DB are selected.}
 }
 \value{
-An updated CellChat object by assigning a subset of the data into the slot `data.signaling`
+An updated SpatialCellChat object with the selected genes in
+  \code{assay$signaling}.
 }
 \description{
 Subset the expression data of signaling genes for saving computation cost

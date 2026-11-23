@@ -2,14 +2,15 @@
 % Please edit documentation in R/utilities.R
 \name{identifyOverExpressedGenes}
 \alias{identifyOverExpressedGenes}
-\title{Identify over-expressed signaling genes associated with each cell group or spatially variable features independent of cell groups}
+\title{Identify over-expressed signaling genes associated with each cell group or
+spatially variable features independent of cell groups.}
 \usage{
 identifyOverExpressedGenes(
   object,
-  do.grid = F,
+  do.grid = FALSE,
   cellsize = c(5, 5),
   what = "polygons",
-  square = T,
+  square = TRUE,
   data.use = NULL,
   selection.method = c("wilcox", "moransi", "meringue"),
   features.name = "features",
@@ -27,9 +28,9 @@ identifyOverExpressedGenes(
 )
 }
 \arguments{
-\item{object}{CellChat object}
+\item{object}{A SpatialCellChat object.}
 
-\item{do.grid}{Boolean. Whether to do "grid" operation to speed up computation.}
+\item{do.grid}{Whether to aggregate cells into a spatial grid first.}
 
 \item{cellsize}{Numeric vector of length 1 or 2. We use [sf::st_make_grid()] to make grid data. It is a numeric vector
 of length 1 or 2 with target cellsize, please see details in [sf::st_make_grid()]:
@@ -43,46 +44,42 @@ Tips: Please run `computeGridSize` to get a proper `cellsize`.the unit of the `c
 
 \item{square}{Boolean. If FALSE, create hexagonal grid. See details in [sf::st_make_grid()]}
 
-\item{data.use}{a custom data matrix. By default, \code{assay$signaling} is used.}
+\item{data.use}{Optional custom expression matrix; otherwise
+\code{assay$signaling} is used.}
 
-\item{selection.method}{Method for selecting (spatially) variable features.}
+\item{selection.method}{One of \code{"wilcox"}, \code{"moransi"}, or
+\code{"meringue"}.}
 
-\item{features.name}{a name under \code{object@misc$.var.features}; the selected
-gene vector is stored at \code{features.name} and its statistics table at
-\code{paste0(features.name, ".info")}.}
+\item{features.name}{Name under \code{misc$.var.features} for the result.}
 
-\item{group.by}{cell group information; default is `object@idents`; otherwise it should be one of the column names of the meta slot}
+\item{group.by}{Metadata column used for Wilcoxon groups; defaults to
+\code{idents}.}
 
-\item{idents.use}{a subset of cell groups used for analysis}
+\item{idents.use}{Optional subset of groups; \code{invert} reverses it.}
 
 \item{invert}{whether invert the idents.use}
 
-\item{group.dataset}{dataset origin information in a merged CellChat object; set it as one of the column names of meta slot when identifying the highly enriched genes in one dataset for each cell group}
+\item{group.dataset}{Optional metadata column for dataset-specific testing.}
 
-\item{pos.dataset}{the dataset name used for identifying highly enriched genes in this dataset for each cell group}
+\item{pos.dataset}{Dataset value to test when \code{group.dataset} is set.}
 
-\item{only.pos}{Only return positive markers}
+\item{only.pos}{Whether to keep only positive markers.}
 
-\item{features}{features used for identifying Over Expressed genes. default use all features}
+\item{features}{Optional expression features to test.}
 
-\item{return.object}{whether return the object; otherwise return a data frame consisting of over-expressed signaling genes associated with each cell group}
+\item{return.object}{Whether to return the object or the statistics table.}
 
-\item{thresh.pc}{Threshold of the percent of cells expressed in one cluster}
+\item{thresh.pc}{Minimum expressing-cell fraction.}
 
-\item{thresh.fc}{Threshold of Log Fold Change}
+\item{thresh.fc}{Minimum log fold change.}
 
-\item{thresh.p}{Threshold of p-values}
+\item{thresh.p}{Maximum p-value.}
 }
 \value{
-A SpatialCellChat object or a data frame. If returning an object, two elements
-named \code{features.name} and \code{paste0(features.name, ".info")} are added
-to \code{object@misc$.var.features}. The first is the selected gene vector;
-the second is the differential-expression or spatial-statistics table.
+A SpatialCellChat object or a data frame of feature statistics.
 }
 \description{
-Users can provide a customized selected gene vector through the
-\code{features} argument. The Bonferroni-adjusted p value, when produced by
-the selection method, is available in
-\code{object@misc$.var.features[[paste0(features.name, ".info")]]}. The default
-\code{features.name} is \code{"features"}.
+Results are stored in \code{object@misc$.var.features}: the selected gene
+vector uses \code{features.name}, and the differential-expression or spatial
+statistics table uses \code{paste0(features.name, ".info")}.
 }

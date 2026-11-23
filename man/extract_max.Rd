@@ -9,6 +9,9 @@ extract_max(p)
 \arguments{
 \item{p}{ggplot object}
 }
+\value{
+The ceiling of the maximum value on the plot's vertical scale.
+}
 \description{
 extract the max value of the y axis
 }

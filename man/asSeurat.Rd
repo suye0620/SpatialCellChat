@@ -19,52 +19,54 @@ asSeurat(
 \arguments{
 \item{object}{A SpatialCellChat object, or a named list of them.}
 
-\item{slot.name}{Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.}
+\item{slot.name}{Source slot: `"assay"`, `"net"` or `"netP"`.}
 
 \item{what}{Centrality direction to write. Ignored when
-\code{slot.name = "assay"}.}
+`slot.name = "assay"`.}
 
-\item{counts}{Optional matrix used as the \code{counts} layer instead of
-\code{assay$raw} / \code{assay$norm}. Ignored when \code{slot.name} is \code{"net"}/\code{"netP"}.}
+\item{counts}{Optional matrix used as the `counts` layer instead of
+`assay$raw` / `assay$norm`. Ignored when `slot.name` is `"net"`/`"netP"`.}
 
-\item{normalize.chat}{Whether to run \code{\link[Seurat]{NormalizeData}} on the
-centrality matrix. Only used when \code{slot.name} is \code{"net"}/\code{"netP"}.}
+\item{normalize.chat}{Whether to run [Seurat::NormalizeData()] on the
+centrality matrix. Only used when `slot.name` is `"net"`/`"netP"`.}
 
-\item{normalization.method}{Passed to \code{\link[Seurat]{NormalizeData}}.}
+\item{normalization.method}{Passed to [Seurat::NormalizeData()].}
 
 \item{assay.name}{Name of the assay in the returned Seurat object.}
 
-\item{group.by}{Metadata column used for \code{Idents()}. Defaults to
-\code{group.cellchat}, which is built from \code{idents(object)}.}
+\item{group.by}{Metadata column used for `Idents()`. Defaults to
+`group.cellchat`, which is built from `idents(object)`.}
 
 \item{check.object}{Whether to plot the converted object. Only used when
-\code{slot.name = "assay"}.}
+`slot.name = "assay"`.}
 }
 \value{
 A Seurat object.
 }
 \description{
-\code{slot.name} decides the feature space of the returned Seurat assay, and
-\code{what} decides which part of that slot is written.
+`slot.name` decides the feature space of the returned Seurat assay, and
+`what` decides which part of that slot is written.
 }
 \details{
-\itemize{
-\item \code{slot.name = "assay"}: the expression layers, mapped the way Seurat expects
-them. \code{assay$raw} (or \code{assay$norm} when no raw counts were stored) becomes
-\code{counts}, \code{assay$norm} becomes \code{data} and \code{assay$scale} becomes
-\code{scale.data}. \code{assay$signaling} and \code{assay$smooth} are gene subsets with no
-Seurat counterpart, so they are kept in \code{misc} of the new assay. \code{what} is
-ignored.
-\item \code{slot.name = "net"} or \code{"netP"}: the cell-level centrality written by
-\code{\link{netAnalysis_computeCentrality}} with \code{do.group = FALSE}. Features are the
-ligand-receptor pairs (\code{net}) or the signaling pathways (\code{netP}), and the
-values are the centrality scores.
-}
+- `slot.name = "assay"`: the expression layers, mapped the way Seurat expects
+  them. `assay$raw` (or `assay$norm` when no raw counts were stored) becomes
+  `counts`, `assay$norm` becomes `data` and `assay$scale` becomes
+  `scale.data`. `assay$signaling` and `assay$smooth` are gene subsets with no
+  Seurat counterpart, so they are kept in `misc` of the new assay. `what` is
+  ignored.
+- `slot.name = "net"` or `"netP"`: the cell-level centrality written by
+  [netAnalysis_computeCentrality()] with `do.group = FALSE`. Features are the
+  ligand-receptor pairs (`net`) or the signaling pathways (`netP`), and the
+  values are the centrality scores.
 
-\code{what} only applies to \code{net} / \code{netP}: \code{"incoming"} writes \code{indeg},
-\code{"outgoing"} writes \code{outdeg}, and \code{"merge"} puts both into one assay with
-\code{-I} / \code{-O} feature suffixes.
+`what` only applies to `net` / `netP`: `"incoming"` writes `indeg`,
+`"outgoing"` writes `outdeg`, and `"merge"` puts both into one assay with
+`-I` / `-O` feature suffixes.
 
-When \code{object} is a list, every element is converted and the results are
-merged into a single Seurat object carrying a \code{Condition} column.
+When `object` is a list, every element is converted and the results are
+merged into a single Seurat object carrying a `Condition` column.
+
+Seurat rewrites `_` to `-` in feature names, so a centrality feature such as
+`L1_R1` arrives as `L1-R1`. The original names stay available in the
+`features.info` metadata of the new assay (`orig.features`).
 }

@@ -8,6 +8,10 @@
 # (implicit zeros untouched), a dense layer by dividing the whole matrix. Both
 # branches agree whenever every stored value is non-negative, which holds for
 # signaling and for the PPI projection.
+#' Scale expression by its largest finite positive value
+#' @param x A dense or sparse signaling expression matrix.
+#' @return The matrix scaled by its positive maximum, retaining its representation.
+#' @noRd
 .sc_scale_expression <- function(x) {
   if (inherits(x, "sparseMatrix")) {
     if (!length(x@x))
@@ -25,6 +29,13 @@
   x / maximum
 }
 
+#' Resolve and cache expression for a ligand or receptor
+#' @param gene The ligand, receptor, or complex symbol to resolve.
+#' @param sig The genes-by-cells signaling expression matrix.
+#' @param complex_subunits Named list of gene constituents for each annotated complex.
+#' @param cache A memoization environment keyed by gene or complex name.
+#' @return A numeric vector of expression across cells.
+#' @noRd
 .sc_expr_row <- function(gene, sig, complex_subunits, cache) {
   row <- cache[[gene]]
   if (!is.null(row)) return(row)
@@ -54,6 +65,16 @@
 #       "antagonist" (Hill^-1 = Kh^n/(Kh^n+e^n)). NULL name -> NULL (neutral skip).
 # Multi-gene member branch uses apply(..., 2, prod); the single-gene branch of the
 # baseline equals the length-1 product exactly (bitwise identical).
+#' Compute a Hill-dependent cofactor modulation factor
+#' @param cof.name The cofactor names to evaluate.
+#' @param cofactor_input The database cofactor annotation table.
+#' @param sig The genes-by-cells signaling expression matrix.
+#' @param type Cofactor role: A (activating), I (inhibiting), agonist, or antagonist.
+#' @param Kh The half-saturation constant of the Hill function.
+#' @param n Hill coefficient (n = 1 uses the division fast path in the kernel).
+#' @param cache A memoization environment keyed by cofactor and role.
+#' @return A per-cell modulation factor, or NULL when no matching cofactor is present.
+#' @noRd
 .sc_cofactor_factor <- function(cof.name, cofactor_input, sig,
                                 type = c("A", "I", "agonist", "antagonist"),
                                 Kh = NULL, n = NULL, cache) {
@@ -85,6 +106,10 @@
 }
 # v2 内部：手工 CSR（dgC -> 行指针 rp + 行内升序排列 ord + 条目列索引 jc）。
 # Matrix 无 dgC->dgR coerce 方法；radix order 稳定，行内保持列主序升序。
+#' Construct row-wise offsets for sparse matrix entries
+#' @param m The sparse matrix in compressed column representation.
+#' @return A list of indices and pointers for row access.
+#' @noRd
 .sc_csr_build <- function(m) {
   ord <- order(m@i, method = "radix")
   rp <- as.integer(c(0L, cumsum(tabulate(m@i + 1L, nbins = nrow(m)))))
@@ -93,6 +118,13 @@
 }
 
 # v2 内部：d 侧 pattern 行索引（等价 which(d[ci, ] > 0)：含显式零排除、含对角、升序）
+#' Read and cache one sparse neighbor pattern row
+#' @param csr The row-wise index structure built from the sparse matrix.
+#' @param m The sparse matrix in compressed column representation.
+#' @param ci The cell row index to retrieve.
+#' @param cache A memoization environment keyed by cell row index.
+#' @return A record containing the neighbor indices and their values.
+#' @noRd
 .sc_pattern_row <- function(csr, m, ci, cache) {
   key <- as.character(ci)
   v <- cache[[key]]
@@ -111,6 +143,11 @@
 # kernel 内退化为 cnt >= thr；单调性在 tests_dev/test-computeAvgCommunProb.R
 # 中对 fixture 组大小穷举验证。该契约有意不复现 pinned upstream 的
 # format() 字符比较行为，后者仅作为历史对拍参考。
+#' Convert a support fraction to a cell count
+#' @param n Number of cells in the group.
+#' @param min.percent The required fraction of expressing cells.
+#' @return The minimum qualifying count, or n + 1 if no count qualifies.
+#' @noRd
 .sc_gate_threshold <- function(n, min.percent) {
   decision <- function(cnt)
     isTRUE(signif(mean(rep(c(1, 0), c(cnt, n - cnt))), 1) >= min.percent)
@@ -497,8 +534,6 @@ computeCommunProb <- function(
 #' Otherwise, the cell-cell communication probability share the same computation factor 1 within the maximum interaction/diffusion length of ligands
 #' @return CsparseMatrix object in `Matrix` Package
 #' @export
-#'
-#' @examples
 createPspatialFrom_dspatial <- function(d.spatial,distance.use=T){
   # d.spatial is a sparse matrix, note if dividing it directly, many 1/0 => inf will arise
   P.spatial <- d.spatial
@@ -1462,6 +1497,10 @@ computeAvgCommunProb <- function(
 
 # Sum SparseChatArray layers (list of K x K / nC x nC dgCMatrix) into a single
 # dgCMatrix.  Mirrors the delayed cpp lookup of marginSums.SparseChatArray.
+#' Sum corresponding entries of sparse communication layers
+#' @param layers The list of sparse signaling matrices.
+#' @return A sparse matrix of summed weights.
+#' @noRd
 .sc_sum_layers <- function(layers) {
   if (length(layers) == 1L) return(layers[[1L]])
   cpp_sum_layers <- get("cpp_sum_layers", inherits = TRUE)
@@ -1473,22 +1512,13 @@ computeAvgCommunProb <- function(
 
 #' Compute the communication probability on signaling pathway level by summarizing all related ligands/receptors
 #'
-#' @param object CellChat object
-#' @param net A list from object@net; If net = NULL, net = object@net
+#' @param object A SpatialCellChat object.
+#' @param net An LR-level network list. Defaults to the network stored in the object.
 #' @param pairLR.use A dataframe giving the ligand-receptor interactions; If pairLR.use = NULL, pairLR.use = object@LR$LRsig
 #' @param thresh threshold of the p-value for determining significant interaction
 #' @param do.group whether to compute the group-level signaling based on the cell group information in `object@idents`
-#' @param do.cell whether to compute the individual-cell signaling at signaling pathway level. This works when "prob.cell" exists in `object@net`.
-#' @return A CellChat object with updated slot 'netP':
-#'
-#' object@netP$group$prob is the group-level communication probability array (SparseChatArray) on signaling pathway level; layers are pathways with significant communications, ordered by the descending total communication probability. USER can access all significant interactions using the function \code{\link{subsetCommunication}}
-#'
-#' object@netP$cell$prob is the individual-cell-level communication probability array (SparseChatArray) on signaling pathway level.
-#'
-#' object@netP$pathways (group level) and object@netP$pathways.cell (cell level) list all the signaling pathways with significant communications.
-#'
-#' From version >= 1.1.0, pathways are ordered based on the total communication probabilities. NB: pathways with small total communication probabilities might be also very important since they might be specifically activated between only few cell types.
-#'
+#' @param do.cell Whether to compute a cell-level pathway network from net$cell$prob.
+#' @return The object with pathway communication stored in netP$group and/or netP$cell. Each computed branch includes the pathway probabilities.
 #' @export
 
 computeCommunProbPathway <- function(
@@ -2321,7 +2351,7 @@ computeAveExpr <- function(object, features = NULL, group.by = NULL, type = c("t
 #' @param complex_input the complex_input from CellChatDB
 #' @param data.use data matrix (row are genes and columns are cells or cell groups)
 #' @param complex the names of complex
-#' @return
+#' @return A matrix of complex expression across the cells.
 #' @importFrom dplyr select starts_with
 #' @importFrom future nbrOfWorkers
 #' @importFrom future.apply future_sapply
@@ -2347,9 +2377,7 @@ computeExpr_complex <- function(complex_input, data.use, complex) {
 #' @param geneLR a char vector giving a set of ligands or receptors
 #' @param data.use data matrix (row are genes and columns are cells or cell groups)
 #' @param complex_input the complex_input from CellChatDB
-# #' @param group a factor defining the cell groups; If NULL, compute the expression of ligands or receptors in individual cells; otherwise, compute the average expression of ligands or receptors per cell group
-# #' @param FunMean the function for computing average expression per cell group
-#' @return
+#' @return A matrix of per-cell expression for the requested ligands, receptors, or complexes.
 #' @export
 computeExpr_LR <- function(geneLR, data.use, complex_input){
   nLR <- length(geneLR)
@@ -2402,7 +2430,7 @@ geometricMean <- function(x,na.rm=TRUE){
 #' Compute the Tukey's trimean
 #' @param x a numeric vector
 #' @param na.rm whether remove na
-#' @return
+#' @return The Tukey trimean of the input values.
 #' @importFrom stats quantile
 #' @export
 triMean <- function(x, na.rm = TRUE) {
@@ -2413,7 +2441,7 @@ triMean <- function(x, na.rm = TRUE) {
 #' @param x a numeric vector
 #' @param trim the percent of expressing cells per cell group to be considered as zero
 #' @param na.rm whether remove na
-#' @return
+#' @return The mean when the positive fraction passes the minimum; otherwise zero.
 #' @importFrom Matrix nnzero
 #' @export
 thresholdedMean <- function(x, trim = 0.1, na.rm = TRUE) {
@@ -2460,6 +2488,16 @@ identifyEnrichedInteractions <- function(object, from, to, bidirection = FALSE, 
                                  pair.only, pairLR.use0, thresh)
 }
 
+#' Select LR records from pairwise dataset rankings
+#' @param pairwiseLR The pairwise LR ranking table.
+#' @param from The dataset or group to compare from.
+#' @param to The dataset or group to compare to.
+#' @param bidirection Whether to evaluate both comparison directions.
+#' @param pair.only Whether to retain only the LR identifiers.
+#' @param pairLR.use0 Optional LR name filter resolved by the calling function.
+#' @param thresh threshold of the p-value for determining significant interaction
+#' @return The pairwise LR table filtered by the requested comparison and thresholds.
+#' @noRd
 .sc_identify_enriched_pairwise <- function(pairwiseLR, from, to, bidirection,
                                             pair.only, pairLR.use0, thresh) {
   if (is.null(pairwiseLR)) {

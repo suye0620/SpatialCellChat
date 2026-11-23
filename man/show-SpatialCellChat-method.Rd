@@ -3,17 +3,16 @@
 \docType{methods}
 \name{show,SpatialCellChat-method}
 \alias{show,SpatialCellChat-method}
-\title{show method for SpatialCellChat}
+\title{Print a SpatialCellChat summary}
 \usage{
 \S4method{show}{SpatialCellChat}(object)
 }
 \arguments{
-\item{object}{object}
-
-\item{SpatialCellChat}{object}
-
-\item{show}{show the object}
+\item{object}{A SpatialCellChat object.}
+}
+\value{
+The result of writing the summary to the console, invisibly.
 }
 \description{
-show method for SpatialCellChat
+Print a SpatialCellChat summary
 }

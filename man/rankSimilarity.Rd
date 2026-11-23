@@ -41,6 +41,9 @@ e.g., comparison2 = c(1,3) indicates the first and third datasets defined in `co
 
 \item{font.size}{font size}
 }
+\value{
+A ggplot showing distances between pathway embeddings across datasets.
+}
 \description{
 Rank the similarity of the shared signaling pathways based on their joint manifold learning
 }

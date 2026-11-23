@@ -17,6 +17,9 @@ When `key` is a vector, the `search` should be a list with the size being `lengt
 
 \item{non_protein}{whether to use the non-protein signaling for CellChat analysis. By default, non_protein = FALSE because most of non-protein signaling are the special synaptic signaling interactions that can only be used when inferring neuron-neuron communication.}
 }
+\value{
+A database list with its interaction table restricted to the requested records.
+}
 \description{
 Subset CellChatDB databse by only including interactions of interest
 }

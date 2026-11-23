@@ -2,10 +2,9 @@
 #'
 #' @param net compute the centrality measures on a specific signaling network given by a 2 or 3 dimemsional array net
 #' @param degree.only only compute outdeg_unweighted,indeg_unweighted,outdeg,indeg and page_rank
+#' @return A matrix of centrality measures by node.
 #' @importFrom igraph graph_from_adjacency_matrix strength hub_score authority_score eigen_centrality page_rank betweenness E
 #' @importFrom sna flowbet infocent
-#'
-#' @return
 computeCentralityLocal <- function (
     net,
     degree.only = F
@@ -235,6 +234,14 @@ netAnalysis_computeCentrality <- function (
 
 
 
+#' Compute scaled totals for each signaling layer
+#' @param layers The list of sparse signaling matrices.
+#' @param rows Deprecated. Use \code{nrow}.
+#' @param cols defining the color for each cell group
+#' @param min.value The lower endpoint of the common scaling interval.
+#' @param range.value The width of the common scaling interval.
+#' @return A numeric vector with one contribution total per layer.
+#' @noRd
 .sc_contribution_layer_sums <- function(layers, rows = NULL, cols = NULL, min.value, range.value) {
   vapply(layers, function(mat) {
     if (!is.null(rows)) mat <- mat[rows, , drop = FALSE]
@@ -245,6 +252,10 @@ netAnalysis_computeCentrality <- function (
   }, numeric(1))
 }
 
+#' Find the range of sparse communication values
+#' @param layers The list of sparse signaling matrices.
+#' @return The minimum, maximum, and range, including implicit zeros.
+#' @noRd
 .sc_contribution_layer_minmax <- function(layers) {
   total <- sum(vapply(layers, function(mat) as.double(nrow(mat)) * ncol(mat), numeric(1)))
   stored <- unlist(lapply(layers, function(mat) {
@@ -270,14 +281,12 @@ netAnalysis_computeCentrality <- function (
 #' @param title the title of the plot
 #' @param font.size font size of the text
 #' @param font.size.title font size of the title
+#' @return A ggplot, or a list of the LR contribution table and plot when return.data is TRUE.
 #' @importFrom dplyr select
 #' @importFrom ggplot2 ggplot geom_bar aes coord_flip scale_x_discrete element_text theme ggtitle
 #' @importFrom cowplot ggdraw draw_label plot_grid
 #'
-#' @return
 #' @export
-#'
-#' @examples
 netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, do.group = TRUE, width = 0.1, vertex.receiver = NULL, thresh = 0.05, return.data = FALSE,
                                      x.rotation = 0, title = "Contribution of each L-R pair",
                                      font.size = 10, font.size.title = 10) {
@@ -400,6 +409,9 @@ netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, d
 
 #' Internal helpers shared by the single-sample and snapshot-based comparison
 #' paths. Cell-level layers remain sparse throughout aggregation.
+#' @param object A SpatialCellChat object.
+#' @return Names of validated dataset snapshots.
+#' @noRd
 .sc_ranknet_dataset_names <- function(object) {
   if (!identical(object@misc$.mode, "merged"))
     stop("comparison mode requires a merged object with misc$.datasets.", call. = FALSE)
@@ -411,6 +423,12 @@ netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, d
   names(datasets)
 }
 
+#' Resolve the requested ranking network
+#' @param object A SpatialCellChat object.
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param dataset The name of a dataset snapshot, or NULL for the top-level object.
+#' @return A network list from a single object or one merged snapshot.
+#' @noRd
 .sc_ranknet_branch <- function(object, slot.name, dataset = NULL) {
   if (is.null(dataset)) return(methods::slot(object, slot.name))
   record <- object@misc$.datasets[[dataset]]
@@ -421,6 +439,12 @@ netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, d
   branch.slot
 }
 
+#' Resolve ranking selectors against a named axis
+#' @param index The index or names selecting positions along the axis.
+#' @param labels Names associated with the values or index positions.
+#' @param name The input name to include in diagnostics.
+#' @return Unique integer indices in the requested order.
+#' @noRd
 .sc_ranknet_index <- function(index, labels, name) {
   n <- length(labels)
   if (is.null(index)) return(seq_len(n))
@@ -435,6 +459,16 @@ netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, d
   unique(as.integer(index))
 }
 
+#' Extract ranking layers and retain the selected edges
+#' @param object A SpatialCellChat object.
+#' @param slot.name Source slot: \code{"assay"}, \code{"net"} or \code{"netP"}.
+#' @param do.group whether to compute the group-level signaling based on the cell group information in `object@idents`
+#' @param thresh threshold of the p-value for determining significant interaction
+#' @param sources.use Please check the description in function \code{\link{subsetCommunication}}
+#' @param targets.use Please check the description in function \code{\link{subsetCommunication}}
+#' @param dataset The name of a dataset snapshot, or NULL for the top-level object.
+#' @return A named list of layer records with edge positions and values.
+#' @noRd
 .sc_ranknet_layers <- function(object, slot.name, do.group, thresh,
                                sources.use = NULL, targets.use = NULL, dataset = NULL) {
   slot.data <- .sc_ranknet_branch(object, slot.name, dataset)
@@ -457,6 +491,11 @@ netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, d
   layers
 }
 
+#' Summarize each selected ranking layer
+#' @param layers The list of sparse signaling matrices.
+#' @param measure "count" or "weight". "count": comparing the number of interactions; "weight": comparing the total interaction weights (strength)
+#' @return A named vector of communication counts or total weights.
+#' @noRd
 .sc_ranknet_summarize <- function(layers, measure) {
   values <- vapply(layers, function(mat) {
     if (identical(measure, "count")) {
@@ -468,6 +507,11 @@ netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, d
   values
 }
 
+#' Align values from two datasets on their common edge axis
+#' @param first The edge values and keys from the first dataset.
+#' @param second The edge values and keys from the second dataset.
+#' @return A list with parallel vectors for the two datasets where either has a nonzero value.
+#' @noRd
 .sc_ranknet_paired_values <- function(first, second) {
   if (!identical(dim(first), dim(second)))
     stop("Statistical test requires datasets with identical interaction matrix dimensions; set `do.stat = FALSE`.",
@@ -539,12 +583,10 @@ netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, d
 #' @param legend.text.size the text size on the legend
 #' @param legend.position parameters for configurating the plot
 #' @param legend.spacing a two-elements vector respectively specifying legend.key.spacing.x and legend.key.spacing.y for spacing apart legend key-label pairs
+#' @return A ggplot, or a list of the signaling contribution table and plot when return.data is TRUE.
 #' @import ggplot2
 #' @importFrom methods slot
-#' @return
 #' @export
-#'
-#' @examples
 rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), mode = c("comparison", "single"), comparison = c(1,2), do.group = TRUE,
                     color.use = NULL, stacked = FALSE, sources.use = NULL, targets.use = NULL,  signaling = NULL, pairLR = NULL, signaling.type = NULL, do.stat = FALSE, cutoff.pvalue = 0.05, tol = 0.05, thresh = 0.05, show.raw = FALSE, return.data = FALSE, x.rotation = 90, title = NULL, bar.w = 0.75, font.size = 8,
                     do.flip = TRUE, x.angle = NULL, y.angle = 0, x.hjust = 1,y.hjust = 1,
@@ -1033,14 +1075,10 @@ extractEnrichedLR_internal <- function(net, LR, DB, signaling, enriched.only = T
 #' @param nrun number of runs when performing NMF
 #' @param seed.use seed when performing NMF
 #' @importFrom methods slot
-# #' @importFrom NMF nmfEstimateRank
 #' @import NMF
-# #' @importFrom ggplot2 scale_color_brewer
 #' @import ggplot2
 #' @return a ggplot object
 #' @export
-#'
-#' @examples
 selectK <- function(object, slot.name = "netP", pattern = c("outgoing","incoming"), title.name = NULL, do.facet = TRUE, k.range = seq(2,10), nrun = 30, seed.use = 10) {
   object <- .sc_assert_spatial_cell_chat(object)
   pattern <- match.arg(pattern)
@@ -1269,7 +1307,7 @@ suggestK <- function(
 #' Make sure H is cell x factor
 #' Experimental method to examine the dispersion of results
 #' @param H a list of numeric matrices or a single matrix
-#' @return
+#' @return A sparse symmetric connectivity matrix based on common pattern membership.
 .H_to_conn_mat <- function(H) {
   # Get max factor loading of all cells and concatenate
   H <- Reduce(rbind, H)
@@ -1306,28 +1344,16 @@ suggestK <- function(
 #'
 #' @param object CellChat object
 #' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks
-#' @param pattern "outgoing" or "incoming"
-#' @param k the number of patterns
-#' @param k.range a range of the number of patterns
-#' @param heatmap.show whether showing heatmap
-#' @param color.use the character vector defining the color of each cell group
-#' @param color.heatmap a color name in brewer.pal
-#' @param title.legend the title of legend in heatmap
-#' @param width width of heatmap
-#' @param height height of heatmap
-#' @param font.size fontsize in heatmap
+#' @return A dense sender by receiver by signaling array of group probabilities.
+#' @noRd
 #' @importFrom methods slot
-# #' @importFrom NMF nmfEstimateRank nmf
 #' @importFrom grDevices colorRampPalette
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom ComplexHeatmap Heatmap HeatmapAnnotation draw
 #' @importFrom stats setNames
 #' @importFrom grid grid.grabExpr grid.newpage pushViewport grid.draw unit gpar viewport popViewport
 #'
-#' @return
 #' @export
-#'
-#' @examples
 .sc_group_prob_array <- function(object, slot.name) {
   prob <- methods::slot(object, slot.name)$group$prob
   if (!inherits(prob, "SparseChatArray"))
@@ -1336,6 +1362,11 @@ suggestK <- function(
         dim = dim(prob), dimnames = dimnames(prob))
 }
 
+#' Normalize pattern loadings with positive maxima
+#' @param prob A communication probability array with sender, receiver, and signaling axes.
+#' @param pattern "outgoing" or "incoming"
+#' @return The matrix of column-scaled scores, with inactive columns removed.
+#' @noRd
 .sc_normalize_pattern_scores <- function(prob, pattern) {
   pattern <- match.arg(pattern, c("outgoing", "incoming"))
   group.margin <- if (pattern == "outgoing") 1L else 2L
@@ -1357,6 +1388,21 @@ suggestK <- function(
   scores
 }
 
+#' Identification of major signals for specific cell groups and general communication patterns
+#' @param object CellChat object
+#' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks
+#' @param pattern "outgoing" or "incoming"
+#' @param k the number of patterns
+#' @param k.range a range of the number of patterns
+#' @param heatmap.show whether showing heatmap
+#' @param color.use the character vector defining the color of each cell group
+#' @param color.heatmap a color name in brewer.pal
+#' @param title.legend the title of legend in heatmap
+#' @param width width of heatmap
+#' @param height height of heatmap
+#' @param font.size fontsize in heatmap
+#' @export
+#' @return The object with the selected network's pattern data and loadings recorded under \code{pattern[[pattern]]}.
 identifyCommunicationPatterns <- function(object, slot.name = "netP", pattern = c("outgoing","incoming"), k = NULL, k.range = seq(2,10), heatmap.show = TRUE,
                                           color.use = NULL, color.heatmap = "Spectral", title.legend = "Contributions",
                                           width = 4, height = 6, font.size = 8) {
@@ -1436,13 +1482,10 @@ identifyCommunicationPatterns <- function(object, slot.name = "netP", pattern = 
 #' @param type "functional","structural"
 #' @param k the number of nearest neighbors
 #' @param thresh the fraction (0 to 0.25) of interactions to be trimmed before computing network similarity
+#' @return The object with the similarity matrix stored under the chosen network and similarity type.
 #' @importFrom methods slot
-
 #'
-#' @return
 #' @export
-#'
-#' @examples
 computeNetSimilarity <- function(object, slot.name = "netP", type = c("functional","structural"), k = NULL, thresh = NULL) {
   type <- match.arg(type)
   prob = .sc_group_prob_array(object, slot.name)
@@ -1514,11 +1557,10 @@ computeNetSimilarity <- function(object, slot.name = "netP", type = c("functiona
 #' @param comparison a numerical vector giving the datasets for comparison
 #' @param k the number of nearest neighbors
 #' @param thresh the fraction (0 to 0.25) of interactions to be trimmed before computing network similarity
+#' @return The merged object with pairwise signaling similarities stored under the chosen network and similarity type.
 #' @importFrom methods slot
 #'
-#' @return
 #' @export
-#'
 computeNetSimilarityPairwise <- function(object, slot.name = "netP", type = c("functional", "structural"), comparison = NULL, k = NULL, thresh = NULL) {
   type <- match.arg(type)
   if (!identical(object@misc$.mode, "merged"))
@@ -1615,11 +1657,9 @@ computeNetSimilarityPairwise <- function(object, slot.name = "netP", type = c("f
 #' Larger values ensure embedded points are moreevenly distributed, while smaller values allow the
 #' algorithm to optimise more accurately with regard to local structure. Sensible values are in the range 0.001 to 0.5.
 #' @param ... Parameters passing to umap
+#' @return The object with the embedding stored in the selected network's similarity results.
 #' @importFrom methods slot
-#' @return
 #' @export
-#'
-#' @examples
 netEmbedding <- function(object, slot.name = "netP", type = c("functional","structural"), comparison = NULL, pathway.remove = NULL,
                          umap.method = c("umap-learn", "uwot"), n_neighbors = NULL,min_dist = 0.3,...) {
   umap.method <- match.arg(umap.method)
@@ -1673,14 +1713,12 @@ netEmbedding <- function(object, slot.name = "netP", type = c("functional","stru
 #' @param do.plot whether showing the eigenspectrum for inferring number of clusters; Default will save the plot
 #' @param fig.id add a unique figure id when saving the plot
 #' @param k.eigen the number of eigenvalues used when doing spectral clustering
+#' @return The object with cluster labels stored in the similarity results. The adjacency-matrix branch returns adjacency and cluster count.
 #' @importFrom methods slot
 #' @importFrom future nbrOfWorkers plan
 #' @importFrom future.apply future_sapply
 #' @importFrom pbapply pbsapply
-#' @return
 #' @export
-#'
-#' @examples
 netClustering <- function(object, slot.name = "netP", type = c("functional","structural"), comparison = NULL, k = NULL, methods = "kmeans", do.plot = TRUE, fig.id = NULL, k.eigen = NULL) {
   type <- match.arg(type)
   if (identical(object@misc$.mode, "single")) {
@@ -1783,7 +1821,7 @@ buildSNN <- function(data.use, k = 10, k.scale = 10, prune.SNN = 1/15) {
 #' @param CM consensus matrix
 #' @param tau truncated consensus matrix
 #' @param tol tolerance
-#' @return
+#' @return A list containing two suggested bounds, eigenvalues, and an eigengap plot.
 #' @import ggplot2
 #' @export
 computeEigengap <- function(CM, tau = NULL, tol = 0.01){
@@ -1833,7 +1871,7 @@ computeEigengap <- function(CM, tau = NULL, tol = 0.01){
 #'
 #' @param CM consensus matrix
 #' @param tol tolerance
-#' @return
+#' @return A list containing sorted Laplacian eigenvalues and the number at or below the tolerance.
 #' @importFrom RSpectra eigs_sym
 #' @importFrom Matrix colSums
 #' @export
@@ -1866,12 +1904,10 @@ computeLaplacian <- function(CM, tol = 0.01) {
 #' @param bar.w the width of bar plot
 #' @param color.use defining the color
 #' @param font.size font size
+#' @return A ggplot showing distances between pathway embeddings across datasets.
 #' @import ggplot2
 #' @importFrom methods slot
-#' @return
 #' @export
-#'
-#' @examples
 rankSimilarity <- function(object, slot.name = "netP", type = c("functional","structural"), comparison1 = NULL,  comparison2 = c(1,2),
                            x.rotation = 90, title = NULL, color.use = NULL, bar.w = NULL, font.size = 8) {
   object <- .sc_assert_spatial_cell_chat(object)
@@ -2038,9 +2074,8 @@ compareInteractions <- function(object, measure = c("count", "weight"), color.us
 #'
 #' @param object CellChat object
 #' @param LR.use ligand-receptor interactions used in inferring communication network
-#' @return
+#' @return The merged object with pairwise LR rankings saved in its network results.
 #' @export
-#'
 rankNetPairwise <- function(object, LR.use = NULL) {
   object <- .sc_assert_spatial_cell_chat(object)
   make_rank <- function(net, lr.table) {
@@ -2119,7 +2154,7 @@ rankNetPairwise <- function(object, LR.use = NULL) {
 #' compute the Shannon entropy
 #'
 #' @param a a numeric vector
-#' @return
+#' @return The entropy of the positive entries, computed with natural logarithms.
 entropia<-function(a){
   a<-a[which(a>0)]
   return(-sum(a*log(a)))
@@ -2129,7 +2164,7 @@ entropia<-function(a){
 #' compute the node distance matrix
 #'
 #' @param g a graph objecct
-#' @return
+#' @return A matrix of per-node shortest-path length frequencies.
 node_distance<-function(g){
   n<-length(V(g))
   if(n==1){
@@ -2164,7 +2199,7 @@ node_distance<-function(g){
 #' compute nnd
 #'
 #' @param g a graph objecct
-#' @return
+#' @return The mean distance distribution followed by the network node dispersion score.
 nnd<-function(g){
 
   N<-length(V(g))
@@ -2181,8 +2216,8 @@ nnd<-function(g){
 #' compute alpha centrality
 #'
 #' @param g a graph objecct
+#' @return A vector of normalized centrality values followed by the remaining probability mass.
 #' @importFrom igraph degree alpha.centrality
-#' @return
 alpha_centrality<-function(g){
 
   N<-length(igraph::V(g))
@@ -2200,11 +2235,9 @@ alpha_centrality<-function(g){
 #' @param w1 parameter
 #' @param w2 parameter
 #' @param w3 parameter
+#' @return A scalar structural dissimilarity between the graphs.
 #' @importFrom igraph graph_from_adjacency_matrix V graph.complementer
-#' @return
 #' @export
-#'
-#' @examples
 computeNetD_structure <- function(g, h, w1 = 0.45, w2 = 0.45, w3 = 0.1){
 
   first<-0
@@ -2858,16 +2891,14 @@ subsetCommunication_internal <- function(net, LR, cells.level, slot.name = "net"
 #' @param font.size.title font size of the title
 #' @param cluster.rows whether cluster rows
 #' @param cluster.cols whether cluster columns
+#' @return The result of drawing a ComplexHeatmap heatmap for the selected signaling network.
 #' @importFrom methods slot
 #' @importFrom grDevices colorRampPalette
 #' @importFrom stats setNames
 #' @import RColorBrewer
 #' @import ComplexHeatmap
 #'
-#' @return
 #' @export
-#'
-#' @examples
 netAnalysis_signalingRole_network <- function(object, signaling, slot.name = "netP", measure = c("outdeg","indeg","flowbet","info"), measure.name = c("Sender","Receiver","Mediator","Influencer"),
                                               color.use = NULL, color.heatmap = "BuGn",
                                               width = 6.5, height = 1.4, font.size = 8, font.size.title = 10, cluster.rows = FALSE, cluster.cols = FALSE) {
@@ -3435,15 +3466,14 @@ dataset.record <- object@misc$.datasets[[dataset.name[comparison[ii]]]]
 #' @param font.size.title font size of the title
 #' @param cluster.rows whether cluster rows
 #' @param cluster.cols whether cluster columns
+#' @return A ComplexHeatmap object showing outgoing, incoming, or total signaling centrality.
 #' @importFrom methods slot
 #' @importFrom grDevices colorRampPalette
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom ComplexHeatmap Heatmap HeatmapAnnotation anno_barplot rowAnnotation
 #' @importFrom stats setNames
 #'
-#' @return
 #' @export
-#'
 netAnalysis_signalingRole_heatmap <- function(object, signaling = NULL, pattern = c("outgoing", "incoming","all"), slot.name = "netP",
                                               color.use = NULL, color.heatmap = "BuGn",
                                               title = NULL, width = 10, height = 8, font.size = 8, font.size.title = 10, cluster.rows = FALSE, cluster.cols = FALSE){
@@ -3536,6 +3566,13 @@ netAnalysis_signalingRole_heatmap <- function(object, signaling = NULL, pattern 
 
 
 # Map one communication table with one already aligned DEG table.
+#' Attach DEG summary columns to communication records
+#' @param net compute the centrality measures on a specific signaling network given by a 2 or 3 dimemsional array net
+#' @param DEG The differential expression summary table.
+#' @param geneInfo Database information for mapping gene identifiers and symbols.
+#' @param complex_input the complex_input from CellChatDB
+#' @return The communication table with ligand and receptor differential expression columns.
+#' @noRd
 .sc_map_deg_to_net <- function(net, DEG, geneInfo, complex_input) {
   required.deg <- c("clusters", "features", "pvalues", "logFC", "pct.1", "pct.2")
   if (!is.data.frame(DEG) || !all(required.deg %in% names(DEG))) {
@@ -4082,6 +4119,10 @@ identifyTopicCommunities <- function(
 
 # Matrix::diag() treats a length-one numeric argument as a matrix order.  Use
 # an explicit diagonal constructor so rank-one NMF results remain 1 x 1.
+#' Construct the square-root diagonal used in NMF initialization
+#' @param d The numeric vector whose square roots form the diagonal.
+#' @return A sparse diagonal matrix with the square roots of the input values.
+#' @noRd
 .sc_nmf_sqrt_diagonal <- function(d) {
   d <- as.numeric(d)
   if (!length(d) || any(!is.finite(d)) || any(d < 0)) {
@@ -4315,6 +4356,14 @@ extractTopicSignaling <- function (object,
 }
 
 
+#' Compute direction-specific centroids from one network layer
+#' @param mat A matrix for the current layer.
+#' @param coordinates Numeric matrix or data.frame; each row gives the spatial location of one cell/spot. Two- and three-dimensional coordinates are supported.
+#' @param top the cutoff for selecting top signalings
+#' @param sparse whether to apply a sparse strategy for selecting top signalings
+#' @param direction The direction of signaling to process, or the scale direction for a plot.
+#' @return A sparse matrix with two weighted-centroid columns per observation.
+#' @noRd
 .sc_communication_field_layer <- function(mat, coordinates, top, sparse, direction) {
   if (!inherits(mat, "sparseMatrix"))
     stop("communication probability layers must be sparse matrices", call. = FALSE)
@@ -4382,6 +4431,14 @@ extractTopicSignaling <- function (object,
 
 
 
+#' Compute incoming and outgoing spatial centroids
+#' @param prob A communication probability array with sender, receiver, and signaling axes.
+#' @param coordinates Numeric matrix or data.frame; each row gives the spatial location of one cell/spot. Two- and three-dimensional coordinates are supported.
+#' @param signaling Please check the description in function \code{\link{subsetCommunication}}
+#' @param top the cutoff for selecting top signalings
+#' @param sparse whether to apply a sparse strategy for selecting top signalings
+#' @return A list of outgoing and incoming centroid arrays, indexed by cell and signaling layer.
+#' @noRd
 .sc_compute_communication_field <- function(prob, coordinates, signaling, top, sparse) {
   outgoing <- lapply(signaling, function(name) {
     .sc_communication_field_layer(prob[[name]], coordinates, top, sparse, "outgoing")

@@ -19,28 +19,28 @@ computeAveExpr(
 
 \item{features}{a char vector giving the used features. default use all features}
 
-\item{group.by}{cell group information; default is \code{idents(object)}; otherwise
-it should be one of the column names of \code{meta(object)}}
+\item{group.by}{cell group information; default is `idents(object)`; otherwise
+it should be one of the column names of `meta(object)`}
 
 \item{type}{methods for computing the average gene expression per cell group.
 
 By default = "triMean", defined as a weighted average of the distribution's median and its two quartiles (https://en.wikipedia.org/wiki/Trimean);
 
-When setting \code{type = "truncatedMean"}, a value should be assigned to 'trim'. See the function \code{\link[base]{mean}}.}
+When setting `type = "truncatedMean"`, a value should be assigned to 'trim'. See the function \code{\link[base]{mean}}.}
 
 \item{trim}{the fraction (0 to 0.25) of observations to be trimmed from each end of x before the mean is computed.}
 
-\item{slot.name}{which assay layer to average: \code{"signaling"}, \code{"smooth"} or \code{"norm"}.}
+\item{slot.name}{which assay layer to average: `"signaling"`, `"smooth"` or `"norm"`.}
 
-\item{data.use}{a customed data matrix. Default: data.use = NULL and the matrix of \code{slot.name} is used}
+\item{data.use}{a customed data matrix. Default: data.use = NULL and the matrix of `slot.name` is used}
 }
 \value{
 Returns a matrix with genes as rows, cell groups as columns.
 }
 \description{
 Averages expression per cell group over one assay layer. Layers follow the
-11-slot schema: \code{"signaling"} is the \code{subsetData()} gene subset that the
-default inference consumes, \code{"smooth"} is the \code{projectData()} PPI projection
-used when \code{computeCommunProb(raw.use = FALSE)}, and \code{"norm"} is the full
+11-slot schema: `"signaling"` is the `subsetData()` gene subset that the
+default inference consumes, `"smooth"` is the `projectData()` PPI projection
+used when `computeCommunProb(raw.use = FALSE)`, and `"norm"` is the full
 normalized matrix.
 }

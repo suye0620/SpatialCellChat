@@ -32,6 +32,9 @@ plotGeneExpression(
 
 \item{...}{other arguments passing to either VlnPlot or DotPlot from Seurat package}
 }
+\value{
+The requested expression visualization as a ggplot or combined plot.
+}
 \description{
 This function create a Seurat object from an input CellChat object, and then plot gene expression distribution using a modified violin plot or dot plot based on Seurat's function or a bar plot.
 Please check \code{\link{StackedVlnPlot}},\code{\link{dotPlot}} and \code{\link{barPlot}}for detailed description of the arguments.

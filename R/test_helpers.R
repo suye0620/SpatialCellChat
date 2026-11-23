@@ -14,6 +14,8 @@
 #   7. rs$close()                                   — done, kill the process
 
 #' Start a persistent background R session for iterative testing
+#' @return A persistent callr R session.
+#' @noRd
 start_session <- function() {
   rs <- callr::r_session$new(wait_timeout = 300000)
   rs$run(function() { "alive" })
@@ -26,6 +28,9 @@ start_session <- function() {
 #' Pre-loads key dependencies (Matrix, methods, etc.) then sources all R/ files.
 #' Use this instead of devtools::load_all() to avoid dependency checks.
 #' Call after any edit to R source files to reload.
+#' @param rs A persistent callr R session returned by start_session().
+#' @return NULL invisibly. Sourcing status is printed to the console.
+#' @noRd
 source_chat <- function(rs) {
   loaded <- rs$run(function() {
     # preload essential packages needed by class definitions
@@ -54,6 +59,9 @@ source_chat <- function(rs) {
 #'
 #' Creates: 50 cells, 100 genes, 5 cell groups, 10 LR pairs
 #' Saves:   .test_cache/chat.rds
+#' @param rs A persistent callr R session returned by start_session().
+#' @return The background call result, invisibly. The fixture is written to the session cache.
+#' @noRd
 init_test_data <- function(rs) {
   rs$run(function() {
     set.seed(42)
@@ -102,6 +110,8 @@ init_test_data <- function(rs) {
 }
 
 #' Show available checkpoints
+#' @return NULL invisibly. Checkpoint names and sizes are printed to the console.
+#' @noRd
 list_checkpoints <- function() {
   fs <- list.files(".test_cache", pattern = "\\.rds$")
   cat("Checkpoints:\n")

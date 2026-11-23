@@ -13,6 +13,11 @@ showDatabaseCategory(CellChatDB, nrow = 1)
 
 \item{nrow}{the number of rows in the plot}
 }
+\value{
+A ggplot showing the signal categories and their frequencies.
+
+A combined ggplot summarizing database interaction categories.
+}
 \description{
 Show the description of CellChatDB databse
 

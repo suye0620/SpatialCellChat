@@ -13,6 +13,9 @@ scaleMat(x, scale, na.rm = TRUE)
 
 \item{na.rm}{whether remove na}
 }
+\value{
+A scaled matrix with the original axis names.
+}
 \description{
 Scale a data matrix
 }

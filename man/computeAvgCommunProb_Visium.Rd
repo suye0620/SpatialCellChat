@@ -2,48 +2,49 @@
 % Please edit documentation in R/modeling.R
 \name{computeAvgCommunProb_Visium}
 \alias{computeAvgCommunProb_Visium}
-\title{Compute group-level cell-cell communication for Visium Low Definition(LD)}
+\title{Compute group-level cell-cell communication for Visium Low Definition (LD)}
 \usage{
 computeAvgCommunProb_Visium(
   object,
   cell.type.decomposition,
   avg.type = c("avg", "sum"),
   group.by = NULL,
-  do.permutation = T,
+  do.permutation = TRUE,
   nboot = 100,
   seed.use = 1L,
-  colocalization.use = F,
+  colocalization.use = FALSE,
   thresh.colo = 0.05
 )
 }
 \arguments{
-\item{object}{SpatialCellChat object with communication probabilities for pairwise individual cells}
+\item{object}{SpatialCellChat object with communication probabilities in
+`net$cell$prob`.}
 
-\item{cell.type.decomposition}{NCells x NTypes Matrix, which comes from any kind of cell type decomposition.}
+\item{cell.type.decomposition}{NCells x NTypes matrix of cell-type proportions.}
 
-\item{avg.type}{methods for integrating communication probabilities per cell group}
+\item{avg.type}{Methods for integrating communication probabilities per cell group.}
 
-\item{group.by}{cell group information used for computing average communication probabilities}
+\item{group.by}{Cell-group metadata column; NULL uses `object@idents`.}
 
-\item{do.permutation}{whether performing permutation test}
+\item{do.permutation}{Whether to perform the group-column permutation test.}
 
-\item{nboot}{the number of permutations}
+\item{nboot}{Number of permutations when `do.permutation = TRUE`.}
 
-\item{seed.use}{set a random seed. By default, set the seed to 1.}
+\item{seed.use}{Random seed.}
 
-\item{colocalization.use}{whether filtering out spatially distant cell groups based on colocalization analysis between any cell groups}
+\item{colocalization.use}{Whether to gate interactions by colocalization.}
 
-\item{thresh.colo}{removal of cell-cell communication with no significant colocalizations (fdr < 0.05)}
+\item{thresh.colo}{Remove interactions whose colocalization p-value exceeds this threshold.}
 }
 \value{
-A CellChat object with updated slot 'net':
-
-object@net$prob is the inferred group-level communication probability (strength) array, where the first, second and third dimensions represent a source group, target group and ligand-receptor pair, respectively.
-
-USER can access all the inferred cell-cell communications using the function 'subsetCommunication(object)', which returns a data frame.
-
-object@net$pval is the corresponding p-values of each interaction
+A SpatialCellChat object with updated final 11-slot `net`:
+  `net$group$prob` is a `SparseChatArray` of group-level LR probabilities and
+  `net$group$pval` is the corresponding `SparseChatArray`, or NULL without
+  permutation. Runtime counts and parameters, including the decomposition, are
+  stored in `net$tmp` and `misc$.param$averaging`, respectively.
 }
 \description{
-For Visium HD ST datasets, please use \link{computeAvgCommunProb} instead.
+Consume cell-level communication probabilities from the final 11-slot schema
+and aggregate them with a cell-type decomposition. For Visium HD ST datasets,
+please use \link{computeAvgCommunProb} instead.
 }
