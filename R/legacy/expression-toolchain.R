@@ -331,7 +331,6 @@ modifySparse3Darray <- function(
 #' @param ... Ignored.
 #' @param strict Boolean. Logical value specifying whether to enforce the rule that each entry in i,j,k,x refers to a different cell. If strict=TRUE, entries which refer to the same cell in the array will be reduced to a single entry by summing the x values. Default is strict=FALSE.
 #' @param nonzero Boolean. Logical value specifying whether to remove any entries of x which equal zero.
-#' @importFrom spatstat.sparse sparse3Darray as.sparse3Darray
 #' @return Sparse three-dimensional array (object of class "sparse3Darray").
 #' @export
 #'

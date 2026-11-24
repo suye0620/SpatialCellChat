@@ -5,24 +5,22 @@ Version: 0.1.0
 Author: Suoqin Jin, Xiangzheng Cheng, Ye Su
 Maintainer: Xiangzheng Cheng <xzcheng@whu.edu.cn>, Suoqin Jin <suoqin.jin@gmail.com>
 Description: an open source R tool that infers, visualizes and analyzes the cell-cell communication networks from spatial transcriptomics data.
-Depends: R (>= 4.3.0), dplyr, igraph
+Depends: R (>= 4.3.0)
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-Imports: ALRA, cli, colorspace, sf, purrr, stringr, future, future.apply, pbapply, memoise,
-        irlba, NMF (>= 0.23.0), ggalluvial, svglite, Matrix, MERINGUE,
-        ggrepel, ggplot2, circlize (>= 0.4.12), RColorBrewer,
-        cowplot, methods, ComplexHeatmap, RSpectra, Rfast, Rcpp,
-        reticulate, scales, sna, forcats, reshape2, FNN,
-        shape, Seurat (>= 4.0.0), spatstat.sparse, magrittr, patchwork, plyr, ggpubr,
-        ggnetwork, BiocGenerics, BiocNeighbors, ggnewscale, progressr, uwot, ks, rlang,
+Imports: dplyr, igraph, ALRA, cli, colorspace, sf, purrr, stringr, future,
+        future.apply, pbapply, memoise, irlba, NMF (>= 0.23.0), ggalluvial,
+        svglite, Matrix, MERINGUE, ggrepel, ggplot2, circlize (>= 0.4.12),
+        RColorBrewer, cowplot, methods, ComplexHeatmap, RSpectra, Rcpp,
+        reticulate, scales, sna, forcats, reshape2, FNN, shape,
+        Seurat (>= 4.0.0), magrittr, patchwork, plyr, ggpubr, ggnetwork,
+        BiocGenerics, BiocNeighbors, ggnewscale, progressr, uwot, ks, rlang,
         htmlwidgets, htmltools
 LinkingTo: Rcpp, RcppEigen
-Suggests: rmarkdown, knitr, roxygen2, SingleCellExperiment,
-        SummarizedExperiment, gg.gap, wordcloud, raster, 
-        SeuratObject, metR, oce, plotly, rstudioapi, scattermore, shiny, spdep, tidyr,
-        RcppML, gtools, scatterpie, rliger, SNFtool, pryr, RcppEigen, Rtsne, expm, progress
-VignetteBuilder: knitr
+Suggests: SingleCellExperiment, SummarizedExperiment, gg.gap, wordcloud, raster,
+        SeuratObject, metR, oce, plotly, rstudioapi, shiny, spdep, tidyr,
+        RcppML, gtools, scatterpie, rliger, SNFtool, pryr
 NeedsCompilation: yes
 Packaged: 2026-02
 Config/roxygen2/version: 8.0.0
